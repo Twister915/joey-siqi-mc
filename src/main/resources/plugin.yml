@@ -1,0 +1,7 @@
+name: JoeySiqi-MC
+version: 1.0
+main: sh.joey.mc.SiqiJoeyPlugin
+description: Joey's custom mods
+api-version: '1.20'
+load: POSTWORLD
+author: Joey
