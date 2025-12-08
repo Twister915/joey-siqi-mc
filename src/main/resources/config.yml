@@ -1,0 +1,9 @@
+teleport:
+  # How many seconds you must stand still before teleporting
+  warmup-seconds: 3
+  # How many blocks of movement is tolerated (for accidental inputs)
+  movement-tolerance-blocks: 0.5
+
+requests:
+  # How long a teleport request stays valid (in seconds)
+  timeout-seconds: 60

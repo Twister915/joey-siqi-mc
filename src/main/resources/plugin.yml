@@ -1,7 +1,24 @@
 name: JoeySiqi-MC
 version: 1.0
 main: sh.joey.mc.SiqiJoeyPlugin
-description: Joey's custom mods
-api-version: '1.20'
+description: Joey's custom mods for playing with Siqi
+api-version: '1.21'
 load: POSTWORLD
 author: Joey
+
+commands:
+  back:
+    description: Return to your death location or previous teleport location
+    usage: /back
+  tp:
+    description: Send a teleport request to another player
+    usage: /tp <player>
+  accept:
+    description: Accept a pending teleport request
+    usage: /accept
+  decline:
+    description: Decline a pending teleport request
+    usage: /decline
+  home:
+    description: Manage your saved home locations
+    usage: /home [set|delete|list|share|unshare] [name] [player]
