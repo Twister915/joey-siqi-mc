@@ -6,6 +6,7 @@ import org.bukkit.Location;
 import org.bukkit.Particle;
 import org.bukkit.Sound;
 import org.bukkit.World;
+import org.bukkit.block.Block;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.player.PlayerMoveEvent;
@@ -14,6 +15,7 @@ import sh.joey.mc.SiqiJoeyPlugin;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
@@ -24,6 +26,7 @@ import java.util.function.Consumer;
  */
 public final class SafeTeleporter implements Disposable {
     private static final long CANCELLED_DISPLAY_MS = 3000; // Show cancelled for 3 seconds
+    private static final int SAFE_LOCATION_SEARCH_RADIUS = 10; // Max blocks to search for safe spot
 
     private final CompositeDisposable disposables = new CompositeDisposable();
     private final SiqiJoeyPlugin plugin;
@@ -114,6 +117,15 @@ public final class SafeTeleporter implements Disposable {
     public void teleport(Player player, Location destination, Consumer<Boolean> onComplete) {
         UUID playerId = player.getUniqueId();
 
+        // Reject if player is in a vehicle
+        if (player.isInsideVehicle()) {
+            Messages.error(player, "You cannot teleport while in a vehicle!");
+            if (onComplete != null) {
+                onComplete.accept(false);
+            }
+            return;
+        }
+
         // Cancel any existing pending teleport
         cancelTeleport(playerId, false);
 
@@ -182,6 +194,17 @@ public final class SafeTeleporter implements Disposable {
             pending.countdownTask().dispose();
         }
 
+        // Find a safe location to prevent suffocation
+        Optional<Location> safeDestinationOpt = findSafeLocation(destination);
+        if (safeDestinationOpt.isEmpty()) {
+            Messages.error(player, "Could not find a safe location to teleport to!");
+            if (onComplete != null) {
+                onComplete.accept(false);
+            }
+            return;
+        }
+        Location safeDestination = safeDestinationOpt.get();
+
         // Record current location before teleporting (for /back)
         Location departureLocation = player.getLocation().clone();
         locationTracker.recordTeleportFrom(playerId, departureLocation);
@@ -189,16 +212,76 @@ public final class SafeTeleporter implements Disposable {
         // Play departure effects
         playTeleportEffects(departureLocation, true);
 
-        player.teleport(destination);
+        player.teleport(safeDestination);
 
         // Play arrival effects
-        playTeleportEffects(destination, false);
+        playTeleportEffects(safeDestination, false);
 
         Messages.success(player, "Teleported!");
 
         if (onComplete != null) {
             onComplete.accept(true);
         }
+    }
+
+    /**
+     * Finds a safe location near the destination where the player won't suffocate.
+     * A safe location has 2 blocks of passable space (for feet and head) above a solid floor.
+     *
+     * @param destination The target location
+     * @return A safe location, or empty if none found within search radius
+     */
+    private Optional<Location> findSafeLocation(Location destination) {
+        World world = destination.getWorld();
+        if (world == null) {
+            return Optional.empty();
+        }
+
+        // First check if the original destination is safe
+        if (isSafeLocation(destination)) {
+            return Optional.of(destination);
+        }
+
+        // Search upward first (most common case: player teleporting into ground)
+        for (int dy = 1; dy <= SAFE_LOCATION_SEARCH_RADIUS; dy++) {
+            Location candidate = destination.clone().add(0, dy, 0);
+            if (isSafeLocation(candidate)) {
+                return Optional.of(candidate);
+            }
+        }
+
+        // Search downward (less common: teleporting into air above void)
+        for (int dy = 1; dy <= SAFE_LOCATION_SEARCH_RADIUS; dy++) {
+            Location candidate = destination.clone().subtract(0, dy, 0);
+            if (isSafeLocation(candidate)) {
+                return Optional.of(candidate);
+            }
+        }
+
+        return Optional.empty();
+    }
+
+    /**
+     * Checks if a location is safe for a player to stand at.
+     * Safe means: feet and head blocks are passable, and there's a solid block below.
+     */
+    private boolean isSafeLocation(Location location) {
+        World world = location.getWorld();
+        if (world == null) {
+            return false;
+        }
+
+        Block feetBlock = location.getBlock();
+        Block headBlock = feetBlock.getRelative(0, 1, 0);
+        Block floorBlock = feetBlock.getRelative(0, -1, 0);
+
+        // Feet and head must be passable (air, water, etc. - not solid)
+        if (!feetBlock.isPassable() || !headBlock.isPassable()) {
+            return false;
+        }
+
+        // Floor must be solid (not air, water, lava, etc.)
+        return floorBlock.isSolid();
     }
 
     /**
