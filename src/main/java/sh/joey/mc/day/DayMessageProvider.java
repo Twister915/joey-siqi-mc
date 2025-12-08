@@ -9,7 +9,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerChangedWorldEvent;
-import org.bukkit.event.player.PlayerJoinEvent;
+import org.bukkit.event.world.WorldUnloadEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.util.*;
@@ -66,13 +66,22 @@ public final class DayMessageProvider implements Listener {
     }
 
     @EventHandler
-    public void onPlayerJoin(PlayerJoinEvent event) {
-        // Clean up tracking for worlds the player might have been in
+    public void onPlayerChangedWorld(PlayerChangedWorldEvent event) {
+        World world = event.getPlayer().getWorld();
+        if (world.getEnvironment() != World.Environment.NORMAL) return;
+
+        // If entering a world during dawn (first 2000 ticks of day), send a message
+        long time = world.getTime();
+        if (time >= 0 && time < 2000) {
+            Player player = event.getPlayer();
+            String message = generateMessage(player);
+            player.sendMessage(PREFIX.append(Component.text(message).color(NamedTextColor.WHITE)));
+        }
     }
 
     @EventHandler
-    public void onPlayerChangedWorld(PlayerChangedWorldEvent event) {
-        // Could send a message when entering a new world during its dawn
+    public void onWorldUnload(WorldUnloadEvent event) {
+        lastDayMessageTime.remove(event.getWorld().getUID());
     }
 
     private String generateMessage(Player player) {

@@ -205,17 +205,28 @@ public final class HomeCommand implements CommandExecutor, TabCompleter {
         Location playerLoc = player.getLocation();
         UUID playerWorldId = playerLoc.getWorld().getUID();
 
-        // Sort owned homes: same world by distance, then other worlds
+        // Sort owned homes: same world by distance, then other worlds, then unloaded worlds
         List<Home> sortedHomes = ownedHomes.stream()
                 .sorted((a, b) -> {
+                    Location locA = a.toLocation();
+                    Location locB = b.toLocation();
+                    boolean aLoaded = locA != null;
+                    boolean bLoaded = locB != null;
+
+                    // Unloaded worlds go last
+                    if (aLoaded && !bLoaded) return -1;
+                    if (!aLoaded && bLoaded) return 1;
+                    if (!aLoaded) return a.name().compareTo(b.name()); // Both unloaded, sort by name
+
                     boolean aInWorld = a.worldId().equals(playerWorldId);
                     boolean bInWorld = b.worldId().equals(playerWorldId);
                     if (aInWorld && !bInWorld) return -1;
                     if (!aInWorld && bInWorld) return 1;
                     if (!aInWorld) return a.name().compareTo(b.name()); // Both in other worlds, sort by name
+
                     // Both in same world, sort by distance
-                    double distA = playerLoc.distance(a.toLocation());
-                    double distB = playerLoc.distance(b.toLocation());
+                    double distA = playerLoc.distance(locA);
+                    double distB = playerLoc.distance(locB);
                     return Double.compare(distA, distB);
                 })
                 .toList();
@@ -223,11 +234,15 @@ public final class HomeCommand implements CommandExecutor, TabCompleter {
         player.sendMessage(PREFIX.append(Component.text("Your Homes:").color(NamedTextColor.WHITE)));
 
         for (Home home : sortedHomes) {
-            boolean sameWorld = home.worldId().equals(playerWorldId);
+            Location homeLoc = home.toLocation();
+            boolean worldLoaded = homeLoc != null;
+            boolean sameWorld = worldLoaded && home.worldId().equals(playerWorldId);
             String distanceStr = "";
             if (sameWorld) {
-                double dist = playerLoc.distance(home.toLocation());
+                double dist = playerLoc.distance(homeLoc);
                 distanceStr = " (" + formatDistance(dist) + ")";
+            } else if (!worldLoaded) {
+                distanceStr = " (world not loaded)";
             }
 
             Component homeEntry = Component.text("  ")
@@ -379,7 +394,7 @@ public final class HomeCommand implements CommandExecutor, TabCompleter {
         Home home = homeOpt.get();
         Location location = home.toLocation();
         if (location == null) {
-            error(player, "The world for this home no longer exists.");
+            error(player, "The world for this home is not loaded.");
             return true;
         }
 
