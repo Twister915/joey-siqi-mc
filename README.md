@@ -87,7 +87,7 @@ teleport:
 
 ## License
 
-MIT License - Feel free to use, modify, and share!
+[MIT License](LICENSE) - Copyright (c) 2025 Joseph Sacchini
 
 ---
 
