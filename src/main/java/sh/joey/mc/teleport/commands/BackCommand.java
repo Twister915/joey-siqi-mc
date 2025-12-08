@@ -71,15 +71,6 @@ public final class BackCommand implements CommandExecutor {
             Messages.info(player, "Returning to your previous location...");
         }
 
-        safeTeleporter.teleport(player, destination, success -> {
-            if (success) {
-                // Clear back location after successful return
-                locationTracker.clearBackLocation(player.getUniqueId())
-                        .subscribe(
-                                () -> {},
-                                err -> logger.warning("Failed to clear back location: " + err.getMessage())
-                        );
-            }
-        });
+        safeTeleporter.teleport(player, destination, success -> {});
     }
 }

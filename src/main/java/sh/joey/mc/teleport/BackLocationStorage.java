@@ -78,20 +78,6 @@ public final class BackLocationStorage {
         });
     }
 
-    /**
-     * Delete the back location for a player.
-     */
-    public Completable clearBackLocation(UUID playerId) {
-        return storage.execute(conn -> {
-            String sql = "DELETE FROM back_locations WHERE player_id = ?";
-
-            try (PreparedStatement stmt = conn.prepareStatement(sql)) {
-                stmt.setObject(1, playerId);
-                stmt.executeUpdate();
-            }
-        });
-    }
-
     private BackLocation readBackLocation(ResultSet rs) throws java.sql.SQLException {
         return new BackLocation(
                 rs.getObject("player_id", UUID.class),

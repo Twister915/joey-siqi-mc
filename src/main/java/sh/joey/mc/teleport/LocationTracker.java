@@ -67,11 +67,4 @@ public final class LocationTracker implements Disposable {
     public Maybe<BackLocation> getBackLocation(UUID playerId) {
         return storage.getBackLocation(playerId);
     }
-
-    /**
-     * Clears the back location after successful /back.
-     */
-    public Completable clearBackLocation(UUID playerId) {
-        return storage.clearBackLocation(playerId);
-    }
 }

@@ -58,10 +58,10 @@ Themed messages at the start of each Minecraft day:
 ## Building
 
 ```bash
-./gradlew build
+./gradlew shadowJar
 ```
 
-The compiled JAR will be in `build/libs/`.
+The compiled JAR will be in `build/libs/` (use the `-all.jar` file which includes all dependencies).
 
 ## Installation
 

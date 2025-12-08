@@ -5,10 +5,10 @@ A Bukkit/Paper Spigot plugin for Minecraft 1.21+. This is a small personal plugi
 ## Build & Run
 
 ```bash
-./gradlew build
+./gradlew shadowJar
 ```
 
-The compiled JAR will be in `build/libs/`.
+The compiled JAR will be in `build/libs/` (use the `-all.jar` file which includes all dependencies).
 
 ## Project Structure
 
