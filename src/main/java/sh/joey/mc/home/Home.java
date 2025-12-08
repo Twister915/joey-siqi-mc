@@ -13,6 +13,7 @@ import java.util.UUID;
  */
 public record Home(
         String name,
+        UUID ownerId,
         UUID worldId,
         double x,
         double y,
@@ -21,9 +22,10 @@ public record Home(
         float yaw,
         Set<UUID> sharedWith
 ) {
-    public Home(String name, Location location) {
+    public Home(String name, UUID ownerId, Location location) {
         this(
                 name,
+                ownerId,
                 location.getWorld().getUID(),
                 location.getX(),
                 location.getY(),
@@ -32,6 +34,13 @@ public record Home(
                 location.getYaw(),
                 new HashSet<>()
         );
+    }
+
+    /**
+     * Check if this home is owned by the given player.
+     */
+    public boolean isOwnedBy(UUID playerId) {
+        return playerId.equals(ownerId);
     }
 
     public Location toLocation() {
@@ -49,12 +58,12 @@ public record Home(
     public Home withSharedPlayer(UUID playerId) {
         Set<UUID> newShared = new HashSet<>(sharedWith);
         newShared.add(playerId);
-        return new Home(name, worldId, x, y, z, pitch, yaw, newShared);
+        return new Home(name, ownerId, worldId, x, y, z, pitch, yaw, newShared);
     }
 
     public Home withoutSharedPlayer(UUID playerId) {
         Set<UUID> newShared = new HashSet<>(sharedWith);
         newShared.remove(playerId);
-        return new Home(name, worldId, x, y, z, pitch, yaw, newShared);
+        return new Home(name, ownerId, worldId, x, y, z, pitch, yaw, newShared);
     }
 }

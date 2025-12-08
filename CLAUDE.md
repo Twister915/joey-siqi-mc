@@ -16,6 +16,7 @@ The compiled JAR will be in `build/libs/`.
 src/main/java/sh/joey/mc/
 ├── SiqiJoeyPlugin.java      # Main plugin entry point
 ├── rx/                       # RxJava integration (schedulers, event observables)
+├── storage/                  # PostgreSQL database layer
 ├── bossbar/                  # Priority-based boss bar system
 ├── teleport/                 # Teleportation with warmup/requests
 ├── home/                     # Home saving and teleportation
@@ -174,12 +175,12 @@ Handles teleport requests between players, warmup countdowns, and location track
 
 ### 3. Home System (`home/`)
 
-Persistent home locations with sharing support, using per-player file storage.
+Persistent home locations with sharing support, stored in PostgreSQL.
 
 **Key Classes:**
 - `Home` - Record with location data and `Set<UUID> sharedWith`
-- `HomeStorage` - Per-player JSON persistence to `data/player-{uuid}/homes.json`
-- `HomeCommand` - All `/home` subcommands with tab completion
+- `HomeStorage` - Async PostgreSQL operations via `StorageService`
+- `HomeCommand` - All `/home` subcommands (async)
 - `BedHomeListener` - Auto-saves first bed interaction as "home"
 
 **Commands:** `/home [name]`, `/home set [name]`, `/home delete <name>`, `/home list`, `/home share`, `/home unshare`, `/home help`
@@ -189,6 +190,7 @@ Persistent home locations with sharing support, using per-player file storage.
 - Delete confirmation with clickable `[Confirm]` / `[Cancel]` buttons
 - Handles unloaded worlds gracefully (shows "world not loaded")
 - Shared homes accessible via `owner:homename` syntax
+- All database operations are async (return `Single<T>` or `Completable`)
 
 ### 4. Message Systems (`day/`, `welcome/`)
 
@@ -267,6 +269,14 @@ Each system has a consistent prefix:
 
 `config.yml`:
 ```yaml
+database:
+  host: localhost
+  port: 5432
+  database: minecraft
+  username: minecraft
+  password: secret
+  pool-size: 3
+
 teleport:
   warmup-seconds: 3
   movement-tolerance-blocks: 0.5
@@ -274,17 +284,99 @@ requests:
   timeout-seconds: 60
 ```
 
-Loaded via `PluginConfig.load(plugin)` into an immutable record.
+Loaded via `DatabaseConfig.load(plugin)` and `PluginConfig.load(plugin)` into immutable records.
 
-## Data Files
+---
 
-Player data is stored in per-player directories under `data/`:
+## PostgreSQL Storage (`storage/`)
+
+All persistent data is stored in PostgreSQL using async operations.
+
+### Key Classes
+
+- `DatabaseConfig` - Connection settings record loaded from `config.yml`
+- `DatabaseService` - HikariCP connection pool management
+- `MigrationRunner` - Runs SQL migrations from `resources/migrations/`
+- `StorageService` - RxJava async wrapper for database operations
+- `SqlFunction<T, R>` - Functional interface that throws `SQLException`
+- `SqlConsumer<T>` - Functional interface for void operations
+
+### StorageService Usage
+
+```java
+// Query that returns a result
+public Single<Optional<Home>> getHome(UUID playerId, String name) {
+    return storage.query(conn -> {
+        // Use PreparedStatement, return result
+    });
+}
+
+// Operation that doesn't return a value
+public Completable setHome(UUID playerId, Home home) {
+    return storage.execute(conn -> {
+        // Use PreparedStatement
+    });
+}
 ```
-plugins/JoeySiqi-MC/data/player-{uuid}/
-├── homes.json    # Player's saved homes
-└── (future files as features are added)
+
+Operations run on `Schedulers.io()` and results are observed on the main thread.
+
+### Migrations
+
+SQL migrations live in `src/main/resources/migrations/` and follow the pattern:
+```
+001_create_homes.sql
+002_add_indexes.sql
+003_create_warps.sql
 ```
 
-**Directory Naming Convention:**
-- `player-{uuid}` - Data scoped to a specific player
-- Future: `world-{name}`, `biome-{name}`, etc. for different scopes
+- Files are sorted by numeric prefix and run in order
+- Tracked in `migration_state` table with filename and SHA-256 checksum
+- Each migration runs in a transaction (rollback on failure)
+- Run synchronously at plugin startup before any storage components initialize
+
+### Table Conventions
+
+Always include timestamp columns:
+```sql
+CREATE TABLE example (
+    id BIGSERIAL PRIMARY KEY,
+    -- ... other columns ...
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+```
+
+### Async Patterns
+
+Since database operations are async, command handlers use `.subscribe()`:
+
+```java
+// Bad - trying to use sync API
+Optional<Home> home = storage.getHome(playerId, name); // Doesn't compile
+
+// Good - async with subscribe
+storage.getHome(playerId, name)
+    .subscribe(
+        homeOpt -> {
+            if (homeOpt.isPresent()) {
+                teleportToHome(player, homeOpt.get());
+            } else {
+                error(player, "Home not found.");
+            }
+        },
+        err -> {
+            plugin.getLogger().warning("Database error: " + err.getMessage());
+            error(player, "Failed to load home.");
+        }
+    );
+```
+
+For long subscribe bodies, extract to instance methods:
+```java
+storage.getHome(playerId, name)
+    .subscribe(
+        homeOpt -> handleHomeResult(player, homeOpt),
+        err -> handleDatabaseError(player, err)
+    );
+```

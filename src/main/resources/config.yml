@@ -1,3 +1,13 @@
+database:
+  host: localhost
+  port: 5432
+  database: minecraft
+  username: minecraft
+  password: secret
+  pool-size: 3
+  # Enable to log all SQL queries (for debugging)
+  log-queries: false
+
 teleport:
   # How many seconds you must stand still before teleporting
   warmup-seconds: 3

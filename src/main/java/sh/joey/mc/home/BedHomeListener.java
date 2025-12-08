@@ -24,17 +24,18 @@ public final class BedHomeListener implements Disposable {
             .append(Component.text("] ").color(NamedTextColor.DARK_GRAY));
 
     private final CompositeDisposable disposables = new CompositeDisposable();
+    private final SiqiJoeyPlugin plugin;
     private final HomeStorage storage;
 
     public BedHomeListener(SiqiJoeyPlugin plugin, HomeStorage storage) {
+        this.plugin = plugin;
         this.storage = storage;
 
         disposables.add(plugin.watchEvent(EventPriority.MONITOR, PlayerInteractEvent.class)
                 .filter(event -> event.getAction().isRightClick())
                 .filter(event -> event.getClickedBlock() != null)
                 .filter(event -> isBed(event.getClickedBlock().getType()))
-                .filter(event -> !storage.hasAnyHomes(event.getPlayer().getUniqueId()))
-                .subscribe(this::handleFirstBedInteraction));
+                .subscribe(this::handleBedInteraction));
     }
 
     @Override
@@ -47,12 +48,29 @@ public final class BedHomeListener implements Disposable {
         return disposables.isDisposed();
     }
 
-    private void handleFirstBedInteraction(PlayerInteractEvent event) {
+    private void handleBedInteraction(PlayerInteractEvent event) {
         Player player = event.getPlayer();
-        Location location = player.getLocation();
-        Home home = new Home("home", location);
-        storage.setHome(player.getUniqueId(), home);
 
+        storage.hasAnyHomes(player.getUniqueId())
+                .filter(hasHomes -> !hasHomes) // Only continue if no homes
+                .subscribe(
+                        ignored -> saveFirstHome(player),
+                        err -> plugin.getLogger().warning("Failed to check homes: " + err.getMessage())
+                );
+    }
+
+    private void saveFirstHome(Player player) {
+        Location location = player.getLocation();
+        Home home = new Home("home", player.getUniqueId(), location);
+
+        storage.setHome(player.getUniqueId(), home)
+                .subscribe(
+                        () -> notifyHomeSaved(player),
+                        err -> plugin.getLogger().warning("Failed to save first home: " + err.getMessage())
+                );
+    }
+
+    private void notifyHomeSaved(Player player) {
         player.sendMessage(PREFIX.append(
                 Component.text("Your first home has been set! Use ")
                         .color(NamedTextColor.GREEN)

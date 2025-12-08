@@ -9,6 +9,7 @@ import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitTask;
 import sh.joey.mc.rx.EventObservable;
 
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import sh.joey.mc.bossbar.BiomeChangeProvider;
 import sh.joey.mc.bossbar.BossBarManager;
@@ -22,6 +23,11 @@ import sh.joey.mc.welcome.ServerPingProvider;
 import sh.joey.mc.home.BedHomeListener;
 import sh.joey.mc.home.HomeCommand;
 import sh.joey.mc.home.HomeStorage;
+import sh.joey.mc.home.HomeTabCompleter;
+import sh.joey.mc.storage.DatabaseConfig;
+import sh.joey.mc.storage.DatabaseService;
+import sh.joey.mc.storage.MigrationRunner;
+import sh.joey.mc.storage.StorageService;
 import sh.joey.mc.teleport.LocationTracker;
 import sh.joey.mc.teleport.PluginConfig;
 import sh.joey.mc.teleport.RequestManager;
@@ -43,6 +49,19 @@ public final class SiqiJoeyPlugin extends JavaPlugin {
         // Initialize RxJava schedulers first
         schedulers = new BukkitSchedulers(this);
 
+        // Load database config and initialize
+        var dbConfig = DatabaseConfig.load(this);
+        var database = new DatabaseService(getLogger());
+        database.initialize(dbConfig);
+        components.add(database);
+
+        // Run migrations (blocks until complete)
+        var migrationRunner = new MigrationRunner(this, database);
+        migrationRunner.run();
+
+        // Create storage service
+        var storageService = new StorageService(database, schedulers.mainThread());
+
         // Boss bar system with priority-based providers
         var bossBarManager = new BossBarManager(this);
         components.add(bossBarManager);
@@ -57,7 +76,7 @@ public final class SiqiJoeyPlugin extends JavaPlugin {
         components.add(weatherChangeProvider);
         bossBarManager.registerProvider(weatherChangeProvider);
 
-        // Load config
+        // Load teleport config
         var config = PluginConfig.load(this);
 
         // Initialize teleport system components
@@ -81,11 +100,13 @@ public final class SiqiJoeyPlugin extends JavaPlugin {
         getCommand("accept").setExecutor(YesNoCommands.accept(requestManager));
         getCommand("decline").setExecutor(YesNoCommands.decline(requestManager));
 
-        // Home system
-        var homeStorage = new HomeStorage(this);
+        // Home system (uses PostgreSQL)
+        var homeStorage = new HomeStorage(storageService);
         var homeCommand = new HomeCommand(this, homeStorage, safeTeleporter);
         getCommand("home").setExecutor(homeCommand);
-        getCommand("home").setTabCompleter(homeCommand);
+
+        var homeTabCompleter = new HomeTabCompleter(this, homeStorage);
+        components.add(homeTabCompleter);
 
         var bedHomeListener = new BedHomeListener(this, homeStorage);
         components.add(bedHomeListener);
@@ -164,23 +185,13 @@ public final class SiqiJoeyPlugin extends JavaPlugin {
      * @return an Observable that emits the specified event types
      */
     @SafeVarargs
-    @SuppressWarnings("unchecked")
     public final <T extends Event> Observable<T> watchEvent(boolean ignoreCancelled, EventPriority priority,
                                                             Class<? extends T>... eventTypes) {
         if (eventTypes.length == 0) {
             return Observable.empty();
         }
 
-        if (eventTypes.length == 1) {
-            return (Observable<T>) new EventObservable<>(eventTypes[0], this, priority, ignoreCancelled);
-        }
-
-        // Multiple event types: merge individual observables
-        Observable<T>[] observables = new Observable[eventTypes.length];
-        for (int i = 0; i < eventTypes.length; i++) {
-            observables[i] = (Observable<T>) new EventObservable<>(eventTypes[i], this, priority, ignoreCancelled);
-        }
-        return Observable.mergeArray(observables);
+        return new EventObservable<>(Set.of(eventTypes), this, priority, ignoreCancelled);
     }
 
     /**

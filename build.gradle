@@ -17,6 +17,8 @@ repositories {
 dependencies {
     compileOnly 'io.papermc.paper:paper-api:1.21.10-R0.1-SNAPSHOT'
     implementation 'io.reactivex.rxjava3:rxjava:3.1.12'
+    implementation 'com.zaxxer:HikariCP:5.1.0'
+    implementation 'org.postgresql:postgresql:42.7.4'
 }
 
 tasks.named('build') {
@@ -27,6 +29,8 @@ shadowJar {
     archiveClassifier.set('')
     relocate 'io.reactivex.rxjava3', 'sh.joey.mc.shaded.rxjava3'
     relocate 'org.reactivestreams', 'sh.joey.mc.shaded.reactivestreams'
+    relocate 'com.zaxxer.hikari', 'sh.joey.mc.shaded.hikari'
+    // PostgreSQL driver uses ServiceLoader - don't relocate
 }
 
 test {

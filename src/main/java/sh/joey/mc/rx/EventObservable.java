@@ -13,6 +13,7 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.server.PluginDisableEvent;
 import org.bukkit.plugin.Plugin;
 
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
@@ -28,12 +29,12 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 public final class EventObservable<T extends Event> extends Observable<T> {
 
-    private final Class<T> eventType;
+    private final Set<Class<? extends T>> eventType;
     private final Plugin plugin;
     private final EventPriority priority;
     private final boolean ignoreCancelled;
 
-    public EventObservable(Class<T> eventType, Plugin plugin, EventPriority priority, boolean ignoreCancelled) {
+    public EventObservable(Set<Class<? extends T>> eventType, Plugin plugin, EventPriority priority, boolean ignoreCancelled) {
         this.eventType = eventType;
         this.plugin = plugin;
         this.priority = priority != null ? priority : EventPriority.NORMAL;
@@ -62,7 +63,7 @@ public final class EventObservable<T extends Event> extends Observable<T> {
      */
     private static final class EventSubscription<T extends Event> implements Disposable, Listener {
         private final Observer<? super T> downstream;
-        private final Class<T> eventType;
+        private final Set<Class<? extends T>> types;
         private final Plugin plugin;
         private final EventPriority priority;
         private final boolean ignoreCancelled;
@@ -70,10 +71,10 @@ public final class EventObservable<T extends Event> extends Observable<T> {
         private final AtomicBoolean disposed = new AtomicBoolean(false);
         private final AtomicBoolean registered = new AtomicBoolean(false);
 
-        EventSubscription(Observer<? super T> downstream, Class<T> eventType,
+        EventSubscription(Observer<? super T> downstream, Set<Class<? extends T>> types,
                           Plugin plugin, EventPriority priority, boolean ignoreCancelled) {
             this.downstream = downstream;
-            this.eventType = eventType;
+            this.types = types;
             this.plugin = plugin;
             this.priority = priority;
             this.ignoreCancelled = ignoreCancelled;
@@ -98,15 +99,17 @@ public final class EventObservable<T extends Event> extends Observable<T> {
                     false
             );
 
-            // Register the actual event listener
-            plugin.getServer().getPluginManager().registerEvent(
-                    eventType,
-                    this,
-                    priority,
-                    this::handleEvent,
-                    plugin,
-                    ignoreCancelled
-            );
+            for (Class<? extends T> type : types) {
+                // Register the actual event listener
+                plugin.getServer().getPluginManager().registerEvent(
+                        type,
+                        this,
+                        priority,
+                        this::handleEvent,
+                        plugin,
+                        ignoreCancelled
+                );
+            }
         }
 
         @SuppressWarnings("unchecked")
@@ -115,14 +118,20 @@ public final class EventObservable<T extends Event> extends Observable<T> {
                 return;
             }
 
-            try {
-                downstream.onNext((T) event);
-            } catch (Throwable t) {
-                dispose();
-                try {
-                    downstream.onError(t);
-                } catch (Throwable inner) {
-                    RxJavaPlugins.onError(inner);
+            Class<? extends Event> eventType = event.getClass();
+            for (Class<? extends T> type : types) {
+                if (type == eventType || type.isAssignableFrom(eventType)) {
+                    try {
+                        downstream.onNext((T) event);
+                    } catch (Throwable t) {
+                        dispose();
+                        try {
+                            downstream.onError(t);
+                        } catch (Throwable inner) {
+                            RxJavaPlugins.onError(inner);
+                        }
+                    }
+                    return;
                 }
             }
         }
