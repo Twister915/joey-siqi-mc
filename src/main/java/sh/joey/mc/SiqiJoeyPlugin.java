@@ -28,6 +28,7 @@ import sh.joey.mc.storage.DatabaseConfig;
 import sh.joey.mc.storage.DatabaseService;
 import sh.joey.mc.storage.MigrationRunner;
 import sh.joey.mc.storage.StorageService;
+import sh.joey.mc.teleport.BackLocationStorage;
 import sh.joey.mc.teleport.LocationTracker;
 import sh.joey.mc.teleport.PluginConfig;
 import sh.joey.mc.teleport.RequestManager;
@@ -80,7 +81,8 @@ public final class SiqiJoeyPlugin extends JavaPlugin {
         var config = PluginConfig.load(this);
 
         // Initialize teleport system components
-        var locationTracker = new LocationTracker(this);
+        var backLocationStorage = new BackLocationStorage(storageService);
+        var locationTracker = new LocationTracker(this, backLocationStorage);
         components.add(locationTracker);
 
         var safeTeleporter = new SafeTeleporter(this, config, locationTracker);
@@ -94,7 +96,7 @@ public final class SiqiJoeyPlugin extends JavaPlugin {
 
         // Register teleport commands
         var tpCommand = new TpCommand(this, requestManager);
-        getCommand("back").setExecutor(new BackCommand(locationTracker, safeTeleporter));
+        getCommand("back").setExecutor(new BackCommand(this, locationTracker, safeTeleporter));
         getCommand("tp").setExecutor(tpCommand);
         getCommand("tp").setTabCompleter(tpCommand);
         getCommand("accept").setExecutor(YesNoCommands.accept(requestManager));

@@ -1,31 +1,42 @@
 package sh.joey.mc.teleport;
 
+import io.reactivex.rxjava3.core.Completable;
+import io.reactivex.rxjava3.core.Maybe;
 import io.reactivex.rxjava3.disposables.CompositeDisposable;
 import io.reactivex.rxjava3.disposables.Disposable;
 import org.bukkit.Location;
 import org.bukkit.event.entity.PlayerDeathEvent;
 import sh.joey.mc.SiqiJoeyPlugin;
 
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Optional;
 import java.util.UUID;
 
 /**
  * Tracks death locations and teleport-from locations for each player.
- * Used by the /back command.
+ * Used by the /back command. Persists to PostgreSQL.
+ * Each player has one back location - the most recent death or teleport.
  */
 public final class LocationTracker implements Disposable {
     private final CompositeDisposable disposables = new CompositeDisposable();
-    private final Map<UUID, Location> deathLocations = new HashMap<>();
-    private final Map<UUID, Location> teleportFromLocations = new HashMap<>();
+    private final SiqiJoeyPlugin plugin;
+    private final BackLocationStorage storage;
 
-    public LocationTracker(SiqiJoeyPlugin plugin) {
+    public LocationTracker(SiqiJoeyPlugin plugin, BackLocationStorage storage) {
+        this.plugin = plugin;
+        this.storage = storage;
+
         disposables.add(plugin.watchEvent(PlayerDeathEvent.class)
-                .subscribe(event -> deathLocations.put(
-                        event.getPlayer().getUniqueId(),
-                        event.getPlayer().getLocation()
-                )));
+                .flatMapCompletable(this::handleDeath)
+                .subscribe());
+    }
+
+    private Completable handleDeath(PlayerDeathEvent event) {
+        UUID playerId = event.getPlayer().getUniqueId();
+        Location location = event.getPlayer().getLocation();
+        BackLocation backLocation = BackLocation.from(playerId, BackLocation.LocationType.DEATH, location);
+
+        return storage.saveLocation(backLocation)
+                .doOnError(err -> plugin.getLogger().warning("Failed to save death location: " + err.getMessage()))
+                .onErrorComplete();
     }
 
     @Override
@@ -38,31 +49,29 @@ public final class LocationTracker implements Disposable {
         return disposables.isDisposed();
     }
 
+    /**
+     * Records a teleport-from location for /back.
+     */
     public void recordTeleportFrom(UUID playerId, Location location) {
-        teleportFromLocations.put(playerId, location.clone());
+        BackLocation backLocation = BackLocation.from(playerId, BackLocation.LocationType.TELEPORT, location);
+        disposables.add(storage.saveLocation(backLocation)
+                .subscribe(
+                        () -> {},
+                        err -> plugin.getLogger().warning("Failed to save teleport location: " + err.getMessage())
+                ));
     }
 
     /**
-     * Gets the most recent "back" location - either death or teleport-from,
-     * whichever is more appropriate. Death takes priority if it exists.
+     * Gets the back location - either death or teleport-from.
      */
-    public Optional<Location> getBackLocation(UUID playerId) {
-        Location death = deathLocations.get(playerId);
-        if (death != null) {
-            return Optional.of(death);
-        }
-        return Optional.ofNullable(teleportFromLocations.get(playerId));
+    public Maybe<BackLocation> getBackLocation(UUID playerId) {
+        return storage.getBackLocation(playerId);
     }
 
-    public void clearDeathLocation(UUID playerId) {
-        deathLocations.remove(playerId);
-    }
-
-    public void clearTeleportFromLocation(UUID playerId) {
-        teleportFromLocations.remove(playerId);
-    }
-
-    public boolean hasDeathLocation(UUID playerId) {
-        return deathLocations.containsKey(playerId);
+    /**
+     * Clears the back location after successful /back.
+     */
+    public Completable clearBackLocation(UUID playerId) {
+        return storage.clearBackLocation(playerId);
     }
 }
