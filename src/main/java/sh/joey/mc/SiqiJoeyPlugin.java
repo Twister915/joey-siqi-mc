@@ -8,6 +8,8 @@ import sh.joey.mc.bossbar.TimeOfDayProvider;
 import sh.joey.mc.bossbar.TeleportCountdownProvider;
 import sh.joey.mc.bossbar.WeatherChangeProvider;
 import sh.joey.mc.day.DayMessageProvider;
+import sh.joey.mc.welcome.JoinMessageProvider;
+import sh.joey.mc.welcome.ServerPingProvider;
 import sh.joey.mc.home.BedHomeListener;
 import sh.joey.mc.home.HomeCommand;
 import sh.joey.mc.home.HomeStorage;
@@ -61,6 +63,10 @@ public final class SiqiJoeyPlugin extends JavaPlugin {
 
         // Day message system
         new DayMessageProvider(this);
+
+        // Welcome message systems
+        new JoinMessageProvider(this);
+        new ServerPingProvider(this);
 
         getLogger().info("Plugin enabled!");
     }
