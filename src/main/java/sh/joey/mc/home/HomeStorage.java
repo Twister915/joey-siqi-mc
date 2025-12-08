@@ -9,17 +9,24 @@ import java.io.IOException;
 import java.io.Reader;
 import java.io.Writer;
 import java.lang.reflect.Type;
+import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Handles persistence of player homes to JSON.
+ * Handles persistence of player homes to JSON files.
+ * Each player's homes are stored in a separate file at:
+ * data/player-{uuid}/homes.json
  */
 public final class HomeStorage {
 
-    private final Path dataFile;
+    private static final String DATA_DIR = "data";
+    private static final String PLAYER_PREFIX = "player-";
+    private static final String HOMES_FILE = "homes.json";
+
+    private final Path dataDirectory;
     private final Gson gson;
     private final JavaPlugin plugin;
 
@@ -28,44 +35,100 @@ public final class HomeStorage {
 
     public HomeStorage(JavaPlugin plugin) {
         this.plugin = plugin;
-        this.dataFile = plugin.getDataFolder().toPath().resolve("homes.json");
+        this.dataDirectory = plugin.getDataFolder().toPath().resolve(DATA_DIR);
         this.gson = new GsonBuilder().setPrettyPrinting().create();
         load();
     }
 
     public void load() {
-        if (!Files.exists(dataFile)) {
+        playerHomes.clear();
+
+        if (!Files.exists(dataDirectory)) {
             return;
         }
 
-        try (Reader reader = Files.newBufferedReader(dataFile)) {
-            Type type = new TypeToken<Map<UUID, Map<String, Home>>>() {}.getType();
-            Map<UUID, Map<String, Home>> loaded = gson.fromJson(reader, type);
-            if (loaded != null) {
-                playerHomes.clear();
-                loaded.forEach((uuid, homes) ->
-                    playerHomes.put(uuid, new ConcurrentHashMap<>(homes)));
+        try (DirectoryStream<Path> stream = Files.newDirectoryStream(dataDirectory, PLAYER_PREFIX + "*")) {
+            for (Path playerDir : stream) {
+                if (!Files.isDirectory(playerDir)) {
+                    continue;
+                }
+
+                String dirName = playerDir.getFileName().toString();
+                if (!dirName.startsWith(PLAYER_PREFIX)) {
+                    continue;
+                }
+
+                String uuidString = dirName.substring(PLAYER_PREFIX.length());
+                UUID playerId;
+                try {
+                    playerId = UUID.fromString(uuidString);
+                } catch (IllegalArgumentException e) {
+                    plugin.getLogger().warning("Invalid player directory name: " + dirName);
+                    continue;
+                }
+
+                loadPlayerHomes(playerId, playerDir);
             }
         } catch (IOException e) {
-            plugin.getLogger().warning("Failed to load homes: " + e.getMessage());
+            plugin.getLogger().warning("Failed to scan player data directories: " + e.getMessage());
         }
     }
 
-    public void save() {
-        try {
-            Files.createDirectories(dataFile.getParent());
-            try (Writer writer = Files.newBufferedWriter(dataFile)) {
-                gson.toJson(playerHomes, writer);
+    private void loadPlayerHomes(UUID playerId, Path playerDir) {
+        Path homesFile = playerDir.resolve(HOMES_FILE);
+        if (!Files.exists(homesFile)) {
+            return;
+        }
+
+        try (Reader reader = Files.newBufferedReader(homesFile)) {
+            Type type = new TypeToken<Map<String, Home>>() {}.getType();
+            Map<String, Home> homes = gson.fromJson(reader, type);
+            if (homes != null && !homes.isEmpty()) {
+                playerHomes.put(playerId, new ConcurrentHashMap<>(homes));
             }
         } catch (IOException e) {
-            plugin.getLogger().warning("Failed to save homes: " + e.getMessage());
+            plugin.getLogger().warning("Failed to load homes for player " + playerId + ": " + e.getMessage());
         }
+    }
+
+    private void savePlayerHomes(UUID playerId) {
+        Map<String, Home> homes = playerHomes.get(playerId);
+
+        Path playerDir = getPlayerDirectory(playerId);
+        Path homesFile = playerDir.resolve(HOMES_FILE);
+
+        try {
+            if (homes == null || homes.isEmpty()) {
+                // Delete the file if no homes exist
+                if (Files.exists(homesFile)) {
+                    Files.delete(homesFile);
+                    // Try to delete the directory if empty
+                    try (DirectoryStream<Path> stream = Files.newDirectoryStream(playerDir)) {
+                        if (!stream.iterator().hasNext()) {
+                            Files.delete(playerDir);
+                        }
+                    }
+                }
+                return;
+            }
+
+            Files.createDirectories(playerDir);
+            try (Writer writer = Files.newBufferedWriter(homesFile)) {
+                gson.toJson(homes, writer);
+            }
+        } catch (IOException e) {
+            plugin.getLogger().warning("Failed to save homes for player " + playerId + ": " + e.getMessage());
+        }
+    }
+
+    private Path getPlayerDirectory(UUID playerId) {
+        return dataDirectory.resolve(PLAYER_PREFIX + playerId.toString());
     }
 
     public void setHome(UUID playerId, Home home) {
         playerHomes.computeIfAbsent(playerId, k -> new ConcurrentHashMap<>())
                 .put(home.name().toLowerCase(), home);
-        save();
+        savePlayerHomes(playerId);
     }
 
     public boolean deleteHome(UUID playerId, String name) {
@@ -75,7 +138,7 @@ public final class HomeStorage {
         }
         boolean removed = homes.remove(name.toLowerCase()) != null;
         if (removed) {
-            save();
+            savePlayerHomes(playerId);
         }
         return removed;
     }
@@ -122,7 +185,7 @@ public final class HomeStorage {
             return false;
         }
         homes.put(homeName.toLowerCase(), home.withSharedPlayer(targetId));
-        save();
+        savePlayerHomes(ownerId);
         return true;
     }
 
@@ -136,7 +199,7 @@ public final class HomeStorage {
             return false;
         }
         homes.put(homeName.toLowerCase(), home.withoutSharedPlayer(targetId));
-        save();
+        savePlayerHomes(ownerId);
         return true;
     }
 

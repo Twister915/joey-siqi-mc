@@ -20,6 +20,7 @@ import sh.joey.mc.teleport.SafeTeleporter;
 import sh.joey.mc.teleport.commands.BackCommand;
 import sh.joey.mc.teleport.commands.TpCommand;
 import sh.joey.mc.teleport.commands.YesNoCommands;
+import sh.joey.mc.world.TimePassingMonitor;
 
 @SuppressWarnings("unused")
 public final class SiqiJoeyPlugin extends JavaPlugin {
@@ -67,6 +68,9 @@ public final class SiqiJoeyPlugin extends JavaPlugin {
         // Welcome message systems
         new JoinMessageProvider(this);
         new ServerPingProvider(this);
+
+        // Monitor to verify time pauses when server is empty
+        new TimePassingMonitor(this);
 
         getLogger().info("Plugin enabled!");
     }

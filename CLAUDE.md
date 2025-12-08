@@ -113,11 +113,11 @@ Handles teleport requests between players, warmup countdowns, and location track
 
 ### 3. Home System (`home/`)
 
-Persistent home locations with sharing support.
+Persistent home locations with sharing support, using per-player file storage.
 
 **Key Classes:**
 - `Home` - Record with location data and `Set<UUID> sharedWith`
-- `HomeStorage` - JSON persistence to `homes.json`, keyed by player UUID
+- `HomeStorage` - Per-player JSON persistence to `data/player-{uuid}/homes.json`
 - `HomeCommand` - All `/home` subcommands with tab completion
 - `BedHomeListener` - Auto-saves first bed interaction as "home"
 
@@ -214,4 +214,13 @@ Loaded via `PluginConfig.load(plugin)` into an immutable record.
 
 ## Data Files
 
-- `homes.json` - Player homes, keyed by UUID
+Player data is stored in per-player directories under `data/`:
+```
+plugins/JoeySiqi-MC/data/player-{uuid}/
+├── homes.json    # Player's saved homes
+└── (future files as features are added)
+```
+
+**Directory Naming Convention:**
+- `player-{uuid}` - Data scoped to a specific player
+- Future: `world-{name}`, `biome-{name}`, etc. for different scopes

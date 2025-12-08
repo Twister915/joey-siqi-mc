@@ -82,8 +82,15 @@ teleport:
 
 ## Data Storage
 
-- Homes are stored in `plugins/SiqiJoeyPlugin/homes.json`
-- All data persists across server restarts
+Player data is stored in per-player directories:
+```
+plugins/JoeySiqi-MC/data/player-{uuid}/homes.json
+```
+
+This structure:
+- Prevents race conditions when multiple players modify their homes
+- Allows easy backup/restore of individual player data
+- Scales well as more features are added
 
 ## License
 
