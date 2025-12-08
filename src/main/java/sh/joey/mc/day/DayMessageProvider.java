@@ -1,72 +1,79 @@
 package sh.joey.mc.day;
 
+import io.reactivex.rxjava3.disposables.CompositeDisposable;
+import io.reactivex.rxjava3.disposables.Disposable;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
-import net.kyori.adventure.text.format.TextDecoration;
 import org.bukkit.Bukkit;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
-import org.bukkit.event.EventHandler;
-import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerChangedWorldEvent;
 import org.bukkit.event.world.WorldUnloadEvent;
-import org.bukkit.plugin.java.JavaPlugin;
+import sh.joey.mc.SiqiJoeyPlugin;
 
 import java.util.*;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Sends a themed message to players at the start of each Minecraft day.
  * Uses a mix of static messages, procedural templates, and context-aware messages.
  */
-public final class DayMessageProvider implements Listener {
+public final class DayMessageProvider implements Disposable {
 
     private static final Component PREFIX = Component.text("[")
             .color(NamedTextColor.GOLD)
             .append(Component.text("\u2600").color(NamedTextColor.YELLOW)) // ☀
             .append(Component.text("] ").color(NamedTextColor.GOLD));
 
-    private final JavaPlugin plugin;
+    private final CompositeDisposable disposables = new CompositeDisposable();
     private final Random random = ThreadLocalRandom.current();
 
     // Track which worlds we've already sent messages for this day
     private final Map<UUID, Long> lastDayMessageTime = new HashMap<>();
 
-    public DayMessageProvider(JavaPlugin plugin) {
-        this.plugin = plugin;
-        plugin.getServer().getPluginManager().registerEvents(this, plugin);
-        startDayDetection();
+    public DayMessageProvider(SiqiJoeyPlugin plugin) {
+        // Periodic day detection (every second)
+        disposables.add(plugin.interval(1, TimeUnit.SECONDS)
+                .subscribe(tick -> checkDayTransitions()));
+
+        // World events
+        disposables.add(plugin.watchEvent(PlayerChangedWorldEvent.class)
+                .subscribe(this::handleWorldChange));
+
+        disposables.add(plugin.watchEvent(WorldUnloadEvent.class)
+                .subscribe(event -> lastDayMessageTime.remove(event.getWorld().getUID())));
     }
 
-    private void startDayDetection() {
-        Bukkit.getScheduler().runTaskTimer(plugin, () -> {
-            for (World world : Bukkit.getWorlds()) {
-                if (world.getEnvironment() != World.Environment.NORMAL) continue;
+    @Override
+    public void dispose() {
+        disposables.dispose();
+    }
 
-                long time = world.getTime();
-                // Day starts at time 0, check if we're in the first 100 ticks of the day
-                if (time >= 0 && time < 100) {
-                    long dayNumber = world.getFullTime() / 24000;
-                    Long lastDay = lastDayMessageTime.get(world.getUID());
+    @Override
+    public boolean isDisposed() {
+        return disposables.isDisposed();
+    }
 
-                    if (lastDay == null || lastDay < dayNumber) {
-                        lastDayMessageTime.put(world.getUID(), dayNumber);
-                        sendDayMessages(world);
-                    }
+    private void checkDayTransitions() {
+        for (World world : Bukkit.getWorlds()) {
+            if (world.getEnvironment() != World.Environment.NORMAL) continue;
+
+            long time = world.getTime();
+            // Day starts at time 0, check if we're in the first 100 ticks of the day
+            if (time >= 0 && time < 100) {
+                long dayNumber = world.getFullTime() / 24000;
+                Long lastDay = lastDayMessageTime.get(world.getUID());
+
+                if (lastDay == null || lastDay < dayNumber) {
+                    lastDayMessageTime.put(world.getUID(), dayNumber);
+                    sendDayMessages(world);
                 }
             }
-        }, 20L, 20L); // Check every second
-    }
-
-    private void sendDayMessages(World world) {
-        for (Player player : world.getPlayers()) {
-            String message = generateMessage(player);
-            player.sendMessage(PREFIX.append(Component.text(message).color(NamedTextColor.WHITE)));
         }
     }
 
-    @EventHandler
-    public void onPlayerChangedWorld(PlayerChangedWorldEvent event) {
+    private void handleWorldChange(PlayerChangedWorldEvent event) {
         World world = event.getPlayer().getWorld();
         if (world.getEnvironment() != World.Environment.NORMAL) return;
 
@@ -79,9 +86,11 @@ public final class DayMessageProvider implements Listener {
         }
     }
 
-    @EventHandler
-    public void onWorldUnload(WorldUnloadEvent event) {
-        lastDayMessageTime.remove(event.getWorld().getUID());
+    private void sendDayMessages(World world) {
+        for (Player player : world.getPlayers()) {
+            String message = generateMessage(player);
+            player.sendMessage(PREFIX.append(Component.text(message).color(NamedTextColor.WHITE)));
+        }
     }
 
     private String generateMessage(Player player) {

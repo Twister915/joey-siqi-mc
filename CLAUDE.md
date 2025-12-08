@@ -15,23 +15,84 @@ The compiled JAR will be in `build/libs/`.
 ```
 src/main/java/sh/joey/mc/
 ├── SiqiJoeyPlugin.java      # Main plugin entry point
+├── rx/                       # RxJava integration (schedulers, event observables)
 ├── bossbar/                  # Priority-based boss bar system
 ├── teleport/                 # Teleportation with warmup/requests
 ├── home/                     # Home saving and teleportation
 ├── day/                      # Daily message system
-└── welcome/                  # Join messages and MOTD
+├── welcome/                  # Join messages and MOTD
+└── world/                    # World monitoring utilities
 ```
 
 ## Architecture & Patterns
 
-### Self-Registering Components
-Most components register their own event listeners in their constructor:
+### RxJava Event System (PREFERRED)
+
+**Always use the RxJava event system instead of Bukkit's Listener/EventHandler pattern.**
+
+The plugin provides reactive wrappers around Bukkit's event and scheduler systems via `SiqiJoeyPlugin`. These should always be preferred over direct Bukkit APIs.
+
+#### Watching Events
 ```java
-public MyComponent(JavaPlugin plugin) {
-    plugin.getServer().getPluginManager().registerEvents(this, plugin);
+// Single event type
+plugin.watchEvent(PlayerJoinEvent.class)
+    .subscribe(event -> handleJoin(event));
+
+// With event priority
+plugin.watchEvent(EventPriority.MONITOR, PlayerMoveEvent.class)
+    .filter(event -> isRelevant(event))
+    .subscribe(this::handleMove);
+
+// Multiple event types
+plugin.watchEvent(PlayerJoinEvent.class, PlayerQuitEvent.class)
+    .subscribe(event -> handlePlayerChange(event));
+```
+
+#### Scheduled Tasks
+```java
+// Periodic task (runs on main thread)
+plugin.interval(1, TimeUnit.SECONDS)
+    .subscribe(tick -> checkSomething());
+
+// One-shot delayed task
+plugin.timer(5, TimeUnit.SECONDS)
+    .subscribe(tick -> doSomethingLater());
+```
+
+**Why prefer RxJava over Bukkit APIs:**
+- Automatic cleanup on plugin disable
+- Composable with operators (filter, map, debounce, etc.)
+- Type-safe disposal via `CompositeDisposable`
+- Consistent patterns across the codebase
+- `plugin.interval()` and `plugin.timer()` run directly on Bukkit's scheduler without thread switching overhead
+
+#### Component Pattern
+Components should implement `Disposable` and track their subscriptions:
+```java
+public final class MyComponent implements Disposable {
+    private final CompositeDisposable disposables = new CompositeDisposable();
+
+    public MyComponent(SiqiJoeyPlugin plugin) {
+        disposables.add(plugin.watchEvent(SomeEvent.class)
+            .subscribe(this::handle));
+
+        disposables.add(plugin.interval(5, TimeUnit.SECONDS)
+            .subscribe(tick -> periodicCheck()));
+    }
+
+    @Override
+    public void dispose() {
+        disposables.dispose();
+    }
+
+    @Override
+    public boolean isDisposed() {
+        return disposables.isDisposed();
+    }
 }
 ```
-This keeps registration logic close to the component and simplifies `SiqiJoeyPlugin.onEnable()`.
+
+The plugin tracks all components in a root `CompositeDisposable` and disposes them on disable.
 
 ### Records for Immutable Data
 Java records are used extensively for:
@@ -181,13 +242,16 @@ Component.text("[Accept]")
     .hoverEvent(HoverEvent.showText(Component.text("Click to accept")))
 ```
 
-### Scheduled Tasks
-```java
-// Delayed task (20 ticks = 1 second)
-plugin.getServer().getScheduler().runTaskLater(plugin, () -> { ... }, 20L);
+### Scheduled Tasks (PREFER RxJava)
+Use `plugin.interval()` and `plugin.timer()` from the RxJava event system (see above) instead of direct Bukkit scheduler calls.
 
-// Repeating task
-plugin.getServer().getScheduler().runTaskTimer(plugin, () -> { ... }, 20L, 20L);
+```java
+// PREFERRED: Use RxJava
+plugin.interval(1, TimeUnit.SECONDS).subscribe(tick -> { ... });
+plugin.timer(5, TimeUnit.SECONDS).subscribe(tick -> { ... });
+
+// AVOID: Direct Bukkit scheduler (use only in rx package internals)
+// plugin.getServer().getScheduler().runTaskLater(plugin, () -> { ... }, 20L);
 ```
 
 ### Message Prefixes

@@ -1,13 +1,13 @@
 package sh.joey.mc.welcome;
 
+import io.reactivex.rxjava3.disposables.CompositeDisposable;
+import io.reactivex.rxjava3.disposables.Disposable;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextDecoration;
 import org.bukkit.World;
-import org.bukkit.event.EventHandler;
-import org.bukkit.event.Listener;
 import org.bukkit.event.server.ServerListPingEvent;
-import org.bukkit.plugin.java.JavaPlugin;
+import sh.joey.mc.SiqiJoeyPlugin;
 
 import java.util.List;
 import java.util.Random;
@@ -16,20 +16,27 @@ import java.util.concurrent.ThreadLocalRandom;
 /**
  * Provides dynamic MOTD messages when the server is pinged.
  */
-public final class ServerPingProvider implements Listener {
+public final class ServerPingProvider implements Disposable {
 
-    private final JavaPlugin plugin;
+    private final CompositeDisposable disposables = new CompositeDisposable();
+    private final SiqiJoeyPlugin plugin;
     private final Random random = ThreadLocalRandom.current();
 
-    public ServerPingProvider(JavaPlugin plugin) {
+    public ServerPingProvider(SiqiJoeyPlugin plugin) {
         this.plugin = plugin;
-        plugin.getServer().getPluginManager().registerEvents(this, plugin);
+
+        disposables.add(plugin.watchEvent(ServerListPingEvent.class)
+                .subscribe(event -> event.motd(generateMotd())));
     }
 
-    @EventHandler
-    public void onServerPing(ServerListPingEvent event) {
-        Component motd = generateMotd();
-        event.motd(motd);
+    @Override
+    public void dispose() {
+        disposables.dispose();
+    }
+
+    @Override
+    public boolean isDisposed() {
+        return disposables.isDisposed();
     }
 
     private Component generateMotd() {

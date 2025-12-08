@@ -1,18 +1,18 @@
 package sh.joey.mc.bossbar;
 
+import io.reactivex.rxjava3.disposables.CompositeDisposable;
+import io.reactivex.rxjava3.disposables.Disposable;
 import org.bukkit.ChatColor;
 import org.bukkit.World;
 import org.bukkit.boss.BarColor;
 import org.bukkit.boss.BarStyle;
 import org.bukkit.entity.Player;
-import org.bukkit.event.EventHandler;
-import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerChangedWorldEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.weather.ThunderChangeEvent;
 import org.bukkit.event.weather.WeatherChangeEvent;
-import org.bukkit.plugin.java.JavaPlugin;
+import sh.joey.mc.SiqiJoeyPlugin;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -23,11 +23,12 @@ import java.util.UUID;
  * Boss bar provider that shows weather change notifications.
  * Display lasts for 5 seconds after weather changes.
  */
-public final class WeatherChangeProvider implements BossBarProvider, Listener {
+public final class WeatherChangeProvider implements BossBarProvider, Disposable {
 
     private static final int PRIORITY = 140;
     private static final long DISPLAY_DURATION_MS = 5000;
 
+    private final CompositeDisposable disposables = new CompositeDisposable();
     private final Map<UUID, WeatherNotification> worldNotifications = new HashMap<>();
     private final Map<UUID, Long> playerWorldEntryTime = new HashMap<>();
 
@@ -49,8 +50,61 @@ public final class WeatherChangeProvider implements BossBarProvider, Listener {
         }
     }
 
-    public WeatherChangeProvider(JavaPlugin plugin) {
-        plugin.getServer().getPluginManager().registerEvents(this, plugin);
+    public WeatherChangeProvider(SiqiJoeyPlugin plugin) {
+        // Weather change events
+        disposables.add(plugin.watchEvent(WeatherChangeEvent.class)
+                .subscribe(this::handleWeatherChange));
+
+        disposables.add(plugin.watchEvent(ThunderChangeEvent.class)
+                .subscribe(this::handleThunderChange));
+
+        // Player world entry tracking
+        disposables.add(plugin.watchEvent(PlayerJoinEvent.class)
+                .subscribe(event -> playerWorldEntryTime.put(
+                        event.getPlayer().getUniqueId(), System.currentTimeMillis())));
+
+        disposables.add(plugin.watchEvent(PlayerChangedWorldEvent.class)
+                .subscribe(event -> playerWorldEntryTime.put(
+                        event.getPlayer().getUniqueId(), System.currentTimeMillis())));
+
+        disposables.add(plugin.watchEvent(PlayerQuitEvent.class)
+                .subscribe(event -> playerWorldEntryTime.remove(event.getPlayer().getUniqueId())));
+    }
+
+    @Override
+    public void dispose() {
+        disposables.dispose();
+    }
+
+    @Override
+    public boolean isDisposed() {
+        return disposables.isDisposed();
+    }
+
+    private void handleWeatherChange(WeatherChangeEvent event) {
+        World world = event.getWorld();
+        boolean willRain = event.toWeatherState();
+
+        WeatherType newType;
+        if (willRain) {
+            newType = world.isThundering() ? WeatherType.THUNDER : WeatherType.RAIN;
+        } else {
+            newType = WeatherType.CLEAR;
+        }
+
+        worldNotifications.put(world.getUID(), new WeatherNotification(newType, System.currentTimeMillis()));
+    }
+
+    private void handleThunderChange(ThunderChangeEvent event) {
+        World world = event.getWorld();
+        boolean willThunder = event.toThunderState();
+
+        if (!world.hasStorm() && !willThunder) {
+            return;
+        }
+
+        WeatherType newType = willThunder ? WeatherType.THUNDER : WeatherType.RAIN;
+        worldNotifications.put(world.getUID(), new WeatherNotification(newType, System.currentTimeMillis()));
     }
 
     @Override
@@ -93,51 +147,5 @@ public final class WeatherChangeProvider implements BossBarProvider, Listener {
                 "&7Weather: " + type.colorCode + "&l" + type.displayName);
 
         return Optional.of(new BossBarState(title, type.barColor, progress, BarStyle.SOLID));
-    }
-
-    @EventHandler
-    public void onWeatherChange(WeatherChangeEvent event) {
-        World world = event.getWorld();
-        boolean willRain = event.toWeatherState();
-
-        // Determine the new weather type
-        WeatherType newType;
-        if (willRain) {
-            // Check if it will also be thundering
-            newType = world.isThundering() ? WeatherType.THUNDER : WeatherType.RAIN;
-        } else {
-            newType = WeatherType.CLEAR;
-        }
-
-        worldNotifications.put(world.getUID(), new WeatherNotification(newType, System.currentTimeMillis()));
-    }
-
-    @EventHandler
-    public void onThunderChange(ThunderChangeEvent event) {
-        World world = event.getWorld();
-        boolean willThunder = event.toThunderState();
-
-        // Only relevant if it's raining
-        if (!world.hasStorm() && !willThunder) {
-            return;
-        }
-
-        WeatherType newType = willThunder ? WeatherType.THUNDER : WeatherType.RAIN;
-        worldNotifications.put(world.getUID(), new WeatherNotification(newType, System.currentTimeMillis()));
-    }
-
-    @EventHandler
-    public void onPlayerJoin(PlayerJoinEvent event) {
-        playerWorldEntryTime.put(event.getPlayer().getUniqueId(), System.currentTimeMillis());
-    }
-
-    @EventHandler
-    public void onPlayerChangedWorld(PlayerChangedWorldEvent event) {
-        playerWorldEntryTime.put(event.getPlayer().getUniqueId(), System.currentTimeMillis());
-    }
-
-    @EventHandler
-    public void onPlayerQuit(PlayerQuitEvent event) {
-        playerWorldEntryTime.remove(event.getPlayer().getUniqueId());
     }
 }

@@ -1,15 +1,16 @@
 package sh.joey.mc.world;
 
+import io.reactivex.rxjava3.disposables.CompositeDisposable;
+import io.reactivex.rxjava3.disposables.Disposable;
 import org.bukkit.World;
-import org.bukkit.event.EventHandler;
-import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.world.WorldUnloadEvent;
-import org.bukkit.plugin.java.JavaPlugin;
+import sh.joey.mc.SiqiJoeyPlugin;
 
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Monitors world time to detect if time is passing while the server is empty.
@@ -20,13 +21,13 @@ import java.util.UUID;
  * Includes a 90-second grace period after server becomes empty to account for
  * the pause-when-empty-seconds setting (typically 60 seconds).
  */
-public final class TimePassingMonitor implements Listener {
+public final class TimePassingMonitor implements Disposable {
 
     private static final int MAX_WARNINGS = 3;
-    private static final long CHECK_INTERVAL_TICKS = 100L; // Check every 5 seconds
     private static final long GRACE_PERIOD_MS = 90_000L; // 90 seconds grace period
 
-    private final JavaPlugin plugin;
+    private final CompositeDisposable disposables = new CompositeDisposable();
+    private final SiqiJoeyPlugin plugin;
     private final Map<UUID, WorldState> worldStates = new HashMap<>();
     private long emptyServerSince = -1;
 
@@ -36,12 +37,37 @@ public final class TimePassingMonitor implements Listener {
         boolean confirmedPaused = false;
     }
 
-    public TimePassingMonitor(JavaPlugin plugin) {
+    public TimePassingMonitor(SiqiJoeyPlugin plugin) {
         this.plugin = plugin;
-        plugin.getServer().getPluginManager().registerEvents(this, plugin);
 
-        // Start monitoring task
-        plugin.getServer().getScheduler().runTaskTimer(plugin, this::checkTime, CHECK_INTERVAL_TICKS, CHECK_INTERVAL_TICKS);
+        // Periodic time checking (every 5 seconds)
+        disposables.add(plugin.interval(5, TimeUnit.SECONDS)
+                .subscribe(tick -> checkTime()));
+
+        // Player join resets tracking
+        disposables.add(plugin.watchEvent(PlayerJoinEvent.class)
+                .subscribe(event -> {
+                    boolean hadWarnings = worldStates.values().stream().anyMatch(s -> s.warningCount > 0);
+                    if (hadWarnings) {
+                        plugin.getLogger().info("[TimeMonitor] Player joined - resetting time monitor.");
+                    }
+                    worldStates.clear();
+                    emptyServerSince = -1;
+                }));
+
+        // World unload cleanup
+        disposables.add(plugin.watchEvent(WorldUnloadEvent.class)
+                .subscribe(event -> worldStates.remove(event.getWorld().getUID())));
+    }
+
+    @Override
+    public void dispose() {
+        disposables.dispose();
+    }
+
+    @Override
+    public boolean isDisposed() {
+        return disposables.isDisposed();
     }
 
     private void checkTime() {
@@ -130,21 +156,5 @@ public final class TimePassingMonitor implements Listener {
         }
 
         state.lastFullTime = currentFullTime;
-    }
-
-    @EventHandler
-    public void onPlayerJoin(PlayerJoinEvent event) {
-        // Reset all tracking when someone joins
-        boolean hadWarnings = worldStates.values().stream().anyMatch(s -> s.warningCount > 0);
-        if (hadWarnings) {
-            plugin.getLogger().info("[TimeMonitor] Player joined - resetting time monitor.");
-        }
-        worldStates.clear();
-        emptyServerSince = -1;
-    }
-
-    @EventHandler
-    public void onWorldUnload(WorldUnloadEvent event) {
-        worldStates.remove(event.getWorld().getUID());
     }
 }

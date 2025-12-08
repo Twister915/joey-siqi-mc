@@ -1,6 +1,15 @@
 package sh.joey.mc;
 
+import io.reactivex.rxjava3.core.Observable;
+import io.reactivex.rxjava3.core.Scheduler;
+import io.reactivex.rxjava3.disposables.CompositeDisposable;
+import org.bukkit.event.Event;
+import org.bukkit.event.EventPriority;
 import org.bukkit.plugin.java.JavaPlugin;
+import org.bukkit.scheduler.BukkitTask;
+import sh.joey.mc.rx.EventObservable;
+
+import java.util.concurrent.TimeUnit;
 import sh.joey.mc.bossbar.BiomeChangeProvider;
 import sh.joey.mc.bossbar.BossBarManager;
 import sh.joey.mc.bossbar.LodestoneCompassProvider;
@@ -20,29 +29,46 @@ import sh.joey.mc.teleport.SafeTeleporter;
 import sh.joey.mc.teleport.commands.BackCommand;
 import sh.joey.mc.teleport.commands.TpCommand;
 import sh.joey.mc.teleport.commands.YesNoCommands;
+import sh.joey.mc.rx.BukkitSchedulers;
 import sh.joey.mc.world.TimePassingMonitor;
 
 @SuppressWarnings("unused")
 public final class SiqiJoeyPlugin extends JavaPlugin {
 
-    private BossBarManager bossBarManager;
+    private BukkitSchedulers schedulers;
+    private final CompositeDisposable components = new CompositeDisposable();
 
     @Override
     public void onEnable() {
+        // Initialize RxJava schedulers first
+        schedulers = new BukkitSchedulers(this);
+
         // Boss bar system with priority-based providers
-        bossBarManager = new BossBarManager(this);
+        var bossBarManager = new BossBarManager(this);
+        components.add(bossBarManager);
         bossBarManager.registerProvider(new TimeOfDayProvider());
         bossBarManager.registerProvider(new LodestoneCompassProvider());
-        bossBarManager.registerProvider(new BiomeChangeProvider(this));
-        bossBarManager.registerProvider(new WeatherChangeProvider(this));
+
+        var biomeChangeProvider = new BiomeChangeProvider(this);
+        components.add(biomeChangeProvider);
+        bossBarManager.registerProvider(biomeChangeProvider);
+
+        var weatherChangeProvider = new WeatherChangeProvider(this);
+        components.add(weatherChangeProvider);
+        bossBarManager.registerProvider(weatherChangeProvider);
 
         // Load config
         var config = PluginConfig.load(this);
 
-        // Initialize teleport system components (they register their own listeners)
+        // Initialize teleport system components
         var locationTracker = new LocationTracker(this);
+        components.add(locationTracker);
+
         var safeTeleporter = new SafeTeleporter(this, config, locationTracker);
+        components.add(safeTeleporter);
+
         var requestManager = new RequestManager(this, config, safeTeleporter);
+        components.add(requestManager);
 
         // Register teleport countdown provider (needs SafeTeleporter)
         bossBarManager.registerProvider(new TeleportCountdownProvider(safeTeleporter));
@@ -60,24 +86,169 @@ public final class SiqiJoeyPlugin extends JavaPlugin {
         var homeCommand = new HomeCommand(this, homeStorage, safeTeleporter);
         getCommand("home").setExecutor(homeCommand);
         getCommand("home").setTabCompleter(homeCommand);
-        new BedHomeListener(this, homeStorage);
+
+        var bedHomeListener = new BedHomeListener(this, homeStorage);
+        components.add(bedHomeListener);
 
         // Day message system
-        new DayMessageProvider(this);
+        var dayMessageProvider = new DayMessageProvider(this);
+        components.add(dayMessageProvider);
 
         // Welcome message systems
-        new JoinMessageProvider(this);
-        new ServerPingProvider(this);
+        var joinMessageProvider = new JoinMessageProvider(this);
+        components.add(joinMessageProvider);
+
+        var serverPingProvider = new ServerPingProvider(this);
+        components.add(serverPingProvider);
 
         // Monitor to verify time pauses when server is empty
-        new TimePassingMonitor(this);
+        var timePassingMonitor = new TimePassingMonitor(this);
+        components.add(timePassingMonitor);
 
         getLogger().info("Plugin enabled!");
     }
 
     @Override
     public void onDisable() {
-        bossBarManager.onDisable();
-        bossBarManager = null;
+        components.dispose();
+        schedulers.shutdown();
+    }
+
+    /**
+     * Returns the RxJava Scheduler for Bukkit's main server thread.
+     */
+    public Scheduler mainScheduler() {
+        return schedulers.mainThread();
+    }
+
+    /**
+     * Returns the RxJava Scheduler for Bukkit's async thread pool.
+     */
+    public Scheduler asyncScheduler() {
+        return schedulers.async();
+    }
+
+    /**
+     * Creates an Observable that emits events of the specified types.
+     * Uses default priority (NORMAL) and does not ignore cancelled events.
+     */
+    @SafeVarargs
+    public final <T extends Event> Observable<T> watchEvent(Class<? extends T>... eventTypes) {
+        return watchEvent(false, EventPriority.NORMAL, eventTypes);
+    }
+
+    /**
+     * Creates an Observable that emits events of the specified types with the given priority.
+     * Does not ignore cancelled events.
+     */
+    @SafeVarargs
+    public final <T extends Event> Observable<T> watchEvent(EventPriority priority, Class<? extends T>... eventTypes) {
+        return watchEvent(false, priority, eventTypes);
+    }
+
+    /**
+     * Creates an Observable that emits events of the specified types.
+     * Uses default priority (NORMAL).
+     */
+    @SafeVarargs
+    public final <T extends Event> Observable<T> watchEvent(boolean ignoreCancelled, Class<? extends T>... eventTypes) {
+        return watchEvent(ignoreCancelled, EventPriority.NORMAL, eventTypes);
+    }
+
+    /**
+     * Creates an Observable that emits events of the specified types.
+     *
+     * @param ignoreCancelled if true, cancelled events will not be emitted
+     * @param priority the event priority for the listener
+     * @param eventTypes one or more event classes to listen for
+     * @return an Observable that emits the specified event types
+     */
+    @SafeVarargs
+    @SuppressWarnings("unchecked")
+    public final <T extends Event> Observable<T> watchEvent(boolean ignoreCancelled, EventPriority priority,
+                                                            Class<? extends T>... eventTypes) {
+        if (eventTypes.length == 0) {
+            return Observable.empty();
+        }
+
+        if (eventTypes.length == 1) {
+            return (Observable<T>) new EventObservable<>(eventTypes[0], this, priority, ignoreCancelled);
+        }
+
+        // Multiple event types: merge individual observables
+        Observable<T>[] observables = new Observable[eventTypes.length];
+        for (int i = 0; i < eventTypes.length; i++) {
+            observables[i] = (Observable<T>) new EventObservable<>(eventTypes[i], this, priority, ignoreCancelled);
+        }
+        return Observable.mergeArray(observables);
+    }
+
+    /**
+     * Creates an Observable that emits on the main thread at a fixed interval.
+     * More efficient than Observable.interval().observeOn(mainScheduler()) as it
+     * directly uses Bukkit's scheduler without thread switching overhead.
+     *
+     * @param period the period between emissions
+     * @param unit the time unit
+     * @return an Observable that emits Long values starting from 0
+     */
+    public Observable<Long> interval(long period, TimeUnit unit) {
+        return interval(period, period, unit);
+    }
+
+    /**
+     * Creates an Observable that emits on the main thread at a fixed interval.
+     * More efficient than Observable.interval().observeOn(mainScheduler()) as it
+     * directly uses Bukkit's scheduler without thread switching overhead.
+     *
+     * @param initialDelay the initial delay before first emission
+     * @param period the period between subsequent emissions
+     * @param unit the time unit
+     * @return an Observable that emits Long values starting from 0
+     */
+    public Observable<Long> interval(long initialDelay, long period, TimeUnit unit) {
+        return Observable.create(emitter -> {
+            long[] count = {0};
+            long initialTicks = toTicks(initialDelay, unit);
+            long periodTicks = Math.max(1, toTicks(period, unit));
+
+            BukkitTask task = getServer().getScheduler().runTaskTimer(this, () -> {
+                if (!emitter.isDisposed()) {
+                    emitter.onNext(count[0]++);
+                }
+            }, initialTicks, periodTicks);
+
+            emitter.setCancellable(task::cancel);
+        });
+    }
+
+    /**
+     * Creates an Observable that emits once on the main thread after a delay.
+     * More efficient than Observable.timer().observeOn(mainScheduler()) as it
+     * directly uses Bukkit's scheduler without thread switching overhead.
+     *
+     * @param delay the delay before emission
+     * @param unit the time unit
+     * @return an Observable that emits 0L then completes
+     */
+    public Observable<Long> timer(long delay, TimeUnit unit) {
+        return Observable.create(emitter -> {
+            long ticks = toTicks(delay, unit);
+
+            BukkitTask task = getServer().getScheduler().runTaskLater(this, () -> {
+                if (!emitter.isDisposed()) {
+                    emitter.onNext(0L);
+                    emitter.onComplete();
+                }
+            }, ticks);
+
+            emitter.setCancellable(task::cancel);
+        });
+    }
+
+    private static long toTicks(long delay, TimeUnit unit) {
+        long millis = unit.toMillis(delay);
+        if (millis <= 0) return 0;
+        return Math.max(1, (millis * 20L) / 1000);
     }
 }

@@ -1,57 +1,54 @@
 package sh.joey.mc.home;
 
+import io.reactivex.rxjava3.disposables.CompositeDisposable;
+import io.reactivex.rxjava3.disposables.Disposable;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextDecoration;
 import org.bukkit.Location;
 import org.bukkit.Material;
-import org.bukkit.block.Block;
 import org.bukkit.entity.Player;
-import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
-import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerInteractEvent;
-import org.bukkit.plugin.java.JavaPlugin;
+import sh.joey.mc.SiqiJoeyPlugin;
 
 /**
  * Automatically saves a player's first bed interaction as their default home.
  * Only triggers if the player has no existing homes.
  */
-public final class BedHomeListener implements Listener {
+public final class BedHomeListener implements Disposable {
 
     private static final Component PREFIX = Component.text("[")
             .color(NamedTextColor.DARK_GRAY)
             .append(Component.text("Home").color(NamedTextColor.LIGHT_PURPLE).decorate(TextDecoration.BOLD))
             .append(Component.text("] ").color(NamedTextColor.DARK_GRAY));
 
+    private final CompositeDisposable disposables = new CompositeDisposable();
     private final HomeStorage storage;
 
-    public BedHomeListener(JavaPlugin plugin, HomeStorage storage) {
+    public BedHomeListener(SiqiJoeyPlugin plugin, HomeStorage storage) {
         this.storage = storage;
-        plugin.getServer().getPluginManager().registerEvents(this, plugin);
+
+        disposables.add(plugin.watchEvent(EventPriority.MONITOR, PlayerInteractEvent.class)
+                .filter(event -> event.getAction().isRightClick())
+                .filter(event -> event.getClickedBlock() != null)
+                .filter(event -> isBed(event.getClickedBlock().getType()))
+                .filter(event -> !storage.hasAnyHomes(event.getPlayer().getUniqueId()))
+                .subscribe(this::handleFirstBedInteraction));
     }
 
-    @EventHandler(priority = EventPriority.MONITOR)
-    public void onPlayerInteract(PlayerInteractEvent event) {
-        if (!event.getAction().isRightClick()) {
-            return;
-        }
+    @Override
+    public void dispose() {
+        disposables.dispose();
+    }
 
-        Block clickedBlock = event.getClickedBlock();
-        if (clickedBlock == null) {
-            return;
-        }
+    @Override
+    public boolean isDisposed() {
+        return disposables.isDisposed();
+    }
 
-        if (!isBed(clickedBlock.getType())) {
-            return;
-        }
-
+    private void handleFirstBedInteraction(PlayerInteractEvent event) {
         Player player = event.getPlayer();
-        if (storage.hasAnyHomes(player.getUniqueId())) {
-            return;
-        }
-
-        // Player has no homes and right-clicked a bed - save as "home"
         Location location = player.getLocation();
         Home home = new Home("home", location);
         storage.setHome(player.getUniqueId(), home);

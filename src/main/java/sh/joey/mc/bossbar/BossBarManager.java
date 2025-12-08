@@ -1,16 +1,16 @@
 package sh.joey.mc.bossbar;
 
 import com.destroystokyo.paper.event.server.ServerTickStartEvent;
+import io.reactivex.rxjava3.disposables.CompositeDisposable;
+import io.reactivex.rxjava3.disposables.Disposable;
 import org.bukkit.Bukkit;
 import org.bukkit.boss.BarColor;
 import org.bukkit.boss.BarStyle;
 import org.bukkit.boss.BossBar;
 import org.bukkit.entity.Player;
-import org.bukkit.event.EventHandler;
-import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
-import org.bukkit.plugin.java.JavaPlugin;
+import sh.joey.mc.SiqiJoeyPlugin;
 
 import java.util.*;
 
@@ -19,17 +19,34 @@ import java.util.*;
  * Each tick, providers are polled and the highest priority provider
  * with content determines what's shown.
  */
-public final class BossBarManager implements Listener {
+public final class BossBarManager implements Disposable {
 
-    private final JavaPlugin plugin;
+    private final CompositeDisposable disposables = new CompositeDisposable();
+    private final SiqiJoeyPlugin plugin;
     private final List<BossBarProvider> providers = new ArrayList<>();
     private final Map<UUID, BossBar> playerBossBars = new HashMap<>();
 
-    public BossBarManager(JavaPlugin plugin) {
+    public BossBarManager(SiqiJoeyPlugin plugin) {
         this.plugin = plugin;
+
         // Create boss bars for already-online players
         plugin.getServer().getOnlinePlayers().forEach(this::createBossBar);
-        plugin.getServer().getPluginManager().registerEvents(this, plugin);
+
+        // Player join/quit events
+        disposables.add(plugin.watchEvent(PlayerJoinEvent.class)
+                .subscribe(event -> createBossBar(event.getPlayer())));
+
+        disposables.add(plugin.watchEvent(PlayerQuitEvent.class)
+                .subscribe(event -> {
+                    BossBar bar = playerBossBars.remove(event.getPlayer().getUniqueId());
+                    if (bar != null) {
+                        bar.removeAll();
+                    }
+                }));
+
+        // Tick-based updates
+        disposables.add(plugin.watchEvent(ServerTickStartEvent.class)
+                .subscribe(event -> updateAllBossBars()));
     }
 
     /**
@@ -40,26 +57,19 @@ public final class BossBarManager implements Listener {
         providers.sort(Comparator.comparingInt(BossBarProvider::getPriority).reversed());
     }
 
-    public void onDisable() {
+    @Override
+    public void dispose() {
+        disposables.dispose();
         playerBossBars.values().forEach(BossBar::removeAll);
         playerBossBars.clear();
     }
 
-    @EventHandler
-    public void onPlayerJoin(PlayerJoinEvent event) {
-        createBossBar(event.getPlayer());
+    @Override
+    public boolean isDisposed() {
+        return disposables.isDisposed();
     }
 
-    @EventHandler
-    public void onPlayerQuit(PlayerQuitEvent event) {
-        BossBar bar = playerBossBars.remove(event.getPlayer().getUniqueId());
-        if (bar != null) {
-            bar.removeAll();
-        }
-    }
-
-    @EventHandler
-    public void onTick(ServerTickStartEvent event) {
+    private void updateAllBossBars() {
         for (var entry : playerBossBars.entrySet()) {
             Player player = Bukkit.getPlayer(entry.getKey());
             if (player == null || !player.isOnline()) {

@@ -1,11 +1,10 @@
 package sh.joey.mc.teleport;
 
+import io.reactivex.rxjava3.disposables.CompositeDisposable;
+import io.reactivex.rxjava3.disposables.Disposable;
 import org.bukkit.Location;
-import org.bukkit.event.EventHandler;
-import org.bukkit.event.Listener;
 import org.bukkit.event.entity.PlayerDeathEvent;
-
-import org.bukkit.plugin.java.JavaPlugin;
+import sh.joey.mc.SiqiJoeyPlugin;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -16,17 +15,27 @@ import java.util.UUID;
  * Tracks death locations and teleport-from locations for each player.
  * Used by the /back command.
  */
-public final class LocationTracker implements Listener {
+public final class LocationTracker implements Disposable {
+    private final CompositeDisposable disposables = new CompositeDisposable();
     private final Map<UUID, Location> deathLocations = new HashMap<>();
     private final Map<UUID, Location> teleportFromLocations = new HashMap<>();
 
-    public LocationTracker(JavaPlugin plugin) {
-        plugin.getServer().getPluginManager().registerEvents(this, plugin);
+    public LocationTracker(SiqiJoeyPlugin plugin) {
+        disposables.add(plugin.watchEvent(PlayerDeathEvent.class)
+                .subscribe(event -> deathLocations.put(
+                        event.getPlayer().getUniqueId(),
+                        event.getPlayer().getLocation()
+                )));
     }
 
-    @EventHandler
-    public void onPlayerDeath(PlayerDeathEvent event) {
-        deathLocations.put(event.getPlayer().getUniqueId(), event.getPlayer().getLocation());
+    @Override
+    public void dispose() {
+        disposables.dispose();
+    }
+
+    @Override
+    public boolean isDisposed() {
+        return disposables.isDisposed();
     }
 
     public void recordTeleportFrom(UUID playerId, Location location) {

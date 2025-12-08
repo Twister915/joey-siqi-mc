@@ -1,5 +1,7 @@
 package sh.joey.mc.bossbar;
 
+import io.reactivex.rxjava3.disposables.CompositeDisposable;
+import io.reactivex.rxjava3.disposables.Disposable;
 import org.bukkit.ChatColor;
 import org.bukkit.Location;
 import org.bukkit.NamespacedKey;
@@ -7,10 +9,8 @@ import org.bukkit.block.Biome;
 import org.bukkit.boss.BarColor;
 import org.bukkit.boss.BarStyle;
 import org.bukkit.entity.Player;
-import org.bukkit.event.EventHandler;
-import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerQuitEvent;
-import org.bukkit.plugin.java.JavaPlugin;
+import sh.joey.mc.SiqiJoeyPlugin;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -22,11 +22,12 @@ import java.util.UUID;
  * Display lasts for 5 seconds after entering the biome.
  * Includes debounce to prevent spam when walking along biome borders.
  */
-public final class BiomeChangeProvider implements BossBarProvider, Listener {
+public final class BiomeChangeProvider implements BossBarProvider, Disposable {
 
     private static final int PRIORITY = 150;
     private static final long DISPLAY_DURATION_MS = 5000;
 
+    private final CompositeDisposable disposables = new CompositeDisposable();
     private final long debounceMs;
     private final Map<UUID, BiomeState> playerStates = new HashMap<>();
 
@@ -49,13 +50,25 @@ public final class BiomeChangeProvider implements BossBarProvider, Listener {
         }
     }
 
-    public BiomeChangeProvider(JavaPlugin plugin) {
+    public BiomeChangeProvider(SiqiJoeyPlugin plugin) {
         this(plugin, 30); // Default 30 ticks = 1.5 seconds
     }
 
-    public BiomeChangeProvider(JavaPlugin plugin, int debounceTicks) {
-        plugin.getServer().getPluginManager().registerEvents(this, plugin);
+    public BiomeChangeProvider(SiqiJoeyPlugin plugin, int debounceTicks) {
         this.debounceMs = debounceTicks * 50L; // 1 tick = 50ms
+
+        disposables.add(plugin.watchEvent(PlayerQuitEvent.class)
+                .subscribe(event -> playerStates.remove(event.getPlayer().getUniqueId())));
+    }
+
+    @Override
+    public void dispose() {
+        disposables.dispose();
+    }
+
+    @Override
+    public boolean isDisposed() {
+        return disposables.isDisposed();
     }
 
     @Override
@@ -114,10 +127,6 @@ public final class BiomeChangeProvider implements BossBarProvider, Listener {
         return Optional.of(new BossBarState(title, color, progress, BarStyle.SOLID));
     }
 
-    @EventHandler
-    public void onPlayerQuit(PlayerQuitEvent event) {
-        playerStates.remove(event.getPlayer().getUniqueId());
-    }
 
     private String formatBiomeName(NamespacedKey key) {
         // Convert "dark_forest" to "Dark Forest"

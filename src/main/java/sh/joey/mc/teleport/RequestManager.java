@@ -1,37 +1,70 @@
 package sh.joey.mc.teleport;
 
+import io.reactivex.rxjava3.disposables.CompositeDisposable;
+import io.reactivex.rxjava3.disposables.Disposable;
 import org.bukkit.entity.Player;
-import org.bukkit.event.EventHandler;
-import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerQuitEvent;
-import org.bukkit.plugin.java.JavaPlugin;
-import org.bukkit.scheduler.BukkitTask;
+import sh.joey.mc.SiqiJoeyPlugin;
 
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Manages teleport requests between players.
  * Handles /tp requests and /yes /no responses.
  */
-public final class RequestManager implements Listener {
-    private final JavaPlugin plugin;
+public final class RequestManager implements Disposable {
+    private final CompositeDisposable disposables = new CompositeDisposable();
+    private final SiqiJoeyPlugin plugin;
     private final PluginConfig config;
     private final SafeTeleporter safeTeleporter;
     private final Map<UUID, TeleportRequest> pendingRequests = new HashMap<>();
 
     private record TeleportRequest(
             UUID requesterId,
-            BukkitTask expiryTask
+            Disposable expiryTask
     ) {}
 
-    public RequestManager(JavaPlugin plugin, PluginConfig config, SafeTeleporter safeTeleporter) {
+    public RequestManager(SiqiJoeyPlugin plugin, PluginConfig config, SafeTeleporter safeTeleporter) {
         this.plugin = plugin;
         this.config = config;
         this.safeTeleporter = safeTeleporter;
-        plugin.getServer().getPluginManager().registerEvents(this, plugin);
+
+        // Player quit cleanup
+        disposables.add(plugin.watchEvent(PlayerQuitEvent.class)
+                .subscribe(this::handlePlayerQuit));
+    }
+
+    @Override
+    public void dispose() {
+        disposables.dispose();
+        // Cancel all pending requests
+        pendingRequests.values().forEach(req -> req.expiryTask().dispose());
+        pendingRequests.clear();
+    }
+
+    @Override
+    public boolean isDisposed() {
+        return disposables.isDisposed();
+    }
+
+    private void handlePlayerQuit(PlayerQuitEvent event) {
+        UUID playerId = event.getPlayer().getUniqueId();
+
+        // Cancel any request TO this player
+        cancelRequest(playerId, false);
+
+        // Cancel any requests FROM this player
+        pendingRequests.entrySet().removeIf(entry -> {
+            if (entry.getValue().requesterId().equals(playerId)) {
+                entry.getValue().expiryTask().dispose();
+                return true;
+            }
+            return false;
+        });
     }
 
     /**
@@ -45,12 +78,13 @@ public final class RequestManager implements Listener {
         cancelRequest(targetId, false);
 
         // Schedule expiry
-        BukkitTask expiryTask = plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
-            if (pendingRequests.remove(targetId) != null) {
-                Messages.warning(requester, "Your teleport request to " + target.getName() + " expired.");
-                Messages.info(target, "Teleport request from " + requester.getName() + " expired.");
-            }
-        }, config.requestTimeoutSeconds() * 20L);
+        Disposable expiryTask = plugin.timer(config.requestTimeoutSeconds(), TimeUnit.SECONDS)
+                .subscribe(tick -> {
+                    if (pendingRequests.remove(targetId) != null) {
+                        Messages.warning(requester, "Your teleport request to " + target.getName() + " expired.");
+                        Messages.info(target, "Teleport request from " + requester.getName() + " expired.");
+                    }
+                });
 
         pendingRequests.put(targetId, new TeleportRequest(requesterId, expiryTask));
 
@@ -70,7 +104,7 @@ public final class RequestManager implements Listener {
             return;
         }
 
-        request.expiryTask().cancel();
+        request.expiryTask().dispose();
 
         Player requester = plugin.getServer().getPlayer(request.requesterId());
         if (requester == null || !requester.isOnline()) {
@@ -99,7 +133,7 @@ public final class RequestManager implements Listener {
             return;
         }
 
-        request.expiryTask().cancel();
+        request.expiryTask().dispose();
 
         Player requester = plugin.getServer().getPlayer(request.requesterId());
         Messages.info(target, "Teleport request declined.");
@@ -123,24 +157,7 @@ public final class RequestManager implements Listener {
     private void cancelRequest(UUID targetId, boolean notify) {
         TeleportRequest request = pendingRequests.remove(targetId);
         if (request != null) {
-            request.expiryTask().cancel();
+            request.expiryTask().dispose();
         }
-    }
-
-    @EventHandler
-    public void onPlayerQuit(PlayerQuitEvent event) {
-        UUID playerId = event.getPlayer().getUniqueId();
-
-        // Cancel any request TO this player
-        cancelRequest(playerId, false);
-
-        // Cancel any requests FROM this player
-        pendingRequests.entrySet().removeIf(entry -> {
-            if (entry.getValue().requesterId().equals(playerId)) {
-                entry.getValue().expiryTask().cancel();
-                return true;
-            }
-            return false;
-        });
     }
 }

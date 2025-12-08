@@ -1,14 +1,13 @@
 package sh.joey.mc.welcome;
 
+import io.reactivex.rxjava3.disposables.CompositeDisposable;
+import io.reactivex.rxjava3.disposables.Disposable;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
-import net.kyori.adventure.text.format.TextDecoration;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
-import org.bukkit.event.EventHandler;
-import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerJoinEvent;
-import org.bukkit.plugin.java.JavaPlugin;
+import sh.joey.mc.SiqiJoeyPlugin;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -18,24 +17,33 @@ import java.util.concurrent.ThreadLocalRandom;
 /**
  * Sends a themed welcome message to players when they join the server.
  */
-public final class JoinMessageProvider implements Listener {
+public final class JoinMessageProvider implements Disposable {
 
     private static final Component PREFIX = Component.text("[")
             .color(NamedTextColor.GOLD)
             .append(Component.text("\u2605").color(NamedTextColor.YELLOW)) // ★
             .append(Component.text("] ").color(NamedTextColor.GOLD));
 
+    private final CompositeDisposable disposables = new CompositeDisposable();
     private final Random random = ThreadLocalRandom.current();
 
-    public JoinMessageProvider(JavaPlugin plugin) {
-        plugin.getServer().getPluginManager().registerEvents(this, plugin);
+    public JoinMessageProvider(SiqiJoeyPlugin plugin) {
+        disposables.add(plugin.watchEvent(PlayerJoinEvent.class)
+                .subscribe(event -> {
+                    Player player = event.getPlayer();
+                    String message = generateMessage(player);
+                    player.sendMessage(PREFIX.append(Component.text(message).color(NamedTextColor.WHITE)));
+                }));
     }
 
-    @EventHandler
-    public void onPlayerJoin(PlayerJoinEvent event) {
-        Player player = event.getPlayer();
-        String message = generateMessage(player);
-        player.sendMessage(PREFIX.append(Component.text(message).color(NamedTextColor.WHITE)));
+    @Override
+    public void dispose() {
+        disposables.dispose();
+    }
+
+    @Override
+    public boolean isDisposed() {
+        return disposables.isDisposed();
     }
 
     private String generateMessage(Player player) {

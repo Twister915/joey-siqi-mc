@@ -1,31 +1,32 @@
 package sh.joey.mc.teleport;
 
+import io.reactivex.rxjava3.disposables.CompositeDisposable;
+import io.reactivex.rxjava3.disposables.Disposable;
 import org.bukkit.Location;
 import org.bukkit.Particle;
 import org.bukkit.Sound;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
-import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
-import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
-import org.bukkit.plugin.java.JavaPlugin;
-import org.bukkit.scheduler.BukkitTask;
+import sh.joey.mc.SiqiJoeyPlugin;
 
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
 /**
  * Handles safe teleportation with warmup countdown and movement detection.
  * Players must stand still during the warmup period to teleport.
  */
-public final class SafeTeleporter implements Listener {
+public final class SafeTeleporter implements Disposable {
     private static final long CANCELLED_DISPLAY_MS = 3000; // Show cancelled for 3 seconds
 
-    private final JavaPlugin plugin;
+    private final CompositeDisposable disposables = new CompositeDisposable();
+    private final SiqiJoeyPlugin plugin;
     private final PluginConfig config;
     private final LocationTracker locationTracker;
     private final Map<UUID, PendingTeleport> pendingTeleports = new HashMap<>();
@@ -34,7 +35,7 @@ public final class SafeTeleporter implements Listener {
     private record PendingTeleport(
             Location startLocation,
             Location destination,
-            BukkitTask countdownTask,
+            Disposable countdownTask,
             Consumer<Boolean> onComplete,
             long startTimeMs,
             int totalSeconds
@@ -72,11 +73,35 @@ public final class SafeTeleporter implements Listener {
         }
     }
 
-    public SafeTeleporter(JavaPlugin plugin, PluginConfig config, LocationTracker locationTracker) {
+    public SafeTeleporter(SiqiJoeyPlugin plugin, PluginConfig config, LocationTracker locationTracker) {
         this.plugin = plugin;
         this.config = config;
         this.locationTracker = locationTracker;
-        plugin.getServer().getPluginManager().registerEvents(this, plugin);
+
+        // Movement detection
+        disposables.add(plugin.watchEvent(EventPriority.MONITOR, PlayerMoveEvent.class)
+                .subscribe(this::handlePlayerMove));
+
+        // Player quit cleanup
+        disposables.add(plugin.watchEvent(PlayerQuitEvent.class)
+                .subscribe(event -> {
+                    UUID playerId = event.getPlayer().getUniqueId();
+                    cancelTeleport(playerId, false);
+                    cancelledTeleports.remove(playerId);
+                }));
+    }
+
+    @Override
+    public void dispose() {
+        disposables.dispose();
+        // Cancel all pending teleports
+        pendingTeleports.values().forEach(pending -> pending.countdownTask().dispose());
+        pendingTeleports.clear();
+    }
+
+    @Override
+    public boolean isDisposed() {
+        return disposables.isDisposed();
     }
 
     /**
@@ -96,25 +121,57 @@ public final class SafeTeleporter implements Listener {
         cancelledTeleports.remove(playerId);
 
         Location startLocation = player.getLocation().clone();
-        int[] secondsRemaining = {config.teleportWarmupSeconds()};
+        int totalSeconds = config.teleportWarmupSeconds();
 
-        Messages.countdown(player, secondsRemaining[0]);
+        Messages.countdown(player, totalSeconds);
 
-        BukkitTask task = plugin.getServer().getScheduler().runTaskTimer(plugin, () -> {
-            secondsRemaining[0]--;
-
-            if (secondsRemaining[0] > 0) {
-                Messages.countdown(player, secondsRemaining[0]);
-            } else {
-                // Time's up - execute teleport
-                executeTeleport(player, destination, onComplete);
-            }
-        }, 20L, 20L); // 20 ticks = 1 second
+        // Create countdown using interval
+        Disposable countdownTask = plugin.interval(1, TimeUnit.SECONDS)
+                .take(totalSeconds)
+                .subscribe(
+                        tick -> {
+                            int secondsRemaining = totalSeconds - tick.intValue() - 1;
+                            if (secondsRemaining > 0) {
+                                Messages.countdown(player, secondsRemaining);
+                            } else {
+                                // Time's up - execute teleport
+                                executeTeleport(player, destination, onComplete);
+                            }
+                        },
+                        error -> plugin.getLogger().warning("Teleport countdown error: " + error.getMessage())
+                );
 
         pendingTeleports.put(playerId, new PendingTeleport(
-                startLocation, destination, task, onComplete,
-                System.currentTimeMillis(), config.teleportWarmupSeconds()
+                startLocation, destination, countdownTask, onComplete,
+                System.currentTimeMillis(), totalSeconds
         ));
+    }
+
+    private void handlePlayerMove(PlayerMoveEvent event) {
+        UUID playerId = event.getPlayer().getUniqueId();
+        PendingTeleport pending = pendingTeleports.get(playerId);
+
+        if (pending == null) {
+            return;
+        }
+
+        // Calculate horizontal distance moved (ignore Y for small jumps/falls)
+        Location from = pending.startLocation();
+        Location to = event.getTo();
+
+        double horizontalDistance = Math.sqrt(
+                Math.pow(to.getX() - from.getX(), 2) +
+                Math.pow(to.getZ() - from.getZ(), 2)
+        );
+
+        // Also check vertical but with more tolerance (for jumping)
+        double verticalDistance = Math.abs(to.getY() - from.getY());
+
+        // Cancel if moved beyond tolerance
+        if (horizontalDistance > config.movementToleranceBlocks() ||
+            verticalDistance > config.movementToleranceBlocks() * 2) {
+            cancelTeleport(playerId, true);
+        }
     }
 
     private void executeTeleport(Player player, Location destination, Consumer<Boolean> onComplete) {
@@ -122,7 +179,7 @@ public final class SafeTeleporter implements Listener {
         PendingTeleport pending = pendingTeleports.remove(playerId);
 
         if (pending != null) {
-            pending.countdownTask().cancel();
+            pending.countdownTask().dispose();
         }
 
         // Record current location before teleporting (for /back)
@@ -191,7 +248,7 @@ public final class SafeTeleporter implements Listener {
     private void cancelTeleport(UUID playerId, boolean notify) {
         PendingTeleport pending = pendingTeleports.remove(playerId);
         if (pending != null) {
-            pending.countdownTask().cancel();
+            pending.countdownTask().dispose();
             if (notify) {
                 // Record cancellation for boss bar display
                 cancelledTeleports.put(playerId, System.currentTimeMillis());
@@ -235,41 +292,5 @@ public final class SafeTeleporter implements Listener {
             return null;
         }
         return state;
-    }
-
-    @EventHandler(priority = EventPriority.MONITOR)
-    public void onPlayerMove(PlayerMoveEvent event) {
-        UUID playerId = event.getPlayer().getUniqueId();
-        PendingTeleport pending = pendingTeleports.get(playerId);
-
-        if (pending == null) {
-            return;
-        }
-
-        // Calculate horizontal distance moved (ignore Y for small jumps/falls)
-        Location from = pending.startLocation();
-        Location to = event.getTo();
-
-        double horizontalDistance = Math.sqrt(
-                Math.pow(to.getX() - from.getX(), 2) +
-                Math.pow(to.getZ() - from.getZ(), 2)
-        );
-
-        // Also check vertical but with more tolerance (for jumping)
-        double verticalDistance = Math.abs(to.getY() - from.getY());
-
-        // Cancel if moved beyond tolerance
-        // Horizontal tolerance is strict, vertical is more forgiving
-        if (horizontalDistance > config.movementToleranceBlocks() ||
-            verticalDistance > config.movementToleranceBlocks() * 2) {
-            cancelTeleport(playerId, true);
-        }
-    }
-
-    @EventHandler
-    public void onPlayerQuit(PlayerQuitEvent event) {
-        UUID playerId = event.getPlayer().getUniqueId();
-        cancelTeleport(playerId, false);
-        cancelledTeleports.remove(playerId);
     }
 }
