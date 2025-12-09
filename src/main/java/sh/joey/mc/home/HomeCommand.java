@@ -340,27 +340,12 @@ public final class HomeCommand implements CommandExecutor {
         String name = HomeStorage.normalizeName(args[1]);
         String targetName = args[2];
 
-        // Check online players first
-        Player online = Bukkit.getPlayer(targetName);
-        if (online != null) {
-            performUnshare(player, name, targetName, online.getUniqueId());
-            return;
-        }
-
-        // Fall back to database lookup
-        sessionStorage.findPlayerIdByName(targetName)
-                .subscribe(
-                        targetId -> performUnshare(player, name, targetName, targetId),
-                        err -> logAndError(player, "Failed to find player", err),
-                        () -> error(player, "Player '" + targetName + "' not found.")
-                );
-    }
-
-    private void performUnshare(Player player, String name, String targetName, UUID targetId) {
-        storage.unshareHome(player.getUniqueId(), name, targetId)
+        sessionStorage.resolvePlayerId(targetName)
+                .flatMapSingle(targetId -> storage.unshareHome(player.getUniqueId(), name, targetId))
                 .subscribe(
                         unshared -> onUnshareResult(player, targetName, name, unshared),
-                        err -> logAndError(player, "Failed to unshare home", err)
+                        err -> logAndError(player, "Failed to unshare home", err),
+                        () -> error(player, "Player '" + targetName + "' not found.")
                 );
     }
 
@@ -396,24 +381,8 @@ public final class HomeCommand implements CommandExecutor {
         String ownerName = parts[0];
         String homeName = HomeStorage.normalizeName(parts[1]);
 
-        // Check online players first
-        Player online = Bukkit.getPlayer(ownerName);
-        if (online != null) {
-            fetchAndTeleportToSharedHome(player, input, online.getUniqueId(), homeName);
-            return;
-        }
-
-        // Fall back to database lookup
-        sessionStorage.findPlayerIdByName(ownerName)
-                .subscribe(
-                        ownerId -> fetchAndTeleportToSharedHome(player, input, ownerId, homeName),
-                        err -> logAndError(player, "Failed to find player", err),
-                        () -> error(player, "Player '" + ownerName + "' not found.")
-                );
-    }
-
-    private void fetchAndTeleportToSharedHome(Player player, String input, UUID ownerId, String homeName) {
-        storage.getHome(ownerId, homeName)
+        sessionStorage.resolvePlayerId(ownerName)
+                .flatMap(ownerId -> storage.getHome(ownerId, homeName))
                 .filter(home -> home.isSharedWith(player.getUniqueId()))
                 .subscribe(
                         home -> teleportToHome(player, home),

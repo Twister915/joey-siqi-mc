@@ -4,6 +4,8 @@ import io.reactivex.rxjava3.core.Completable;
 import io.reactivex.rxjava3.core.Flowable;
 import io.reactivex.rxjava3.core.Maybe;
 import io.reactivex.rxjava3.core.Single;
+import org.bukkit.Bukkit;
+import org.bukkit.entity.Player;
 import sh.joey.mc.storage.StorageService;
 
 import java.sql.PreparedStatement;
@@ -110,6 +112,7 @@ public final class PlayerSessionStorage {
     /**
      * Find a player's UUID by their username (case-insensitive).
      * Returns the player_id from their most recent session.
+     * Does not check online players - use {@link #resolvePlayerId} for that.
      */
     public Maybe<UUID> findPlayerIdByName(String username) {
         return storage.queryMaybe(conn -> {
@@ -131,6 +134,23 @@ public final class PlayerSessionStorage {
                     return null;
                 }
             }
+        });
+    }
+
+    /**
+     * Resolves a player name to UUID, checking online players first then falling back to database.
+     * Uses defer() to ensure Bukkit.getPlayer is called at subscription time (cold observable).
+     *
+     * @param playerName the player's username (case-insensitive)
+     * @return Maybe emitting the player's UUID, or empty if not found
+     */
+    public Maybe<UUID> resolvePlayerId(String playerName) {
+        return Maybe.defer(() -> {
+            Player online = Bukkit.getPlayer(playerName);
+            if (online != null) {
+                return Maybe.just(online.getUniqueId());
+            }
+            return findPlayerIdByName(playerName);
         });
     }
 

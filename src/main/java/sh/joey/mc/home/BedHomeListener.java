@@ -12,6 +12,8 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.player.PlayerInteractEvent;
 import sh.joey.mc.SiqiJoeyPlugin;
 
+import java.util.UUID;
+
 /**
  * Automatically saves a player's first bed interaction as their default home.
  * Only triggers if the player has no existing homes.
@@ -50,20 +52,15 @@ public final class BedHomeListener implements Disposable {
 
     private void handleBedInteraction(PlayerInteractEvent event) {
         Player player = event.getPlayer();
-
-        storage.hasAnyHomes(player.getUniqueId())
-                .filter(hasHomes -> !hasHomes) // Only continue if no homes
-                .subscribe(
-                        ignored -> saveFirstHome(player),
-                        err -> plugin.getLogger().warning("Failed to check homes: " + err.getMessage())
-                );
-    }
-
-    private void saveFirstHome(Player player) {
+        UUID playerId = player.getUniqueId();
         Location location = player.getLocation();
-        Home home = new Home("home", player.getUniqueId(), location);
 
-        storage.setHome(player.getUniqueId(), home)
+        storage.hasAnyHomes(playerId)
+                .filter(hasHomes -> !hasHomes) // Only continue if no homes
+                .flatMapCompletable(ignored -> {
+                    Home home = new Home("home", playerId, location);
+                    return storage.setHome(playerId, home);
+                })
                 .subscribe(
                         () -> notifyHomeSaved(player),
                         err -> plugin.getLogger().warning("Failed to save first home: " + err.getMessage())
