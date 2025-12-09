@@ -24,6 +24,8 @@ import sh.joey.mc.home.BedHomeListener;
 import sh.joey.mc.home.HomeCommand;
 import sh.joey.mc.home.HomeStorage;
 import sh.joey.mc.home.HomeTabCompleter;
+import sh.joey.mc.session.PlayerSessionStorage;
+import sh.joey.mc.session.PlayerSessionTracker;
 import sh.joey.mc.storage.DatabaseConfig;
 import sh.joey.mc.storage.DatabaseService;
 import sh.joey.mc.storage.MigrationRunner;
@@ -62,6 +64,11 @@ public final class SiqiJoeyPlugin extends JavaPlugin {
 
         // Create storage service
         var storageService = new StorageService(database, schedulers.mainThread());
+
+        // Player session tracking (early - for player ID lookups)
+        var playerSessionStorage = new PlayerSessionStorage(storageService);
+        var playerSessionTracker = new PlayerSessionTracker(this, playerSessionStorage);
+        components.add(playerSessionTracker);
 
         // Boss bar system with priority-based providers
         var bossBarManager = new BossBarManager(this);

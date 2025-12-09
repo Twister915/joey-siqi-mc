@@ -21,6 +21,7 @@ src/main/java/sh/joey/mc/
 ├── confirm/                  # Unified confirmation system for yes/no prompts
 ├── teleport/                 # Teleportation with warmup/requests
 ├── home/                     # Home saving and teleportation
+├── session/                  # Player session tracking
 ├── day/                      # Daily message system
 ├── welcome/                  # Join messages and MOTD
 └── world/                    # World monitoring utilities
@@ -279,7 +280,52 @@ Persistent home locations with sharing support, stored in PostgreSQL with soft d
 - Shares reference `home_id`, so they're scoped to a specific home version
 - Partial unique index ensures only one active home per `(player_id, name)`
 
-### 5. Message Systems (`day/`, `welcome/`)
+### 5. Player Session System (`session/`)
+
+Tracks player connections for player ID lookups, online time calculation, and crash recovery.
+
+**Key Classes:**
+- `PlayerSessionStorage` - Async PostgreSQL operations for session data
+- `PlayerSessionTracker` - Manages session lifecycle: joins, disconnects, heartbeat
+
+**Features:**
+- Records player joins with UUID, username, IP, online mode, and timestamps
+- Periodic heartbeat (30 seconds) updates `last_seen_at` for active sessions
+- Graceful handling of server crashes via orphan session cleanup on startup
+- Player ID lookup by username (case-insensitive) without `Bukkit.getOfflinePlayer()`
+- Username lookup by player ID for display purposes
+
+**Server Session ID:**
+Each server run generates a unique `serverSessionId` UUID. This identifies which sessions belong to the current run vs. previous runs that may have crashed.
+
+**Orphan Session Cleanup:**
+On plugin init, any sessions from previous server runs (different `server_session_id`) that weren't properly closed have their `disconnected_at` set to `last_seen_at`. This runs as a blocking operation using `.blockingGet()` to ensure cleanup completes before the plugin accepts player joins.
+
+**Database Views:**
+- `player_names` - Current username for each player (most recent session)
+- `player_name_history` - All usernames a player has used with date ranges (handles A→B→A)
+- `player_online_time` - Total online time per player
+
+**Lookup Methods:**
+```java
+// Find player UUID by username (case-insensitive)
+storage.findPlayerIdByName("SomePlayer")
+    .subscribe(
+        playerId -> { ... },
+        err -> { ... },
+        () -> { /* not found */ }
+    );
+
+// Find username by player UUID
+storage.findUsernameById(playerId)
+    .subscribe(
+        username -> { ... },
+        err -> { ... },
+        () -> { /* not found */ }
+    );
+```
+
+### 6. Message Systems (`day/`, `welcome/`)
 
 Themed messages using a mix of static, procedural, and context-aware generation.
 
@@ -429,6 +475,8 @@ SQL migrations live in `src/main/resources/migrations/` and follow the pattern:
 001_create_homes.sql
 002_create_back_locations.sql
 003_homes_composite_primary_key.sql
+004_home_soft_delete.sql
+005_create_player_sessions.sql
 ```
 
 - Files are sorted by numeric prefix and run in order

@@ -43,6 +43,23 @@ public final class StorageService {
     }
 
     /**
+     * Execute a database query that returns a result, staying on the IO thread.
+     * Safe for use with blockingGet() from the main thread.
+     *
+     * @param operation the database operation to execute
+     * @param <T> the type of the result
+     * @return a Single that emits the result on the IO thread
+     */
+    public <T> Single<T> queryBlocking(SqlFunction<Connection, T> operation) {
+        return Single.<T>fromCallable(() -> {
+            try (Connection conn = database.getConnection()) {
+                return operation.apply(conn);
+            }
+        })
+        .subscribeOn(Schedulers.io());
+    }
+
+    /**
      * Execute a database query that may or may not return a result.
      * Runs on IO thread pool, observes on main thread.
      *

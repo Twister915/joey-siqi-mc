@@ -100,6 +100,7 @@ All persistent data is stored in PostgreSQL:
 - **homes** - Player home locations with sharing support
 - **home_shares** - Tracks which homes are shared with which players
 - **back_locations** - Death and teleport-from locations for `/back`
+- **player_sessions** - Player connection history for ID lookups and online time tracking
 - **migration_state** - Tracks applied database migrations
 
 Database migrations run automatically on startup.

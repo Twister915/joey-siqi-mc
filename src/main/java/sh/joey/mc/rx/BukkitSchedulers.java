@@ -109,9 +109,11 @@ public final class BukkitSchedulers {
         private final Plugin plugin;
         private final boolean mainThread;
         private final CompositeDisposable tasks = new CompositeDisposable();
+        // private final Logger logger;
 
         BukkitWorker(Plugin plugin, boolean mainThread) {
             this.plugin = plugin;
+            // this.logger = plugin.getLogger();
             this.mainThread = mainThread;
         }
 
@@ -125,6 +127,7 @@ public final class BukkitSchedulers {
 
             // If no delay and already on main thread, run immediately
             if (mainThread && ticks == 0 && Bukkit.isPrimaryThread()) {
+                // logger.info("running task immediately for primary thread");
                 run.run();
                 return Disposable.disposed();
             }
@@ -168,18 +171,21 @@ public final class BukkitSchedulers {
         }
 
         private BukkitTask scheduleImmediate(Runnable run) {
+            // logger.info(String.format("schedule task immediately on %s thread", mainThread ? "main" : "async"));
             return mainThread
                     ? Bukkit.getScheduler().runTask(plugin, run)
                     : Bukkit.getScheduler().runTaskAsynchronously(plugin, run);
         }
 
         private BukkitTask scheduleDelayed(Runnable run, long ticks) {
+            // logger.info(String.format("schedule task delayed on %s thread (%d ticks)", mainThread ? "main" : "async", ticks));
             return mainThread
                     ? Bukkit.getScheduler().runTaskLater(plugin, run, ticks)
                     : Bukkit.getScheduler().runTaskLaterAsynchronously(plugin, run, ticks);
         }
 
         private BukkitTask schedulePeriodic(Runnable run, long initialTicks, long periodTicks) {
+            // logger.info(String.format("schedule task periodically on %s thread (%d ticks init, %d ticks period)", mainThread ? "main" : "async", initialTicks, periodTicks));
             return mainThread
                     ? Bukkit.getScheduler().runTaskTimer(plugin, run, initialTicks, periodTicks)
                     : Bukkit.getScheduler().runTaskTimerAsynchronously(plugin, run, initialTicks, periodTicks);
