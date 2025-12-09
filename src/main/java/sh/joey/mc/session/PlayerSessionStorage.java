@@ -1,12 +1,15 @@
 package sh.joey.mc.session;
 
 import io.reactivex.rxjava3.core.Completable;
+import io.reactivex.rxjava3.core.Flowable;
 import io.reactivex.rxjava3.core.Maybe;
 import io.reactivex.rxjava3.core.Single;
 import sh.joey.mc.storage.StorageService;
 
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -155,6 +158,35 @@ public final class PlayerSessionStorage {
                     return null;
                 }
             }
+        });
+    }
+
+    /**
+     * Find player usernames matching a prefix (case-insensitive).
+     * Returns up to {@code limit} unique usernames from the player_names view.
+     */
+    public Flowable<String> findUsernamesByPrefix(String prefix, int limit) {
+        return storage.queryFlowable(conn -> {
+            String sql = """
+                SELECT username
+                FROM player_names
+                WHERE LOWER(username) LIKE LOWER(?) || '%'
+                ORDER BY username
+                LIMIT ?
+                """;
+
+            List<String> usernames = new ArrayList<>();
+            try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+                stmt.setString(1, prefix);
+                stmt.setInt(2, limit);
+
+                try (ResultSet rs = stmt.executeQuery()) {
+                    while (rs.next()) {
+                        usernames.add(rs.getString("username"));
+                    }
+                }
+            }
+            return usernames;
         });
     }
 }

@@ -112,10 +112,10 @@ public final class SiqiJoeyPlugin extends JavaPlugin {
 
         // Home system (uses PostgreSQL)
         var homeStorage = new HomeStorage(storageService);
-        var homeCommand = new HomeCommand(this, homeStorage, safeTeleporter, confirmationManager);
+        var homeCommand = new HomeCommand(this, homeStorage, playerSessionStorage, safeTeleporter, confirmationManager);
         getCommand("home").setExecutor(homeCommand);
 
-        var homeTabCompleter = new HomeTabCompleter(this, homeStorage);
+        var homeTabCompleter = new HomeTabCompleter(this, homeStorage, playerSessionStorage);
         components.add(homeTabCompleter);
 
         var bedHomeListener = new BedHomeListener(this, homeStorage);

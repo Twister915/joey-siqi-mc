@@ -6,9 +6,12 @@ import io.reactivex.rxjava3.disposables.Disposable;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import sh.joey.mc.SiqiJoeyPlugin;
+import sh.joey.mc.session.PlayerSessionStorage;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -17,13 +20,17 @@ import java.util.UUID;
  */
 public final class HomeTabCompleter implements Disposable {
 
+    private static final int MAX_COMPLETIONS = 20;
+
     private final CompositeDisposable disposables = new CompositeDisposable();
     private final SiqiJoeyPlugin plugin;
     private final HomeStorage storage;
+    private final PlayerSessionStorage sessionStorage;
 
-    public HomeTabCompleter(SiqiJoeyPlugin plugin, HomeStorage storage) {
+    public HomeTabCompleter(SiqiJoeyPlugin plugin, HomeStorage storage, PlayerSessionStorage sessionStorage) {
         this.plugin = plugin;
         this.storage = storage;
+        this.sessionStorage = sessionStorage;
 
         disposables.add(plugin.watchEvent(AsyncTabCompleteEvent.class)
                 .filter(event -> event.getSender() instanceof Player)
@@ -121,14 +128,39 @@ public final class HomeTabCompleter implements Disposable {
 
     private void completeThirdArg(AsyncTabCompleteEvent event, Player player, String subcommand, String partial) {
         if (subcommand.equals("share") || subcommand.equals("unshare")) {
-            // Complete with online player names
-            List<String> completions = new ArrayList<>();
-            for (Player online : Bukkit.getOnlinePlayers()) {
-                if (!online.equals(player) && online.getName().toLowerCase().startsWith(partial)) {
-                    completions.add(online.getName());
+            try {
+                // Use a Set to deduplicate online + database results
+                Set<String> completions = new HashSet<>();
+
+                // Add matching online player names
+                for (Player online : Bukkit.getOnlinePlayers()) {
+                    if (!online.equals(player) && online.getName().toLowerCase().startsWith(partial.toLowerCase())) {
+                        completions.add(online.getName());
+                    }
                 }
+
+                // Add matching names from database (safe to block on async thread)
+                List<String> dbNames = sessionStorage.findUsernamesByPrefix(partial, MAX_COMPLETIONS)
+                        .toList()
+                        .blockingGet();
+
+                for (String name : dbNames) {
+                    // Exclude the player themselves
+                    if (!name.equalsIgnoreCase(player.getName())) {
+                        completions.add(name);
+                    }
+                }
+
+                // Sort and limit
+                List<String> sorted = completions.stream()
+                        .sorted(String.CASE_INSENSITIVE_ORDER)
+                        .limit(MAX_COMPLETIONS)
+                        .toList();
+
+                event.setCompletions(sorted);
+            } catch (Exception e) {
+                plugin.getLogger().warning("Tab complete failed: " + e.getMessage());
             }
-            event.setCompletions(completions);
         }
     }
 
@@ -136,18 +168,7 @@ public final class HomeTabCompleter implements Disposable {
         if (home.isOwnedBy(playerId)) {
             return home.name();
         } else {
-            String ownerName = getPlayerName(home.ownerId());
-            return ownerName + ":" + home.name();
+            return home.ownerDisplayName() + ":" + home.name();
         }
-    }
-
-    private String getPlayerName(UUID playerId) {
-        Player online = Bukkit.getPlayer(playerId);
-        if (online != null) {
-            return online.getName();
-        }
-        var offline = Bukkit.getOfflinePlayer(playerId);
-        String name = offline.getName();
-        return name != null ? name : playerId.toString().substring(0, 8);
     }
 }

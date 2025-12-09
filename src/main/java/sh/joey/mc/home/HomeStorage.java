@@ -41,11 +41,13 @@ public final class HomeStorage {
         return storage.<Home>queryMaybe(conn -> {
             String sql = """
                 SELECT h.id, h.player_id, h.name, h.world_id, h.x, h.y, h.z, h.pitch, h.yaw,
+                       pn.username as owner_name,
                        COALESCE(array_agg(hs.shared_with_id) FILTER (WHERE hs.shared_with_id IS NOT NULL), '{}') as shared_with
                 FROM homes h
                 LEFT JOIN home_shares hs ON h.id = hs.home_id
+                LEFT JOIN player_names pn ON h.player_id = pn.player_id
                 WHERE h.player_id = ? AND h.name = ? AND h.deleted_at IS NULL
-                GROUP BY h.id, h.player_id, h.name, h.world_id, h.x, h.y, h.z, h.pitch, h.yaw
+                GROUP BY h.id, h.player_id, h.name, h.world_id, h.x, h.y, h.z, h.pitch, h.yaw, pn.username
                 """;
 
             try (PreparedStatement stmt = conn.prepareStatement(sql)) {
@@ -69,19 +71,23 @@ public final class HomeStorage {
         return storage.queryFlowable(conn -> {
             String sql = """
                 SELECT h.id, h.player_id, h.name, h.world_id, h.x, h.y, h.z, h.pitch, h.yaw,
+                       pn.username as owner_name,
                        COALESCE(array_agg(hs.shared_with_id) FILTER (WHERE hs.shared_with_id IS NOT NULL), '{}') as shared_with
                 FROM homes h
                 LEFT JOIN home_shares hs ON h.id = hs.home_id
+                LEFT JOIN player_names pn ON h.player_id = pn.player_id
                 WHERE h.player_id = ? AND h.deleted_at IS NULL
-                GROUP BY h.id, h.player_id, h.name, h.world_id, h.x, h.y, h.z, h.pitch, h.yaw
+                GROUP BY h.id, h.player_id, h.name, h.world_id, h.x, h.y, h.z, h.pitch, h.yaw, pn.username
                 UNION ALL
                 SELECT h.id, h.player_id, h.name, h.world_id, h.x, h.y, h.z, h.pitch, h.yaw,
+                       pn.username as owner_name,
                        COALESCE(array_agg(hs2.shared_with_id) FILTER (WHERE hs2.shared_with_id IS NOT NULL), '{}') as shared_with
                 FROM homes h
                 INNER JOIN home_shares hs ON h.id = hs.home_id AND hs.shared_with_id = ?
                 LEFT JOIN home_shares hs2 ON h.id = hs2.home_id
+                LEFT JOIN player_names pn ON h.player_id = pn.player_id
                 WHERE h.deleted_at IS NULL
-                GROUP BY h.id, h.player_id, h.name, h.world_id, h.x, h.y, h.z, h.pitch, h.yaw
+                GROUP BY h.id, h.player_id, h.name, h.world_id, h.x, h.y, h.z, h.pitch, h.yaw, pn.username
                 """;
 
             List<Home> homes = new ArrayList<>();
@@ -260,6 +266,7 @@ public final class HomeStorage {
         UUID id = rs.getObject("id", UUID.class);
         UUID ownerId = rs.getObject("player_id", UUID.class);
         String name = rs.getString("name");
+        String ownerName = rs.getString("owner_name");
         UUID worldId = rs.getObject("world_id", UUID.class);
         double x = rs.getDouble("x");
         double y = rs.getDouble("y");
@@ -278,6 +285,6 @@ public final class HomeStorage {
             }
         }
 
-        return new Home(id, name, ownerId, worldId, x, y, z, pitch, yaw, sharedWith);
+        return new Home(id, name, ownerId, ownerName, worldId, x, y, z, pitch, yaw, sharedWith);
     }
 }

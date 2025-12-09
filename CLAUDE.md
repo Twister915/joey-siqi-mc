@@ -538,3 +538,4 @@ storage.getHomes(playerId)
         err -> handleDatabaseError(player, err)
     );
 ```
+- Can you stop doing this pattern where you call .subscribe inside the handler of other .subscribe? You should almost never do this.

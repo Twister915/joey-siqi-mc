@@ -15,6 +15,7 @@ import org.jetbrains.annotations.NotNull;
 import sh.joey.mc.SiqiJoeyPlugin;
 import sh.joey.mc.confirm.ConfirmationManager;
 import sh.joey.mc.confirm.ConfirmationRequest;
+import sh.joey.mc.session.PlayerSessionStorage;
 import sh.joey.mc.teleport.SafeTeleporter;
 
 import java.util.List;
@@ -41,13 +42,15 @@ public final class HomeCommand implements CommandExecutor {
 
     private final SiqiJoeyPlugin plugin;
     private final HomeStorage storage;
+    private final PlayerSessionStorage sessionStorage;
     private final SafeTeleporter teleporter;
     private final ConfirmationManager confirmationManager;
 
-    public HomeCommand(SiqiJoeyPlugin plugin, HomeStorage storage, SafeTeleporter teleporter,
-                       ConfirmationManager confirmationManager) {
+    public HomeCommand(SiqiJoeyPlugin plugin, HomeStorage storage, PlayerSessionStorage sessionStorage,
+                       SafeTeleporter teleporter, ConfirmationManager confirmationManager) {
         this.plugin = plugin;
         this.storage = storage;
+        this.sessionStorage = sessionStorage;
         this.teleporter = teleporter;
         this.confirmationManager = confirmationManager;
     }
@@ -270,8 +273,7 @@ public final class HomeCommand implements CommandExecutor {
     }
 
     private Component formatSharedHomeEntry(Home home) {
-        String ownerName = getPlayerName(home.ownerId());
-
+        String ownerName = home.ownerDisplayName();
         return Component.text("  ")
                 .append(Component.text(home.name())
                         .color(NamedTextColor.GREEN)
@@ -338,12 +340,23 @@ public final class HomeCommand implements CommandExecutor {
         String name = HomeStorage.normalizeName(args[1]);
         String targetName = args[2];
 
-        UUID targetId = resolvePlayerId(targetName);
-        if (targetId == null) {
-            error(player, "Player '" + targetName + "' not found.");
+        // Check online players first
+        Player online = Bukkit.getPlayer(targetName);
+        if (online != null) {
+            performUnshare(player, name, targetName, online.getUniqueId());
             return;
         }
 
+        // Fall back to database lookup
+        sessionStorage.findPlayerIdByName(targetName)
+                .subscribe(
+                        targetId -> performUnshare(player, name, targetName, targetId),
+                        err -> logAndError(player, "Failed to find player", err),
+                        () -> error(player, "Player '" + targetName + "' not found.")
+                );
+    }
+
+    private void performUnshare(Player player, String name, String targetName, UUID targetId) {
         storage.unshareHome(player.getUniqueId(), name, targetId)
                 .subscribe(
                         unshared -> onUnshareResult(player, targetName, name, unshared),
@@ -357,17 +370,6 @@ public final class HomeCommand implements CommandExecutor {
         } else {
             error(player, "Home '" + name + "' not found.");
         }
-    }
-
-    private UUID resolvePlayerId(String name) {
-        Player online = Bukkit.getPlayer(name);
-        if (online != null) {
-            return online.getUniqueId();
-        }
-
-        @SuppressWarnings("deprecation")
-        var offlinePlayer = Bukkit.getOfflinePlayer(name);
-        return offlinePlayer.hasPlayedBefore() ? offlinePlayer.getUniqueId() : null;
     }
 
     // --- Teleport ---
@@ -394,14 +396,23 @@ public final class HomeCommand implements CommandExecutor {
         String ownerName = parts[0];
         String homeName = HomeStorage.normalizeName(parts[1]);
 
-        @SuppressWarnings("deprecation")
-        var offlinePlayer = Bukkit.getOfflinePlayer(ownerName);
-        if (!offlinePlayer.hasPlayedBefore()) {
-            error(player, "Player '" + ownerName + "' not found.");
+        // Check online players first
+        Player online = Bukkit.getPlayer(ownerName);
+        if (online != null) {
+            fetchAndTeleportToSharedHome(player, input, online.getUniqueId(), homeName);
             return;
         }
 
-        UUID ownerId = offlinePlayer.getUniqueId();
+        // Fall back to database lookup
+        sessionStorage.findPlayerIdByName(ownerName)
+                .subscribe(
+                        ownerId -> fetchAndTeleportToSharedHome(player, input, ownerId, homeName),
+                        err -> logAndError(player, "Failed to find player", err),
+                        () -> error(player, "Player '" + ownerName + "' not found.")
+                );
+    }
+
+    private void fetchAndTeleportToSharedHome(Player player, String input, UUID ownerId, String homeName) {
         storage.getHome(ownerId, homeName)
                 .filter(home -> home.isSharedWith(player.getUniqueId()))
                 .subscribe(
@@ -449,16 +460,6 @@ public final class HomeCommand implements CommandExecutor {
         String worldName = world != null ? world.getName() : "unknown";
         return Component.text(String.format("%s (%.0f, %.0f, %.0f)",
                 worldName, home.x(), home.y(), home.z())).color(NamedTextColor.GRAY);
-    }
-
-    private String getPlayerName(UUID playerId) {
-        Player online = Bukkit.getPlayer(playerId);
-        if (online != null) {
-            return online.getName();
-        }
-        var offline = Bukkit.getOfflinePlayer(playerId);
-        String name = offline.getName();
-        return name != null ? name : playerId.toString().substring(0, 8);
     }
 
     private void info(Player player, String message) {

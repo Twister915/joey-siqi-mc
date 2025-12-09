@@ -3,6 +3,7 @@ package sh.joey.mc.home;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.World;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.HashSet;
 import java.util.Set;
@@ -15,6 +16,7 @@ public record Home(
         UUID id,
         String name,
         UUID ownerId,
+        @Nullable String ownerName,
         UUID worldId,
         double x,
         double y,
@@ -31,6 +33,7 @@ public record Home(
                 UUID.randomUUID(),
                 name,
                 ownerId,
+                null,
                 location.getWorld().getUID(),
                 location.getX(),
                 location.getY(),
@@ -39,6 +42,14 @@ public record Home(
                 location.getYaw(),
                 new HashSet<>()
         );
+    }
+
+    /**
+     * Get the display name for the owner.
+     * Falls back to truncated UUID if owner name is not available.
+     */
+    public String ownerDisplayName() {
+        return ownerName != null ? ownerName : ownerId.toString().substring(0, 8);
     }
 
     /**
@@ -63,12 +74,12 @@ public record Home(
     public Home withSharedPlayer(UUID playerId) {
         Set<UUID> newShared = new HashSet<>(sharedWith);
         newShared.add(playerId);
-        return new Home(id, name, ownerId, worldId, x, y, z, pitch, yaw, newShared);
+        return new Home(id, name, ownerId, ownerName, worldId, x, y, z, pitch, yaw, newShared);
     }
 
     public Home withoutSharedPlayer(UUID playerId) {
         Set<UUID> newShared = new HashSet<>(sharedWith);
         newShared.remove(playerId);
-        return new Home(id, name, ownerId, worldId, x, y, z, pitch, yaw, newShared);
+        return new Home(id, name, ownerId, ownerName, worldId, x, y, z, pitch, yaw, newShared);
     }
 }
