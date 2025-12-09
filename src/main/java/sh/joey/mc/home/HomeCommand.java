@@ -1,6 +1,5 @@
 package sh.joey.mc.home;
 
-import io.reactivex.rxjava3.disposables.Disposable;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.event.ClickEvent;
 import net.kyori.adventure.text.event.HoverEvent;
@@ -14,14 +13,13 @@ import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.jetbrains.annotations.NotNull;
 import sh.joey.mc.SiqiJoeyPlugin;
+import sh.joey.mc.confirm.ConfirmationManager;
+import sh.joey.mc.confirm.ConfirmationRequest;
 import sh.joey.mc.teleport.SafeTeleporter;
 
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.TimeUnit;
 
 /**
  * Handles /home command with subcommands:
@@ -38,20 +36,20 @@ public final class HomeCommand implements CommandExecutor {
             .color(NamedTextColor.DARK_GRAY)
             .append(Component.text("Home").color(NamedTextColor.LIGHT_PURPLE).decorate(TextDecoration.BOLD))
             .append(Component.text("] ").color(NamedTextColor.DARK_GRAY));
-    static final Set<String> RESERVED_NAMES = Set.of("set", "delete", "list", "share", "unshare", "help", "confirm", "cancel");
+    static final Set<String> RESERVED_NAMES = Set.of("set", "delete", "list", "share", "unshare", "help");
     private static final int CONFIRM_TIMEOUT_SECONDS = 30;
 
     private final SiqiJoeyPlugin plugin;
     private final HomeStorage storage;
     private final SafeTeleporter teleporter;
-    private final Map<UUID, PendingDelete> pendingDeletes = new HashMap<>();
+    private final ConfirmationManager confirmationManager;
 
-    private record PendingDelete(String homeName, Disposable expiryTask) {}
-
-    public HomeCommand(SiqiJoeyPlugin plugin, HomeStorage storage, SafeTeleporter teleporter) {
+    public HomeCommand(SiqiJoeyPlugin plugin, HomeStorage storage, SafeTeleporter teleporter,
+                       ConfirmationManager confirmationManager) {
         this.plugin = plugin;
         this.storage = storage;
         this.teleporter = teleporter;
+        this.confirmationManager = confirmationManager;
     }
 
     @Override
@@ -76,8 +74,6 @@ public final class HomeCommand implements CommandExecutor {
             case "share" -> handleShare(player, args);
             case "unshare" -> handleUnshare(player, args);
             case "help" -> showUsage(player);
-            case "confirm" -> handleConfirm(player);
-            case "cancel" -> handleCancel(player);
             default -> handleTeleport(player, args[0]);
         }
 
@@ -123,60 +119,52 @@ public final class HomeCommand implements CommandExecutor {
 
     private void onDeleteHomeFound(Player player, String name) {
         UUID playerId = player.getUniqueId();
-        cancelPendingDelete(playerId);
 
-        Disposable expiryTask = plugin.timer(CONFIRM_TIMEOUT_SECONDS, TimeUnit.SECONDS)
-                .subscribe(tick -> onDeleteExpiry(player, name));
+        confirmationManager.request(player, new ConfirmationRequest() {
+            @Override
+            public Component prefix() {
+                return PREFIX;
+            }
 
-        pendingDeletes.put(playerId, new PendingDelete(name, expiryTask));
-        showDeleteConfirmation(player, name);
-    }
+            @Override
+            public String promptText() {
+                return "Delete home '" + name + "'? This cannot be undone!";
+            }
 
-    private void onDeleteExpiry(Player player, String name) {
-        if (pendingDeletes.remove(player.getUniqueId()) != null) {
-            info(player, "Delete confirmation for '" + name + "' expired.");
-        }
-    }
+            @Override
+            public String acceptText() {
+                return "Delete";
+            }
 
-    private void showDeleteConfirmation(Player player, String name) {
-        Component confirmButton = Component.text("[Confirm]")
-                .color(NamedTextColor.RED)
-                .decorate(TextDecoration.BOLD)
-                .clickEvent(ClickEvent.runCommand("/home confirm"))
-                .hoverEvent(HoverEvent.showText(Component.text("Click to delete").color(NamedTextColor.RED)));
+            @Override
+            public String declineText() {
+                return "Cancel";
+            }
 
-        Component cancelButton = Component.text("[Cancel]")
-                .color(NamedTextColor.GRAY)
-                .decorate(TextDecoration.BOLD)
-                .clickEvent(ClickEvent.runCommand("/home cancel"))
-                .hoverEvent(HoverEvent.showText(Component.text("Click to cancel").color(NamedTextColor.GRAY)));
+            @Override
+            public void onAccept() {
+                storage.deleteHome(playerId, name)
+                        .subscribe(
+                                deleted -> onDeleteResult(player, name, deleted),
+                                err -> logAndError(player, "Failed to delete home", err)
+                        );
+            }
 
-        player.sendMessage(PREFIX
-                .append(Component.text("Delete home '").color(NamedTextColor.GOLD))
-                .append(Component.text(name).color(NamedTextColor.YELLOW).decorate(TextDecoration.BOLD))
-                .append(Component.text("'? This cannot be undone!").color(NamedTextColor.GOLD)));
-        player.sendMessage(PREFIX
-                .append(confirmButton)
-                .append(Component.text(" "))
-                .append(cancelButton));
-    }
+            @Override
+            public void onDecline() {
+                info(player, "Home deletion cancelled.");
+            }
 
-    private void handleConfirm(Player player) {
-        UUID playerId = player.getUniqueId();
-        PendingDelete pending = pendingDeletes.remove(playerId);
+            @Override
+            public void onTimeout() {
+                info(player, "Delete confirmation expired.");
+            }
 
-        if (pending == null) {
-            error(player, "You don't have any pending home deletions.");
-            return;
-        }
-
-        pending.expiryTask().dispose();
-
-        storage.deleteHome(playerId, pending.homeName())
-                .subscribe(
-                        deleted -> onDeleteResult(player, pending.homeName(), deleted),
-                        err -> logAndError(player, "Failed to delete home", err)
-                );
+            @Override
+            public int timeoutSeconds() {
+                return CONFIRM_TIMEOUT_SECONDS;
+            }
+        });
     }
 
     private void onDeleteResult(Player player, String homeName, boolean deleted) {
@@ -184,26 +172,6 @@ public final class HomeCommand implements CommandExecutor {
             success(player, "Home '" + homeName + "' has been deleted.");
         } else {
             error(player, "Home '" + homeName + "' not found.");
-        }
-    }
-
-    private void handleCancel(Player player) {
-        UUID playerId = player.getUniqueId();
-        PendingDelete pending = pendingDeletes.remove(playerId);
-
-        if (pending == null) {
-            error(player, "You don't have any pending home deletions.");
-            return;
-        }
-
-        pending.expiryTask().dispose();
-        info(player, "Home deletion cancelled.");
-    }
-
-    private void cancelPendingDelete(UUID playerId) {
-        PendingDelete pending = pendingDeletes.remove(playerId);
-        if (pending != null) {
-            pending.expiryTask().dispose();
         }
     }
 

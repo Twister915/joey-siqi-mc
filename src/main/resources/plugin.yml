@@ -14,10 +14,10 @@ commands:
     description: Send a teleport request to another player
     usage: /tp <player>
   accept:
-    description: Accept a pending teleport request
+    description: Accept a pending confirmation request
     usage: /accept
   decline:
-    description: Decline a pending teleport request
+    description: Decline a pending confirmation request
     usage: /decline
   home:
     description: Manage your saved home locations

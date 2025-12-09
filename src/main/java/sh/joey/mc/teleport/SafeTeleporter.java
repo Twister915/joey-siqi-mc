@@ -2,6 +2,7 @@ package sh.joey.mc.teleport;
 
 import io.reactivex.rxjava3.disposables.CompositeDisposable;
 import io.reactivex.rxjava3.disposables.Disposable;
+import net.kyori.adventure.text.Component;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.Particle;
@@ -13,6 +14,8 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import sh.joey.mc.SiqiJoeyPlugin;
+import sh.joey.mc.confirm.ConfirmationManager;
+import sh.joey.mc.confirm.ConfirmationRequest;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -28,11 +31,13 @@ import java.util.function.Consumer;
 public final class SafeTeleporter implements Disposable {
     private static final long CANCELLED_DISPLAY_MS = 3000; // Show cancelled for 3 seconds
     private static final int SAFE_LOCATION_SEARCH_RADIUS = 10; // Max blocks to search for safe spot
+    private static final int UNSAFE_CONFIRM_TIMEOUT_SECONDS = 15;
 
     private final CompositeDisposable disposables = new CompositeDisposable();
     private final SiqiJoeyPlugin plugin;
     private final PluginConfig config;
     private final LocationTracker locationTracker;
+    private final ConfirmationManager confirmationManager;
     private final Map<UUID, PendingTeleport> pendingTeleports = new HashMap<>();
     private final Map<UUID, Long> cancelledTeleports = new HashMap<>();
 
@@ -77,10 +82,12 @@ public final class SafeTeleporter implements Disposable {
         }
     }
 
-    public SafeTeleporter(SiqiJoeyPlugin plugin, PluginConfig config, LocationTracker locationTracker) {
+    public SafeTeleporter(SiqiJoeyPlugin plugin, PluginConfig config, LocationTracker locationTracker,
+                          ConfirmationManager confirmationManager) {
         this.plugin = plugin;
         this.config = config;
         this.locationTracker = locationTracker;
+        this.confirmationManager = confirmationManager;
 
         // Movement detection
         disposables.add(plugin.watchEvent(EventPriority.MONITOR, PlayerMoveEvent.class)
@@ -110,6 +117,7 @@ public final class SafeTeleporter implements Disposable {
 
     /**
      * Initiates a safe teleport with warmup. Player must not move during countdown.
+     * If the destination is unsafe, prompts the player for confirmation first.
      *
      * @param player      The player to teleport
      * @param destination Where to teleport
@@ -126,6 +134,70 @@ public final class SafeTeleporter implements Disposable {
             }
             return;
         }
+
+        // Check if destination is safe
+        Optional<Location> safeLocation = findSafeLocation(destination);
+
+        if (safeLocation.isEmpty()) {
+            // No safe location found - ask for confirmation
+            requestUnsafeTeleportConfirmation(player, destination, onComplete);
+            return;
+        }
+
+        // Safe location found - proceed with warmup
+        startWarmup(player, safeLocation.get(), onComplete);
+    }
+
+    private void requestUnsafeTeleportConfirmation(Player player, Location destination,
+                                                   Consumer<Boolean> onComplete) {
+        confirmationManager.request(player, new ConfirmationRequest() {
+            @Override
+            public Component prefix() {
+                return Messages.PREFIX;
+            }
+
+            @Override
+            public String promptText() {
+                return "Destination may be unsafe. Teleport anyway?";
+            }
+
+            @Override
+            public String acceptText() {
+                return "Teleport";
+            }
+
+            @Override
+            public String declineText() {
+                return "Cancel";
+            }
+
+            @Override
+            public void onAccept() {
+                // Bypass safety check, teleport with warmup
+                startWarmup(player, destination, onComplete);
+            }
+
+            @Override
+            public void onDecline() {
+                Messages.info(player, "Teleport cancelled.");
+                if (onComplete != null) onComplete.accept(false);
+            }
+
+            @Override
+            public void onTimeout() {
+                Messages.info(player, "Teleport confirmation expired.");
+                if (onComplete != null) onComplete.accept(false);
+            }
+
+            @Override
+            public int timeoutSeconds() {
+                return UNSAFE_CONFIRM_TIMEOUT_SECONDS;
+            }
+        });
+    }
+
+    private void startWarmup(Player player, Location destination, Consumer<Boolean> onComplete) {
+        UUID playerId = player.getUniqueId();
 
         // Cancel any existing pending teleport
         cancelTeleport(playerId, false);
@@ -148,7 +220,7 @@ public final class SafeTeleporter implements Disposable {
                                 Messages.countdown(player, secondsRemaining);
                             } else {
                                 // Time's up - execute teleport
-                                executeTeleport(player, destination, onComplete);
+                                executeTeleportUnsafe(player, destination, onComplete);
                             }
                         },
                         error -> plugin.getLogger().warning("Teleport countdown error: " + error.getMessage())
@@ -187,22 +259,16 @@ public final class SafeTeleporter implements Disposable {
         }
     }
 
-    private void executeTeleport(Player player, Location destination, Consumer<Boolean> onComplete) {
+    /**
+     * Executes teleport without additional safety checks.
+     * The destination has already been validated or the player confirmed unsafe teleport.
+     */
+    private void executeTeleportUnsafe(Player player, Location destination, Consumer<Boolean> onComplete) {
         UUID playerId = player.getUniqueId();
         PendingTeleport pending = pendingTeleports.remove(playerId);
 
         if (pending != null) {
             pending.countdownTask().dispose();
-        }
-
-        // Find a safe location to prevent suffocation (best-effort)
-        Optional<Location> safeDestinationOpt = findSafeLocation(destination);
-        Location safeDestination;
-        if (safeDestinationOpt.isPresent()) {
-            safeDestination = safeDestinationOpt.get();
-        } else {
-            safeDestination = destination;
-            Messages.warning(player, "Could not find a safe spot - you may take damage!");
         }
 
         // Record current location before teleporting (for /back)
@@ -212,10 +278,10 @@ public final class SafeTeleporter implements Disposable {
         // Play departure effects
         playTeleportEffects(departureLocation, true);
 
-        player.teleport(safeDestination);
+        player.teleport(destination);
 
         // Play arrival effects
-        playTeleportEffects(safeDestination, false);
+        playTeleportEffects(destination, false);
 
         Messages.success(player, "Teleported!");
 

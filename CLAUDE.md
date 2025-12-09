@@ -18,6 +18,7 @@ src/main/java/sh/joey/mc/
 ├── rx/                       # RxJava integration (schedulers, event observables)
 ├── storage/                  # PostgreSQL database layer
 ├── bossbar/                  # Priority-based boss bar system
+├── confirm/                  # Unified confirmation system for yes/no prompts
 ├── teleport/                 # Teleportation with warmup/requests
 ├── home/                     # Home saving and teleportation
 ├── day/                      # Daily message system
@@ -99,7 +100,7 @@ The plugin tracks all components in a root `CompositeDisposable` and disposes th
 Java records are used extensively for:
 - **Configuration**: `PluginConfig`, `BossBarState`
 - **Data models**: `Home`, `PendingTeleport`, `TeleportState`
-- **Internal state**: `BiomeState`, `PendingDelete`
+- **Internal state**: `BiomeState`, `PendingRequest`
 
 ### RxJava Types for Async Results
 Database operations return RxJava types:
@@ -162,17 +163,66 @@ A priority-based system where multiple providers can supply boss bar content, an
 **Debounce Pattern** (BiomeChangeProvider):
 Tracks both "confirmed" and "pending" biome to prevent spam when walking along biome borders. Only confirms after staying in new biome for debounce period.
 
-### 2. Teleportation System (`teleport/`)
+### 2. Confirmation System (`confirm/`)
+
+A unified system for handling all yes/no confirmations with consistent UI and lifecycle management.
+
+**Key Classes:**
+- `ConfirmationRequest` - Interface for confirmation prompts with display methods and callbacks
+- `ConfirmationManager` - Manages pending requests per player, handles timeouts and player quit
+- `ConfirmCommands` - `/accept` and `/decline` command handlers
+
+**Features:**
+- One pending request per player (new requests replace old ones)
+- Automatic receiver quit tracking (built into ConfirmationManager)
+- Custom sender invalidation via `Completable invalidation()`
+- Exception guardrails - callbacks wrapped in try/catch to prevent crashes
+- Consistent message format with prefix, clickable buttons, and hover text
+
+**Lifecycle Callbacks:**
+- `onAccept()` - Player clicked accept
+- `onDecline()` - Player clicked decline
+- `onTimeout()` - Request expired
+- `onInvalidate()` - External condition ended request (e.g., sender quit)
+- `onReplaced()` - New request replaced this one
+
+**Usage Example:**
+```java
+confirmationManager.request(player, new ConfirmationRequest() {
+    @Override
+    public Component prefix() { return PREFIX; }
+
+    @Override
+    public String promptText() { return "Delete this item?"; }
+
+    @Override
+    public String acceptText() { return "Delete"; }
+
+    @Override
+    public String declineText() { return "Cancel"; }
+
+    @Override
+    public void onAccept() { deleteItem(); }
+
+    @Override
+    public void onDecline() { info(player, "Cancelled."); }
+
+    @Override
+    public int timeoutSeconds() { return 30; }
+});
+```
+
+### 3. Teleportation System (`teleport/`)
 
 Handles teleport requests between players, warmup countdowns, location tracking, and safe teleportation.
 
 **Key Classes:**
-- `SafeTeleporter` - Warmup countdown, movement detection, safe location finding, particle/sound effects
-- `RequestManager` - Player-to-player teleport requests with expiry
+- `SafeTeleporter` - Warmup countdown, movement detection, safe location finding, unsafe teleport confirmation, particle/sound effects
+- `TpCommand` - `/tp <player>` command with teleport request handling via ConfirmationManager
 - `LocationTracker` - Tracks death and teleport-from locations for `/back` (persisted to PostgreSQL)
 - `BackLocationStorage` - Async PostgreSQL operations for back locations
 - `BackLocation` - Record with location type (DEATH or TELEPORT)
-- `Messages` - Formatted message utilities with clickable buttons
+- `Messages` - Formatted message utilities with PREFIX constant
 - `PluginConfig` - Typed config record loaded from `config.yml`
 
 **Commands:** `/tp`, `/accept`, `/decline`, `/back`
@@ -180,15 +230,16 @@ Handles teleport requests between players, warmup countdowns, location tracking,
 **Safety Features:**
 - Prevents teleporting while in a vehicle
 - Finds safe landing spots to prevent suffocation (searches up to 10 blocks vertically)
-- If no safe spot found, teleports anyway with a warning
+- If no safe spot found, prompts for confirmation before teleporting
 
 **Flow:**
 1. Player A runs `/tp PlayerB`
-2. `RequestManager` stores pending request, sends clickable accept/decline to Player B
+2. `TpCommand` sends confirmation request to Player B via `ConfirmationManager`
 3. Player B clicks `[Accept]` → runs `/accept`
-4. `SafeTeleporter.teleport()` starts warmup countdown
-5. If player moves beyond tolerance, teleport cancels (shown in boss bar)
-6. On success, finds safe location, plays particle effects, and records departure location for `/back`
+4. `SafeTeleporter.teleport()` checks for safe location
+5. If unsafe, prompts Player A to confirm; if safe, starts warmup countdown
+6. If player moves beyond tolerance during warmup, teleport cancels (shown in boss bar)
+7. On success, plays particle effects and records departure location for `/back`
 
 **Back Location Behavior:**
 - Death locations are automatically saved
@@ -200,7 +251,7 @@ Handles teleport requests between players, warmup countdowns, location tracking,
 - `TeleportState` - Progress calculation for active teleport
 - `CancelledState` - Progress calculation for cancellation display (fades over 3 seconds)
 
-### 3. Home System (`home/`)
+### 4. Home System (`home/`)
 
 Persistent home locations with sharing support, stored in PostgreSQL.
 
@@ -216,12 +267,12 @@ Persistent home locations with sharing support, stored in PostgreSQL.
 **Features:**
 - Defaults: `/home` → teleport to "home", `/home set` → set "home"
 - Home names are normalized (lowercase + trimmed) via `HomeStorage.normalizeName()`
-- Delete confirmation with clickable `[Confirm]` / `[Cancel]` buttons
+- Delete confirmation via unified ConfirmationManager with `[Delete]` / `[Cancel]` buttons
 - Handles unloaded worlds gracefully (shows "world not loaded")
 - Shared homes accessible via `owner:homename` syntax
 - All database operations are async (return `Maybe<T>`, `Flowable<T>`, or `Completable`)
 
-### 4. Message Systems (`day/`, `welcome/`)
+### 5. Message Systems (`day/`, `welcome/`)
 
 Themed messages using a mix of static, procedural, and context-aware generation.
 

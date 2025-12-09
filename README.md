@@ -18,10 +18,11 @@ A priority-based boss bar that displays contextual information:
 
 ### Teleportation System
 - `/tp <player>` - Request to teleport to another player
-- `/accept` / `/decline` - Respond to teleport requests (clickable buttons)
+- `/accept` / `/decline` - Respond to confirmation requests (clickable buttons)
 - `/back` - Return to your death location or previous teleport location (persists across restarts)
 - Warmup countdown with movement cancellation
 - Safe teleportation: prevents suffocation by finding safe landing spots
+- Unsafe destination confirmation: prompts before teleporting to potentially dangerous locations
 - Cannot teleport while in a vehicle
 - Particle effects (smoke + portal) and sound effects on teleport
 

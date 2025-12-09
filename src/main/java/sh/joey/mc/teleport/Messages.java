@@ -13,7 +13,7 @@ import org.bukkit.entity.Player;
 public final class Messages {
     private Messages() {}
 
-    private static final Component PREFIX = Component.text("[")
+    public static final Component PREFIX = Component.text("[")
             .color(NamedTextColor.DARK_GRAY)
             .append(Component.text("TP").color(NamedTextColor.AQUA).decorate(TextDecoration.BOLD))
             .append(Component.text("] ").color(NamedTextColor.DARK_GRAY));

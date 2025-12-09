@@ -28,14 +28,14 @@ import sh.joey.mc.storage.DatabaseConfig;
 import sh.joey.mc.storage.DatabaseService;
 import sh.joey.mc.storage.MigrationRunner;
 import sh.joey.mc.storage.StorageService;
+import sh.joey.mc.confirm.ConfirmationManager;
+import sh.joey.mc.confirm.ConfirmCommands;
 import sh.joey.mc.teleport.BackLocationStorage;
 import sh.joey.mc.teleport.LocationTracker;
 import sh.joey.mc.teleport.PluginConfig;
-import sh.joey.mc.teleport.RequestManager;
 import sh.joey.mc.teleport.SafeTeleporter;
 import sh.joey.mc.teleport.commands.BackCommand;
 import sh.joey.mc.teleport.commands.TpCommand;
-import sh.joey.mc.teleport.commands.YesNoCommands;
 import sh.joey.mc.rx.BukkitSchedulers;
 import sh.joey.mc.world.TimePassingMonitor;
 
@@ -80,31 +80,32 @@ public final class SiqiJoeyPlugin extends JavaPlugin {
         // Load teleport config
         var config = PluginConfig.load(this);
 
+        // Confirmation system (early - other components depend on it)
+        var confirmationManager = new ConfirmationManager(this);
+        components.add(confirmationManager);
+
         // Initialize teleport system components
         var backLocationStorage = new BackLocationStorage(storageService);
         var locationTracker = new LocationTracker(this, backLocationStorage);
         components.add(locationTracker);
 
-        var safeTeleporter = new SafeTeleporter(this, config, locationTracker);
+        var safeTeleporter = new SafeTeleporter(this, config, locationTracker, confirmationManager);
         components.add(safeTeleporter);
-
-        var requestManager = new RequestManager(this, config, safeTeleporter);
-        components.add(requestManager);
 
         // Register teleport countdown provider (needs SafeTeleporter)
         bossBarManager.registerProvider(new TeleportCountdownProvider(safeTeleporter));
 
         // Register teleport commands
-        var tpCommand = new TpCommand(this, requestManager);
+        var tpCommand = new TpCommand(this, config, safeTeleporter, confirmationManager);
         getCommand("back").setExecutor(new BackCommand(this, locationTracker, safeTeleporter));
         getCommand("tp").setExecutor(tpCommand);
         getCommand("tp").setTabCompleter(tpCommand);
-        getCommand("accept").setExecutor(YesNoCommands.accept(requestManager));
-        getCommand("decline").setExecutor(YesNoCommands.decline(requestManager));
+        getCommand("accept").setExecutor(ConfirmCommands.accept(confirmationManager));
+        getCommand("decline").setExecutor(ConfirmCommands.decline(confirmationManager));
 
         // Home system (uses PostgreSQL)
         var homeStorage = new HomeStorage(storageService);
-        var homeCommand = new HomeCommand(this, homeStorage, safeTeleporter);
+        var homeCommand = new HomeCommand(this, homeStorage, safeTeleporter, confirmationManager);
         getCommand("home").setExecutor(homeCommand);
 
         var homeTabCompleter = new HomeTabCompleter(this, homeStorage);
