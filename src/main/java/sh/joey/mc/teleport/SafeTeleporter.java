@@ -3,6 +3,7 @@ package sh.joey.mc.teleport;
 import io.reactivex.rxjava3.disposables.CompositeDisposable;
 import io.reactivex.rxjava3.disposables.Disposable;
 import org.bukkit.Location;
+import org.bukkit.Material;
 import org.bukkit.Particle;
 import org.bukkit.Sound;
 import org.bukkit.World;
@@ -224,8 +225,9 @@ public final class SafeTeleporter implements Disposable {
     }
 
     /**
-     * Finds a safe location near the destination where the player won't suffocate.
-     * A safe location has 2 blocks of passable space (for feet and head) above a solid floor.
+     * Finds a safe location near the destination where the player won't die.
+     * A safe location has 2 blocks of non-solid, non-lethal space for feet and head.
+     * Water is considered safe (player can swim). Air is safe (player will fall but survive).
      *
      * @param destination The target location
      * @return A safe location, or empty if none found within search radius
@@ -241,19 +243,46 @@ public final class SafeTeleporter implements Disposable {
             return Optional.of(destination);
         }
 
-        // Search upward first (most common case: player teleporting into ground)
+        // Search in expanding layers: first vertical, then horizontal
+        // This prioritizes staying close to the original destination
+
+        // Phase 1: Search vertically (most common fix for being in ground)
         for (int dy = 1; dy <= SAFE_LOCATION_SEARCH_RADIUS; dy++) {
-            Location candidate = destination.clone().add(0, dy, 0);
-            if (isSafeLocation(candidate)) {
-                return Optional.of(candidate);
+            Location up = destination.clone().add(0, dy, 0);
+            if (isSafeLocation(up)) {
+                return Optional.of(up);
+            }
+            Location down = destination.clone().subtract(0, dy, 0);
+            if (isSafeLocation(down)) {
+                return Optional.of(down);
             }
         }
 
-        // Search downward (less common: teleporting into air above void)
-        for (int dy = 1; dy <= SAFE_LOCATION_SEARCH_RADIUS; dy++) {
-            Location candidate = destination.clone().subtract(0, dy, 0);
-            if (isSafeLocation(candidate)) {
-                return Optional.of(candidate);
+        // Phase 2: Search horizontally (for wall teleportation issues)
+        // Check adjacent blocks in cardinal directions first, then diagonals
+        int[][] horizontalOffsets = {
+            {1, 0}, {-1, 0}, {0, 1}, {0, -1},  // Cardinal
+            {1, 1}, {1, -1}, {-1, 1}, {-1, -1} // Diagonal
+        };
+
+        for (int radius = 1; radius <= SAFE_LOCATION_SEARCH_RADIUS / 2; radius++) {
+            for (int[] offset : horizontalOffsets) {
+                int dx = offset[0] * radius;
+                int dz = offset[1] * radius;
+
+                // Check at same Y, then above, then below
+                for (int dy = 0; dy <= SAFE_LOCATION_SEARCH_RADIUS; dy++) {
+                    Location candidate = destination.clone().add(dx, dy, dz);
+                    if (isSafeLocation(candidate)) {
+                        return Optional.of(candidate);
+                    }
+                    if (dy > 0) {
+                        Location candidateDown = destination.clone().add(dx, -dy, dz);
+                        if (isSafeLocation(candidateDown)) {
+                            return Optional.of(candidateDown);
+                        }
+                    }
+                }
             }
         }
 
@@ -262,7 +291,8 @@ public final class SafeTeleporter implements Disposable {
 
     /**
      * Checks if a location is safe for a player to stand at.
-     * Safe means: feet and head blocks are passable, and there's a solid block below.
+     * Safe means: feet and head blocks won't kill the player (not solid, not lethal).
+     * Water is safe (player can swim). Air is safe (player will fall but usually survive).
      */
     private boolean isSafeLocation(Location location) {
         World world = location.getWorld();
@@ -272,15 +302,25 @@ public final class SafeTeleporter implements Disposable {
 
         Block feetBlock = location.getBlock();
         Block headBlock = feetBlock.getRelative(0, 1, 0);
-        Block floorBlock = feetBlock.getRelative(0, -1, 0);
 
-        // Feet and head must be passable (air, water, etc. - not solid)
-        if (!feetBlock.isPassable() || !headBlock.isPassable()) {
+        // Check for lethal materials (instant damage)
+        if (isLethalBlock(feetBlock) || isLethalBlock(headBlock)) {
             return false;
         }
 
-        // Floor must be solid (not air, water, lava, etc.)
-        return floorBlock.isSolid();
+        // Feet and head must not be solid (would cause suffocation)
+        // Note: water, air, grass, etc. are all passable and safe
+        return feetBlock.isPassable() && headBlock.isPassable();
+    }
+
+    /**
+     * Checks if a block contains a lethal material that would kill the player.
+     */
+    private boolean isLethalBlock(Block block) {
+        Material type = block.getType();
+        return type == Material.LAVA
+            || type == Material.FIRE
+            || type == Material.SOUL_FIRE;
     }
 
     /**
