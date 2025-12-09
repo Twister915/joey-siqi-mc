@@ -24,10 +24,10 @@ import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
-import java.util.HashSet;
+import java.util.HashMap;
 import java.util.HexFormat;
 import java.util.List;
-import java.util.Set;
+import java.util.Map;
 import java.util.logging.Logger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -61,7 +61,7 @@ public final class MigrationRunner {
     public void run() {
         try (Connection conn = database.getConnection()) {
             createMigrationStateTable(conn);
-            Set<String> appliedMigrations = getAppliedMigrations(conn);
+            Map<String, String> appliedMigrations = getAppliedMigrations(conn);
             List<Migration> pendingMigrations = loadPendingMigrations(appliedMigrations);
 
             if (pendingMigrations.isEmpty()) {
@@ -96,21 +96,21 @@ public final class MigrationRunner {
         }
     }
 
-    private Set<String> getAppliedMigrations(Connection conn) throws SQLException {
-        Set<String> applied = new HashSet<>();
-        String sql = "SELECT filename FROM migration_state";
+    private Map<String, String> getAppliedMigrations(Connection conn) throws SQLException {
+        Map<String, String> applied = new HashMap<>();
+        String sql = "SELECT filename, checksum FROM migration_state";
 
         try (Statement stmt = conn.createStatement();
              ResultSet rs = stmt.executeQuery(sql)) {
             while (rs.next()) {
-                applied.add(rs.getString("filename"));
+                applied.put(rs.getString("filename"), rs.getString("checksum"));
             }
         }
 
         return applied;
     }
 
-    private List<Migration> loadPendingMigrations(Set<String> appliedMigrations) {
+    private List<Migration> loadPendingMigrations(Map<String, String> appliedMigrations) {
         List<Migration> pending = new ArrayList<>();
 
         try {
@@ -142,7 +142,7 @@ public final class MigrationRunner {
         return pending;
     }
 
-    private void loadMigrationsFromPath(Path migrationsPath, Set<String> appliedMigrations,
+    private void loadMigrationsFromPath(Path migrationsPath, Map<String, String> appliedMigrations,
                                         List<Migration> pending) throws IOException {
         try (Stream<Path> stream = Files.list(migrationsPath)) {
             stream.forEach(path -> {
@@ -153,14 +153,22 @@ public final class MigrationRunner {
                     return;
                 }
 
-                if (appliedMigrations.contains(filename)) {
-                    return;
-                }
-
                 int sequence = Integer.parseInt(matcher.group(1));
                 try {
                     String content = Files.readString(path, StandardCharsets.UTF_8);
                     String checksum = sha256(content);
+
+                    // Verify checksum for already-applied migrations
+                    String appliedChecksum = appliedMigrations.get(filename);
+                    if (appliedChecksum != null) {
+                        if (!appliedChecksum.equals(checksum)) {
+                            throw new RuntimeException(
+                                    "Migration file '" + filename + "' has been modified after it was applied! " +
+                                    "Expected checksum: " + appliedChecksum + ", actual: " + checksum);
+                        }
+                        return; // Already applied and checksum matches
+                    }
+
                     pending.add(new Migration(sequence, filename, content, checksum));
                 } catch (IOException e) {
                     throw new RuntimeException("Failed to read migration: " + filename, e);

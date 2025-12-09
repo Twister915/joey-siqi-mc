@@ -194,16 +194,15 @@ public final class SafeTeleporter implements Disposable {
             pending.countdownTask().dispose();
         }
 
-        // Find a safe location to prevent suffocation
+        // Find a safe location to prevent suffocation (best-effort)
         Optional<Location> safeDestinationOpt = findSafeLocation(destination);
-        if (safeDestinationOpt.isEmpty()) {
-            Messages.error(player, "Could not find a safe location to teleport to!");
-            if (onComplete != null) {
-                onComplete.accept(false);
-            }
-            return;
+        Location safeDestination;
+        if (safeDestinationOpt.isPresent()) {
+            safeDestination = safeDestinationOpt.get();
+        } else {
+            safeDestination = destination;
+            Messages.warning(player, "Could not find a safe spot - you may take damage!");
         }
-        Location safeDestination = safeDestinationOpt.get();
 
         // Record current location before teleporting (for /back)
         Location departureLocation = player.getLocation().clone();

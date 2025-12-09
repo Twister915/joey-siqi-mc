@@ -87,7 +87,7 @@ public final class HomeCommand implements CommandExecutor {
     // --- Set Home ---
 
     private void handleSet(Player player, String[] args) {
-        String name = args.length < 2 ? "home" : args[1].toLowerCase();
+        String name = args.length < 2 ? "home" : HomeStorage.normalizeName(args[1]);
         if (RESERVED_NAMES.contains(name)) {
             error(player, "Cannot use '" + name + "' as a home name.");
             return;
@@ -109,7 +109,7 @@ public final class HomeCommand implements CommandExecutor {
             return;
         }
 
-        String name = args[1].toLowerCase();
+        String name = HomeStorage.normalizeName(args[1]);
         UUID playerId = player.getUniqueId();
 
         storage.getHome(playerId, name)
@@ -329,7 +329,7 @@ public final class HomeCommand implements CommandExecutor {
             return;
         }
 
-        String name = args[1].toLowerCase();
+        String name = HomeStorage.normalizeName(args[1]);
         String targetName = args[2];
 
         Player target = Bukkit.getPlayer(targetName);
@@ -367,7 +367,7 @@ public final class HomeCommand implements CommandExecutor {
             return;
         }
 
-        String name = args[1].toLowerCase();
+        String name = HomeStorage.normalizeName(args[1]);
         String targetName = args[2];
 
         UUID targetId = resolvePlayerId(targetName);
@@ -405,12 +405,10 @@ public final class HomeCommand implements CommandExecutor {
     // --- Teleport ---
 
     private void handleTeleport(Player player, String input) {
-        UUID playerId = player.getUniqueId();
-
         if (input.contains(":")) {
             handleSharedHomeTeleport(player, input);
         } else {
-            handleOwnHomeTeleport(player, input.toLowerCase());
+            handleOwnHomeTeleport(player, HomeStorage.normalizeName(input));
         }
     }
 
@@ -426,7 +424,7 @@ public final class HomeCommand implements CommandExecutor {
     private void handleSharedHomeTeleport(Player player, String input) {
         String[] parts = input.split(":", 2);
         String ownerName = parts[0];
-        String homeName = parts[1].toLowerCase();
+        String homeName = HomeStorage.normalizeName(parts[1]);
 
         @SuppressWarnings("deprecation")
         var offlinePlayer = Bukkit.getOfflinePlayer(ownerName);

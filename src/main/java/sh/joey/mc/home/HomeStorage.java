@@ -27,22 +27,30 @@ public final class HomeStorage {
     }
 
     /**
+     * Normalizes a home name: lowercase and trimmed.
+     */
+    public static String normalizeName(String name) {
+        return name.toLowerCase().trim();
+    }
+
+    /**
      * Get a specific home by name.
      */
     public Maybe<Home> getHome(UUID playerId, String name) {
+        String normalizedName = normalizeName(name);
         return storage.<Home>queryMaybe(conn -> {
             String sql = """
                 SELECT h.player_id, h.name, h.world_id, h.x, h.y, h.z, h.pitch, h.yaw,
                        COALESCE(array_agg(hs.shared_with_id) FILTER (WHERE hs.shared_with_id IS NOT NULL), '{}') as shared_with
                 FROM homes h
-                LEFT JOIN home_shares hs ON h.id = hs.home_id
-                WHERE h.player_id = ? AND LOWER(h.name) = LOWER(?)
-                GROUP BY h.id
+                LEFT JOIN home_shares hs ON h.player_id = hs.owner_id AND h.name = hs.home_name
+                WHERE h.player_id = ? AND h.name = ?
+                GROUP BY h.player_id, h.name, h.world_id, h.x, h.y, h.z, h.pitch, h.yaw
                 """;
 
             try (PreparedStatement stmt = conn.prepareStatement(sql)) {
                 stmt.setObject(1, playerId);
-                stmt.setString(2, name);
+                stmt.setString(2, normalizedName);
 
                 try (ResultSet rs = stmt.executeQuery()) {
                     if (rs.next()) {
@@ -63,16 +71,16 @@ public final class HomeStorage {
                 SELECT h.player_id, h.name, h.world_id, h.x, h.y, h.z, h.pitch, h.yaw,
                        COALESCE(array_agg(hs.shared_with_id) FILTER (WHERE hs.shared_with_id IS NOT NULL), '{}') as shared_with
                 FROM homes h
-                LEFT JOIN home_shares hs ON h.id = hs.home_id
+                LEFT JOIN home_shares hs ON h.player_id = hs.owner_id AND h.name = hs.home_name
                 WHERE h.player_id = ?
-                GROUP BY h.id
+                GROUP BY h.player_id, h.name, h.world_id, h.x, h.y, h.z, h.pitch, h.yaw
                 UNION ALL
                 SELECT h.player_id, h.name, h.world_id, h.x, h.y, h.z, h.pitch, h.yaw,
                        COALESCE(array_agg(hs2.shared_with_id) FILTER (WHERE hs2.shared_with_id IS NOT NULL), '{}') as shared_with
                 FROM homes h
-                INNER JOIN home_shares hs ON h.id = hs.home_id AND hs.shared_with_id = ?
-                LEFT JOIN home_shares hs2 ON h.id = hs2.home_id
-                GROUP BY h.id
+                INNER JOIN home_shares hs ON h.player_id = hs.owner_id AND h.name = hs.home_name AND hs.shared_with_id = ?
+                LEFT JOIN home_shares hs2 ON h.player_id = hs2.owner_id AND h.name = hs2.home_name
+                GROUP BY h.player_id, h.name, h.world_id, h.x, h.y, h.z, h.pitch, h.yaw
                 """;
 
             List<Home> homes = new ArrayList<>();
@@ -112,6 +120,7 @@ public final class HomeStorage {
      * Save a home (insert or update).
      */
     public Completable setHome(UUID playerId, Home home) {
+        String normalizedName = normalizeName(home.name());
         return storage.execute(conn -> {
             String sql = """
                 INSERT INTO homes (player_id, name, world_id, x, y, z, pitch, yaw)
@@ -128,7 +137,7 @@ public final class HomeStorage {
 
             try (PreparedStatement stmt = conn.prepareStatement(sql)) {
                 stmt.setObject(1, playerId);
-                stmt.setString(2, home.name().toLowerCase());
+                stmt.setString(2, normalizedName);
                 stmt.setObject(3, home.worldId());
                 stmt.setDouble(4, home.x());
                 stmt.setDouble(5, home.y());
@@ -146,12 +155,13 @@ public final class HomeStorage {
      * @return true if a home was deleted
      */
     public Single<Boolean> deleteHome(UUID playerId, String name) {
+        String normalizedName = normalizeName(name);
         return storage.query(conn -> {
-            String sql = "DELETE FROM homes WHERE player_id = ? AND LOWER(name) = LOWER(?)";
+            String sql = "DELETE FROM homes WHERE player_id = ? AND name = ?";
 
             try (PreparedStatement stmt = conn.prepareStatement(sql)) {
                 stmt.setObject(1, playerId);
-                stmt.setString(2, name);
+                stmt.setString(2, normalizedName);
                 return stmt.executeUpdate() > 0;
             }
         });
@@ -163,17 +173,30 @@ public final class HomeStorage {
      * @return true if the share was added (false if home doesn't exist or already shared)
      */
     public Single<Boolean> shareHome(UUID ownerId, String homeName, UUID targetId) {
+        String normalizedName = normalizeName(homeName);
         return storage.query(conn -> {
+            // First verify the home exists
+            String checkSql = "SELECT 1 FROM homes WHERE player_id = ? AND name = ?";
+            try (PreparedStatement checkStmt = conn.prepareStatement(checkSql)) {
+                checkStmt.setObject(1, ownerId);
+                checkStmt.setString(2, normalizedName);
+                try (ResultSet rs = checkStmt.executeQuery()) {
+                    if (!rs.next()) {
+                        return false; // Home doesn't exist
+                    }
+                }
+            }
+
             String sql = """
-                INSERT INTO home_shares (home_id, shared_with_id)
-                SELECT id, ? FROM homes WHERE player_id = ? AND LOWER(name) = LOWER(?)
+                INSERT INTO home_shares (owner_id, home_name, shared_with_id)
+                VALUES (?, ?, ?)
                 ON CONFLICT DO NOTHING
                 """;
 
             try (PreparedStatement stmt = conn.prepareStatement(sql)) {
-                stmt.setObject(1, targetId);
-                stmt.setObject(2, ownerId);
-                stmt.setString(3, homeName);
+                stmt.setObject(1, ownerId);
+                stmt.setString(2, normalizedName);
+                stmt.setObject(3, targetId);
                 return stmt.executeUpdate() > 0;
             }
         });
@@ -185,16 +208,16 @@ public final class HomeStorage {
      * @return true if the share was removed
      */
     public Single<Boolean> unshareHome(UUID ownerId, String homeName, UUID targetId) {
+        String normalizedName = normalizeName(homeName);
         return storage.query(conn -> {
             String sql = """
                 DELETE FROM home_shares
-                WHERE home_id = (SELECT id FROM homes WHERE player_id = ? AND LOWER(name) = LOWER(?))
-                AND shared_with_id = ?
+                WHERE owner_id = ? AND home_name = ? AND shared_with_id = ?
                 """;
 
             try (PreparedStatement stmt = conn.prepareStatement(sql)) {
                 stmt.setObject(1, ownerId);
-                stmt.setString(2, homeName);
+                stmt.setString(2, normalizedName);
                 stmt.setObject(3, targetId);
                 return stmt.executeUpdate() > 0;
             }
