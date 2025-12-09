@@ -22,7 +22,7 @@ public final class PlayerSessionTracker implements Disposable {
     private final CompositeDisposable disposables = new CompositeDisposable();
 
     public PlayerSessionTracker(SiqiJoeyPlugin plugin, PlayerSessionStorage storage) {
-
+        plugin.getLogger().info("server session id is " + serverSessionId);
         // Fix orphaned sessions from previous server runs (blocking on startup)
         int fixed = storage.fixOrphanedSessions(serverSessionId).blockingGet();
         if (fixed > 0) {
