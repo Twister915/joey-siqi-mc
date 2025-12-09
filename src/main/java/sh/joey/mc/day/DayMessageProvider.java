@@ -113,7 +113,7 @@ public final class DayMessageProvider implements Disposable {
     }
 
     // ========================================
-    // STATIC MESSAGES (~100 messages)
+    // STATIC MESSAGES (~150 messages)
     // ========================================
 
     private static final List<String> STATIC_MESSAGES = List.of(
@@ -265,7 +265,95 @@ public final class DayMessageProvider implements Disposable {
             "Warm bread from the furnace. Simple pleasures.",
             "The fireplace crackles. Even if it's just a campfire.",
             "Rain patters on the roof you finally built. Cozy.",
-            "Your dogs are happy to see you. As always."
+            "Your dogs are happy to see you. As always.",
+
+            // Redstone and technical
+            "The comparator clicks. Your contraption lives.",
+            "Somewhere, a hopper is clogged. As is tradition.",
+            "The observer observes. The piston pushes. Satisfaction.",
+            "Redstone dust trails across your floor like electric spaghetti.",
+            "Today's project: a door that requires 47 components to open.",
+            "The flying machine flies. You are basically an engineer now.",
+            "Your item sorter works. You don't know why, but it works.",
+            "The T flip-flop flips. Or flops. You're not sure which.",
+
+            // Enchantments
+            "May Fortune III bless your mining today.",
+            "Silk Touch: for when you want the block, not the drops.",
+            "Mending: the enchantment that makes tools immortal. Almost.",
+            "Curse of Vanishing: because losing items wasn't painful enough.",
+            "Bane of Arthropods V. For when you REALLY hate spiders.",
+            "Thorns III: the enchantment of 'no, YOU take damage.'",
+            "Feather Falling IV: trust issues with heights, solved.",
+            "Infinity on a bow is nice. Mending is nicer. You can't have both.",
+
+            // Potions and brewing
+            "The brewing stand bubbles. Alchemy awaits.",
+            "Fire Resistance: for when the Nether stops being polite.",
+            "Night Vision makes caves less terrifying. Slightly.",
+            "Splash Potion of Healing: for when eating is too slow.",
+            "Slow Falling: because sometimes you just need to float.",
+            "Invisibility: the mobs can still hear you, you know.",
+            "Awkward Potion: useless alone, essential for everything.",
+            "Water Breathing: the ocean is now your domain.",
+
+            // Food and cooking
+            "Golden carrots: the food of champions and the wealthy.",
+            "Suspicious stew: will it help or hurt? Only one way to find out.",
+            "Steak: the optimal food. Don't let the golden carrot elitists fool you.",
+            "Cake: the only food you have to place before eating.",
+            "Rabbit stew: effort required, satisfaction questionable.",
+            "Pumpkin pie: autumn vibes, year-round.",
+            "Chorus fruit: teleports you randomly. What could go wrong?",
+            "Rotten flesh: emergency food with consequences.",
+
+            // Death and respawn
+            "You died. Somewhere, a skeleton is wearing your armor.",
+            "Items despawn in 5 minutes. The clock is always ticking.",
+            "At least you set your spawn point. You did set it, right?",
+            "Death by kinetic energy. Translation: you hit the ground too hard.",
+            "Killed by intentional game design. The Warden doesn't play fair.",
+            "Your stuff is in the lava now. It belongs to the lava.",
+            "Respawn, retrieve, revenge. The three Rs of Minecraft.",
+            "Keep Inventory is not cheating. It's self-care.",
+
+            // Inventory management
+            "27 slots. 27 problems. Wait, 36. Wait, more with armor.",
+            "Full inventory, diamonds on the ground. Classic.",
+            "The stack limit is 64. Your hoarding limit is infinite.",
+            "Shulker boxes: the solution to inventory problems. Mostly.",
+            "You don't need 15 stacks of cobblestone. But you're keeping them anyway.",
+            "Ender chest: your pocket dimension of chaos.",
+            "Why do you have 47 stone swords? When did you make these?",
+            "One day you'll organize. Today is not that day.",
+
+            // XP and grinding
+            "'Too Expensive.' Two words. Infinite pain.",
+            "Level 30. The magic number. The grind is real.",
+            "XP orbs are the sound of progress. Collect them all.",
+            "The grindstone removes enchantments. And a small piece of your soul.",
+            "Anvil says 'Too Expensive.' You say nothing. You just stare.",
+            "39 levels to repair. Anvil wants 40. Mathematics is cruel.",
+            "Experience farms: because punching mobs is so last century.",
+
+            // Rare events
+            "Somewhere out there, a pink sheep exists. Find it.",
+            "Baby zombie riding a chicken. Nature's cruelest joke.",
+            "Skeleton horse trap: free horses! And also lightning and death.",
+            "Charged creeper: rare, terrifying, and oddly useful.",
+            "Spider jockey: because spiders needed ranged attacks apparently.",
+            "A brown mooshroom exists. It requires lightning. And luck.",
+            "Natural diamond armor zombie. Someone won the lottery today.",
+
+            // Specific painful experiences
+            "You forgot to write down the coordinates. We've all been there.",
+            "The pickaxe broke on the last diamond. Poetic tragedy.",
+            "You mined into lava. The diamonds watched as they burned.",
+            "Forgot to bring food. The walk of shame begins.",
+            "Creeper in the storage room. How did it even get there?",
+            "You fell in the End void. With all your stuff. The void thanks you.",
+            "Built the portal in the wrong spot. Now there are two bases.",
+            "The enderman stole a block from your build. That specific block."
     );
 
     private String getStaticMessage() {
@@ -273,11 +361,11 @@ public final class DayMessageProvider implements Disposable {
     }
 
     // ========================================
-    // PROCEDURAL TEMPLATES (~30 templates with word banks)
+    // PROCEDURAL TEMPLATES (~45 templates with word banks)
     // ========================================
 
     private String getProceduralMessage() {
-        int template = random.nextInt(30);
+        int template = random.nextInt(45);
 
         return switch (template) {
             case 0 -> "Today feels like a good day to " + pick(ACTIVITIES) + ".";
@@ -301,15 +389,31 @@ public final class DayMessageProvider implements Disposable {
             case 18 -> "Your " + pick(TOOLS) + " grows restless in your inventory.";
             case 19 -> "Today's quest: " + pick(ACTIVITIES) + ". Or just vibes.";
             case 20 -> "The stars foretold you would " + pick(ACTIVITIES) + ". The stars are weird.";
-            case 21 -> "A " + pick(MOBS) + " dreams of " + pick(TREASURES) + ". Don't let it have it.";
+            case 21 -> "A " + pick(MOBS) + " dreams of finding " + pick(TREASURES) + ". Don't let it.";
             case 22 -> "The " + pick(ORES) + " calls from the depths. Answer wisely.";
             case 23 -> "Why " + pick(ACTIVITIES) + " when you could " + pick(ACTIVITIES) + " instead?";
             case 24 -> "News from the " + pick(BIOMES) + ": a " + pick(ADJECTIVES) + " " + pick(MOBS) + " was spotted.";
             case 25 -> "The universe suggests you try " + pick(ADVICE) + ".";
             case 26 -> "Prophecy: The " + pick(MOBS) + " and the " + pick(ITEMS) + " will meet today.";
-            case 27 -> "Deep in the " + pick(BIOMES) + ", " + pick(TREASURES) + " awaits the brave.";
+            case 27 -> "Deep in the " + pick(BIOMES) + ", treasure awaits the brave.";
             case 28 -> "A " + pick(ADJECTIVES) + " feeling hangs in the air. Time to " + pick(ACTIVITIES) + ".";
             case 29 -> "The " + pick(SOUNDS) + " suggest it's time to " + pick(ACTIVITIES) + ".";
+            // New templates
+            case 30 -> "Dear " + pick(MOBS) + ": please don't. Sincerely, everyone.";
+            case 31 -> "Loading tip: Try " + pick(ADVICE) + " for best results.";
+            case 32 -> "Breaking news: Local player plans to " + pick(ACTIVITIES) + ". More at never.";
+            case 33 -> "Your " + pick(ENCHANTMENTS) + " enchantment tingles with anticipation.";
+            case 34 -> "The " + pick(VILLAGER_PROFESSIONS) + " villager nods approvingly at your " + pick(ITEMS) + ".";
+            case 35 -> "Step 1: " + pick(ACTIVITIES) + ". Step 2: ???. Step 3: Profit.";
+            case 36 -> "Today's vibe: " + pick(ADJECTIVES) + " with a chance of " + pick(MOBS) + ".";
+            case 37 -> "The " + pick(FOODS) + " in your inventory grows cold. Eat it already.";
+            case 38 -> "Achievement idea: " + pick(ACTIVITIES) + " while avoiding " + pick(MOBS) + ".";
+            case 39 -> "Your " + pick(ARMOR) + " armor shines in the morning light.";
+            case 40 -> "The " + pick(MOBS) + " council has decided your fate: " + pick(ACTIVITIES) + ".";
+            case 41 -> "Plot twist: The " + pick(DISCOVERIES) + " was inside you all along. (It wasn't.)";
+            case 42 -> "Overheard in the village: 'That player is going to " + pick(ACTIVITIES) + " today.'";
+            case 43 -> "The " + pick(BLOCKS) + " awaits placement. It believes in you.";
+            case 44 -> "Warning: " + pick(MOBS) + " levels are elevated in the " + pick(BIOMES) + " today.";
             default -> getStaticMessage();
         };
     }
@@ -366,7 +470,32 @@ public final class DayMessageProvider implements Disposable {
             "make a beacon pyramid",
             "explore a trial chamber",
             "tame a parrot",
-            "build a treehouse"
+            "build a treehouse",
+            // New activities
+            "brew some potions",
+            "build a nether highway",
+            "create an ice boat road",
+            "smelt everything in sight",
+            "build a villager trading hall",
+            "make a hidden base entrance",
+            "collect all armor trims",
+            "build a working elevator",
+            "create a note block song",
+            "hunt for a trident",
+            "build a guardian farm",
+            "explore the deep dark quietly",
+            "make a wool farm",
+            "build a slime farm",
+            "create a honey farm",
+            "design a custom banner",
+            "build a minecart system",
+            "collect every sapling type",
+            "create a zero-tick farm",
+            "build a raid farm",
+            "make fireworks",
+            "build a wither rose farm",
+            "create a custom map art",
+            "build a snow golem army"
     );
 
     private static final List<String> ADVICE = List.of(
@@ -401,7 +530,24 @@ public final class DayMessageProvider implements Disposable {
             "always carrying a boat",
             "building with a plan",
             "taking breaks from the grind",
-            "appreciating the small victories"
+            "appreciating the small victories",
+            // New advice
+            "keeping a bed in your inventory",
+            "never looking an enderman in the eye",
+            "using Fortune on ore, Silk Touch on spawners",
+            "setting your respawn point before boss fights",
+            "crafting a spare set of tools",
+            "putting your diamonds in an ender chest",
+            "learning the piglin bartering table",
+            "building farms before grinding",
+            "using coordinates, not memory",
+            "always having a totem equipped",
+            "testing redstone before committing",
+            "wearing gold in the Nether",
+            "keeping a fire resistance potion ready",
+            "pillar up before fighting the Wither",
+            "never trusting sand either",
+            "lighting spawners before breaking them"
     );
 
     private static final List<String> ADJECTIVES = List.of(
@@ -436,7 +582,24 @@ public final class DayMessageProvider implements Disposable {
             "cozy",
             "ominous",
             "whimsical",
-            "foreboding"
+            "foreboding",
+            // New adjectives
+            "shimmering",
+            "weathered",
+            "untouched",
+            "sprawling",
+            "secluded",
+            "precarious",
+            "mossy",
+            "crystalline",
+            "scorched",
+            "frozen",
+            "subterranean",
+            "celestial",
+            "corrupted",
+            "serene",
+            "chaotic",
+            "gilded"
     );
 
     private static final List<String> DISCOVERIES = List.of(
@@ -467,7 +630,22 @@ public final class DayMessageProvider implements Disposable {
             "nether fortress",
             "end city",
             "ancient city",
-            "dripstone cave"
+            "dripstone cave",
+            // New discoveries
+            "desert well",
+            "village library",
+            "double spawner",
+            "exposed diamond vein",
+            "skeleton horse trap",
+            "coral reef",
+            "underground lake",
+            "mega cave",
+            "surface stronghold",
+            "piglin village",
+            "warped forest",
+            "crimson forest",
+            "end gateway",
+            "mob-free mushroom island"
     );
 
     private static final List<String> WHISPERS = List.of(
@@ -490,7 +668,18 @@ public final class DayMessageProvider implements Disposable {
             "rare coral in shallow waters",
             "a jungle temple overgrown",
             "a skeleton spawner waiting",
-            "gold in the badlands"
+            "gold in the badlands",
+            // New whispers
+            "a double blaze spawner",
+            "librarians with mending books",
+            "a mushroom island over the horizon",
+            "treasure maps in shipwrecks",
+            "a perfectly flat plains biome",
+            "slime chunks beneath your base",
+            "a spider spawner near the surface",
+            "nether quartz veins exposed",
+            "a piglin bastion untouched",
+            "chorus forests in the outer End"
     );
 
     private static final List<String> TREASURES = List.of(
@@ -513,7 +702,18 @@ public final class DayMessageProvider implements Disposable {
             "sniffer egg",
             "amethyst cluster",
             "end crystal",
-            "shulker shell"
+            "shulker shell",
+            // New treasures
+            "silk touch pickaxe",
+            "fortune III book",
+            "maxed out sword",
+            "conduit",
+            "wither skeleton skull",
+            "perfectly enchanted bow",
+            "pigstep disc",
+            "god armor set",
+            "ender chest full of diamonds",
+            "stack of emerald blocks"
     );
 
     private static final List<String> GOALS = List.of(
@@ -542,7 +742,21 @@ public final class DayMessageProvider implements Disposable {
             "get every potion effect at once",
             "build your dream storage system",
             "create a working clock tower",
-            "beat the game without dying"
+            "beat the game without dying",
+            // New goals
+            "get a full set of netherite armor",
+            "build a perimeter",
+            "collect every banner pattern",
+            "complete the How Did We Get Here advancement",
+            "build a working computer in redstone",
+            "find a notch apple in survival",
+            "max out every enchantment on one item",
+            "build a self-sustaining base",
+            "collect every pottery sherd",
+            "craft a conduit and power it",
+            "breed every color of sheep",
+            "fill a double chest with diamond blocks",
+            "build a monument replica"
     );
 
     private static final List<String> MOBS = List.of(
@@ -579,7 +793,25 @@ public final class DayMessageProvider implements Disposable {
             "axolotl",
             "goat",
             "frog",
-            "sniffer"
+            "sniffer",
+            // New mobs
+            "elder guardian",
+            "vindicator",
+            "zombie piglin",
+            "strider",
+            "piglin brute",
+            "zoglin",
+            "endermite",
+            "silverfish",
+            "cave spider",
+            "husk",
+            "stray",
+            "parrot",
+            "turtle",
+            "panda",
+            "llama",
+            "polar bear",
+            "wither"
     );
 
     private static final List<String> ITEMS = List.of(
@@ -602,7 +834,18 @@ public final class DayMessageProvider implements Disposable {
             "golden apple",
             "firework rocket",
             "lead",
-            "bucket"
+            "bucket",
+            // New items
+            "helmet",
+            "chestplate",
+            "leggings",
+            "boots",
+            "recovery compass",
+            "lodestone compass",
+            "clock",
+            "name tag",
+            "saddle",
+            "carrot on a stick"
     );
 
     private static final List<String> TOOLS = List.of(
@@ -619,7 +862,15 @@ public final class DayMessageProvider implements Disposable {
             "lead",
             "compass",
             "clock",
-            "spyglass"
+            "spyglass",
+            // New tools
+            "warped fungus on a stick",
+            "bone meal",
+            "map",
+            "name tag",
+            "elytra",
+            "trident",
+            "ender pearl"
     );
 
     private static final List<String> BIOMES = List.of(
@@ -648,7 +899,21 @@ public final class DayMessageProvider implements Disposable {
             "warm ocean",
             "bamboo jungle",
             "old growth forest",
-            "dripstone caves"
+            "dripstone caves",
+            // New biomes
+            "soul sand valley",
+            "warped forest",
+            "crimson forest",
+            "basalt deltas",
+            "nether wastes",
+            "the End",
+            "end highlands",
+            "river",
+            "beach",
+            "windswept hills",
+            "eroded badlands",
+            "ice spikes",
+            "sunflower plains"
     );
 
     private static final List<String> SOUNDS = List.of(
@@ -671,7 +936,18 @@ public final class DayMessageProvider implements Disposable {
             "end crystals humming",
             "portal whooshing",
             "furnaces crackling",
-            "anvils clanging"
+            "anvils clanging",
+            // New sounds
+            "minecarts rolling on tracks",
+            "a jukebox playing in the distance",
+            "chickens clucking nervously",
+            "the warden's heartbeat",
+            "blaze rods spinning",
+            "shulker bullets whizzing",
+            "guardians charging their lasers",
+            "the crackle of soul fire",
+            "dolphins clicking excitedly",
+            "bells tolling an alarm"
     );
 
     private static final List<String> ORES = List.of(
@@ -692,7 +968,116 @@ public final class DayMessageProvider implements Disposable {
             "raw iron",
             "raw gold",
             "amethyst",
-            "glowstone"
+            "glowstone",
+            // New ores
+            "deepslate emerald",
+            "deepslate iron",
+            "deepslate gold",
+            "deepslate copper",
+            "deepslate redstone",
+            "deepslate lapis",
+            "deepslate coal",
+            "budding amethyst",
+            "gilded blackstone"
+    );
+
+    // New word banks for expanded templates
+    private static final List<String> ENCHANTMENTS = List.of(
+            "Mending",
+            "Unbreaking III",
+            "Fortune III",
+            "Silk Touch",
+            "Sharpness V",
+            "Protection IV",
+            "Feather Falling IV",
+            "Looting III",
+            "Efficiency V",
+            "Power V",
+            "Infinity",
+            "Flame",
+            "Punch II",
+            "Thorns III",
+            "Depth Strider III",
+            "Frost Walker II",
+            "Soul Speed III",
+            "Swift Sneak III",
+            "Respiration III",
+            "Aqua Affinity"
+    );
+
+    private static final List<String> VILLAGER_PROFESSIONS = List.of(
+            "librarian",
+            "armorer",
+            "toolsmith",
+            "weaponsmith",
+            "cleric",
+            "farmer",
+            "fisherman",
+            "fletcher",
+            "cartographer",
+            "leatherworker",
+            "mason",
+            "shepherd",
+            "butcher",
+            "nitwit"
+    );
+
+    private static final List<String> FOODS = List.of(
+            "steak",
+            "golden carrot",
+            "golden apple",
+            "bread",
+            "baked potato",
+            "cooked porkchop",
+            "cooked salmon",
+            "cooked chicken",
+            "pumpkin pie",
+            "cake",
+            "rabbit stew",
+            "suspicious stew",
+            "mushroom stew",
+            "beetroot soup",
+            "dried kelp",
+            "sweet berries",
+            "glow berries",
+            "melon slice",
+            "apple",
+            "cookie"
+    );
+
+    private static final List<String> ARMOR = List.of(
+            "leather",
+            "chainmail",
+            "iron",
+            "gold",
+            "diamond",
+            "netherite",
+            "turtle shell",
+            "elytra",
+            "carved pumpkin"
+    );
+
+    private static final List<String> BLOCKS = List.of(
+            "deepslate",
+            "tuff",
+            "calcite",
+            "dripstone",
+            "copper",
+            "amethyst",
+            "moss",
+            "sculk",
+            "mud brick",
+            "cherry wood",
+            "bamboo",
+            "mangrove",
+            "prismarine",
+            "end stone",
+            "purpur",
+            "blackstone",
+            "basalt",
+            "quartz",
+            "terracotta",
+            "concrete"
     );
 
     // ========================================
@@ -702,6 +1087,173 @@ public final class DayMessageProvider implements Disposable {
     private String getContextMessage(Player player) {
         World world = player.getWorld();
         List<String> candidates = new ArrayList<>();
+
+        // ===== PLAYER STATE =====
+
+        // Health-based messages
+        double health = player.getHealth();
+        double maxHealth = player.getAttribute(org.bukkit.attribute.Attribute.MAX_HEALTH).getValue();
+        if (health <= 4) {
+            candidates.add("You're barely alive. Maybe eat something?");
+            candidates.add("Your health is critical. Today might be short.");
+            candidates.add("Two hearts left. Living dangerously, I see.");
+        } else if (health >= maxHealth) {
+            candidates.add("Full health! You're ready for anything.");
+            candidates.add("Peak condition. The mobs should be worried.");
+        }
+
+        // Hunger-based messages
+        int foodLevel = player.getFoodLevel();
+        if (foodLevel <= 6) {
+            candidates.add("Your stomach growls. Feed yourself, adventurer.");
+            candidates.add("Hunger gnaws at you. Time to eat.");
+            candidates.add("Running on empty. Find food before the sprint fails.");
+        } else if (foodLevel >= 20) {
+            candidates.add("Well fed and ready to go!");
+        }
+
+        // Experience level messages
+        int level = player.getLevel();
+        if (level >= 30) {
+            candidates.add("Level " + level + "! Time to enchant something.");
+            candidates.add("All that XP is burning a hole in your pocket.");
+            candidates.add("You're glowing with experience. Literally.");
+        } else if (level == 0) {
+            candidates.add("Starting fresh with zero XP. The grind begins.");
+        }
+
+        // Armor-based messages
+        var helmet = player.getInventory().getHelmet();
+        var chestplate = player.getInventory().getChestplate();
+        if (helmet == null && chestplate == null) {
+            candidates.add("No armor? Bold strategy. Let's see if it pays off.");
+            candidates.add("Unarmored and unafraid. Or just unprepared.");
+        } else if (chestplate != null && chestplate.getType().name().contains("NETHERITE")) {
+            candidates.add("Netherite armor gleams. You've made it.");
+            candidates.add("Decked in netherite. The endgame is now.");
+        } else if (chestplate != null && chestplate.getType().name().contains("DIAMOND")) {
+            candidates.add("Diamond armor shines in the morning light.");
+        } else if (chestplate != null && chestplate.getType().name().contains("IRON")) {
+            candidates.add("Iron armor. Reliable. Respectable.");
+        } else if (chestplate != null && chestplate.getType().name().contains("LEATHER")) {
+            candidates.add("Leather armor. It's a start!");
+        } else if (chestplate != null && chestplate.getType().name().contains("GOLD")) {
+            candidates.add("Gold armor. Stylish but fragile. Very fragile.");
+        }
+
+        // Elytra check
+        if (chestplate != null && chestplate.getType() == org.bukkit.Material.ELYTRA) {
+            candidates.add("Elytra equipped. The sky is yours today.");
+            candidates.add("Wings ready. Where will you fly?");
+        }
+
+        // Held item messages
+        var mainHand = player.getInventory().getItemInMainHand();
+        if (mainHand.getType() == org.bukkit.Material.DIAMOND_PICKAXE) {
+            candidates.add("Diamond pickaxe in hand. The caves await.");
+        } else if (mainHand.getType() == org.bukkit.Material.NETHERITE_PICKAXE) {
+            candidates.add("Netherite pickaxe ready. Nothing can stop you.");
+        } else if (mainHand.getType() == org.bukkit.Material.FISHING_ROD) {
+            candidates.add("Fishing rod at the ready. A peaceful day ahead?");
+        } else if (mainHand.getType().name().contains("SWORD")) {
+            candidates.add("Sword drawn at dawn. Expecting trouble?");
+        } else if (mainHand.getType() == org.bukkit.Material.BOW || mainHand.getType() == org.bukkit.Material.CROSSBOW) {
+            candidates.add("Ranged weapon ready. Smart choice.");
+        } else if (mainHand.getType() == org.bukkit.Material.SHIELD) {
+            candidates.add("Shield up. A defensive start to the day.");
+        } else if (mainHand.getType() == org.bukkit.Material.TRIDENT) {
+            candidates.add("Trident in hand. Poseidon would be proud.");
+        }
+
+        // ===== LOCATION STATE =====
+
+        // Y-level messages
+        int y = player.getLocation().getBlockY();
+        if (y < -50) {
+            candidates.add("Deep in the world. Diamonds lurk at this depth.");
+            candidates.add("Y level " + y + ". The deep dark isn't far.");
+            candidates.add("This far down, even the stone changes.");
+        } else if (y < 0) {
+            candidates.add("Below sea level. The deepslate zone.");
+            candidates.add("Negative Y coordinates. The depths welcome you.");
+        } else if (y > 200) {
+            candidates.add("High in the sky! Don't look down.");
+            candidates.add("Y level " + y + ". The clouds are below you.");
+            candidates.add("Mountain peak living. The air is thin up here.");
+        } else if (y > 100) {
+            candidates.add("Above the clouds. The view must be incredible.");
+        }
+
+        // Underground detection
+        int highestBlockY = world.getHighestBlockYAt(player.getLocation());
+        if (player.getLocation().getBlockY() < highestBlockY - 10) {
+            candidates.add("Underground at dawn. The sun rises without you.");
+            candidates.add("Waking up in a cave. Classic miner lifestyle.");
+            candidates.add("No sunrise for you today. Just stone and ore.");
+        }
+
+        // In water
+        if (player.isInWater()) {
+            candidates.add("Starting the day in water. Refreshing!");
+            candidates.add("You're soaking wet. Interesting sleeping arrangements.");
+        }
+
+        // Riding something
+        if (player.isInsideVehicle()) {
+            var vehicle = player.getVehicle();
+            if (vehicle != null) {
+                String vehicleType = vehicle.getType().name().toLowerCase().replace("_", " ");
+                candidates.add("Good morning from your " + vehicleType + "!");
+                if (vehicle.getType() == org.bukkit.entity.EntityType.HORSE) {
+                    candidates.add("Your horse greets the dawn with you.");
+                } else if (vehicleType.contains("boat")) {
+                    candidates.add("Dawn breaks over the water. Peaceful sailing ahead.");
+                } else if (vehicle.getType() == org.bukkit.entity.EntityType.PIG) {
+                    candidates.add("Riding a pig at sunrise. Living your best life.");
+                } else if (vehicle.getType() == org.bukkit.entity.EntityType.STRIDER) {
+                    candidates.add("Your strider warbles happily. Well, probably happily.");
+                } else if (vehicleType.contains("minecart")) {
+                    candidates.add("Riding the rails at dawn. Efficient transportation.");
+                } else if (vehicle.getType() == org.bukkit.entity.EntityType.DONKEY || vehicle.getType() == org.bukkit.entity.EntityType.MULE) {
+                    candidates.add("Your trusty pack animal is ready for the day.");
+                } else if (vehicle.getType() == org.bukkit.entity.EntityType.LLAMA) {
+                    candidates.add("Your llama spits in greeting. Charming.");
+                } else if (vehicle.getType() == org.bukkit.entity.EntityType.CAMEL) {
+                    candidates.add("Your camel is ready to traverse the dunes.");
+                }
+            }
+        }
+
+        // ===== WORLD STATE =====
+
+        // Day number milestones
+        long dayNumber = (world.getFullTime() / 24000) + 1;
+        if (dayNumber == 1) {
+            candidates.add("Day 1. Your journey begins!");
+            candidates.add("The first day. Everything is possible.");
+        } else if (dayNumber == 100) {
+            candidates.add("Day 100! You've been here a while.");
+        } else if (dayNumber == 365) {
+            candidates.add("Day 365. A full Minecraft year!");
+        } else if (dayNumber == 1000) {
+            candidates.add("Day 1,000. You're basically a local legend.");
+        } else if (dayNumber % 100 == 0) {
+            candidates.add("Day " + dayNumber + ". Another milestone!");
+        } else if (dayNumber <= 3) {
+            candidates.add("Still early days. Survive, then thrive.");
+        }
+
+        // Difficulty-based messages
+        switch (world.getDifficulty()) {
+            case PEACEFUL -> {
+                candidates.add("Peaceful mode. Relax, no monsters today.");
+                candidates.add("A calm world awaits. No hostile mobs here.");
+            }
+            case HARD -> {
+                candidates.add("Hard mode. The mobs hit harder. So should you.");
+                candidates.add("Hard difficulty. Every mistake costs more.");
+            }
+        }
 
         // Moon phase messages (check what tonight will be)
         int moonPhase = (int) ((world.getFullTime() / 24000) % 8);
@@ -833,7 +1385,28 @@ public final class DayMessageProvider implements Disposable {
             candidates.add("Netherrack stretches endlessly. Ancient debris hides in the depths.");
             candidates.add("Lava flows in rivers below. The Nether never sleeps.");
             candidates.add("Piglins barter in the distance. What will they want today?");
-            candidates.add("The basalt deltas crackle. Watch your step.");
+
+            // Nether biome-specific
+            if (biomeName.contains("soul_sand") || biomeName.contains("soul sand")) {
+                candidates.add("Soul sand slows your steps. Ghasts wail overhead.");
+                candidates.add("The valley of souls. Blue fire flickers in the darkness.");
+                candidates.add("Skeletons roam the soul sand. Tread carefully.");
+            } else if (biomeName.contains("warped")) {
+                candidates.add("The warped forest glows blue. Endermen lurk here.");
+                candidates.add("Warped fungi tower overhead. An alien landscape.");
+                candidates.add("Striders wander through the warped forest. Peaceful, almost.");
+            } else if (biomeName.contains("crimson")) {
+                candidates.add("The crimson forest pulses with red light. Hoglins grunt nearby.");
+                candidates.add("Crimson stems stretch toward the ceiling. Piglins hunt here.");
+                candidates.add("Red and hostile. The crimson forest doesn't welcome visitors.");
+            } else if (biomeName.contains("basalt")) {
+                candidates.add("The basalt deltas crackle. Watch your step.");
+                candidates.add("Basalt pillars and magma cubes. Treacherous terrain.");
+                candidates.add("Gray and black jagged stone. The most hostile Nether biome.");
+            } else if (biomeName.contains("wastes")) {
+                candidates.add("Nether wastes stretch endlessly. Classic hellscape.");
+                candidates.add("Zombie piglins shamble through the wastes. Don't provoke them.");
+            }
         } else if (world.getEnvironment() == World.Environment.THE_END) {
             candidates.add("The void hums. The dragon remembers.");
             candidates.add("End stone beneath your feet. Don't look down.");
@@ -841,6 +1414,39 @@ public final class DayMessageProvider implements Disposable {
             candidates.add("Chorus fruit grows on the outer islands. Sweet freedom.");
             candidates.add("The End is vast and empty. And somehow, beautiful.");
             candidates.add("Shulker cities float in the distance. Adventure awaits.");
+
+            // End-specific location checks
+            if (y < 50) {
+                candidates.add("Low in the End. The void is close.");
+            }
+            if (Math.abs(player.getLocation().getBlockX()) > 1000 || Math.abs(player.getLocation().getBlockZ()) > 1000) {
+                candidates.add("The outer End islands. Far from the dragon's perch.");
+                candidates.add("Out here, only chorus plants and shulkers keep you company.");
+            }
+        }
+
+        // ===== SPECIAL SITUATIONS =====
+
+        // Flying with elytra
+        if (player.isGliding()) {
+            candidates.add("Soaring through the sky! What a way to start the day.");
+            candidates.add("Gliding at dawn. The world looks different from up here.");
+        }
+
+        // Burning (rare but possible at dawn in certain situations)
+        if (player.getFireTicks() > 0) {
+            candidates.add("You're on fire. This is fine. Everything is fine.");
+            candidates.add("Burning at dawn. Not the warm start you wanted.");
+        }
+
+        // Sneaking
+        if (player.isSneaking()) {
+            candidates.add("Sneaking at sunrise. Cautious start to the day.");
+        }
+
+        // Sprinting
+        if (player.isSprinting()) {
+            candidates.add("Already sprinting? Somewhere to be?");
         }
 
         if (candidates.isEmpty()) {
