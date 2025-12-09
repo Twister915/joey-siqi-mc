@@ -20,12 +20,8 @@ public final class PlayerSessionTracker implements Disposable {
 
     private final UUID serverSessionId = UUID.randomUUID();
     private final CompositeDisposable disposables = new CompositeDisposable();
-    private final SiqiJoeyPlugin plugin;
-    private final PlayerSessionStorage storage;
 
     public PlayerSessionTracker(SiqiJoeyPlugin plugin, PlayerSessionStorage storage) {
-        this.plugin = plugin;
-        this.storage = storage;
 
         // Fix orphaned sessions from previous server runs (blocking on startup)
         int fixed = storage.fixOrphanedSessions(serverSessionId).blockingGet();
@@ -35,56 +31,40 @@ public final class PlayerSessionTracker implements Disposable {
 
         // Record joins
         disposables.add(plugin.watchEvent(PlayerJoinEvent.class)
-            .subscribe(event -> recordJoin(event.getPlayer())));
+            .flatMapCompletable(event -> {
+                Player player = event.getPlayer();
+                return storage.recordJoin(
+                        player.getUniqueId(),
+                        player.getName(),
+                        getRemoteIp(player),
+                        isOnlineMode(),
+                        serverSessionId)
+                    .doOnError(err -> plugin.getLogger().warning(
+                        "Failed to record player join for " + player.getName() + ": " + err.getMessage()))
+                    .onErrorComplete();
+            })
+            .subscribe());
 
         // Record disconnects
         disposables.add(plugin.watchEvent(PlayerQuitEvent.class)
-            .subscribe(event -> recordDisconnect(event.getPlayer())));
+            .flatMapCompletable(event -> {
+                Player player = event.getPlayer();
+                return storage.recordDisconnect(player.getUniqueId(), serverSessionId)
+                    .doOnError(err -> plugin.getLogger().warning(
+                        "Failed to record disconnect for " + player.getName() + ": " + err.getMessage()))
+                    .onErrorComplete();
+            })
+            .subscribe());
 
         // Periodic heartbeat (every 30 seconds)
         disposables.add(plugin.interval(30, TimeUnit.SECONDS)
-            .subscribe(tick -> updateLastSeen()));
+            .flatMapCompletable(tick -> storage.updateLastSeen(serverSessionId)
+                .doOnError(err -> plugin.getLogger().warning("Failed to update last seen: " + err.getMessage()))
+                .onErrorComplete())
+            .subscribe());
     }
 
-    /**
-     * Get the unique server session ID for this server run.
-     */
-    public UUID getServerSessionId() {
-        return serverSessionId;
-    }
-
-    private void recordJoin(Player player) {
-        UUID playerId = player.getUniqueId();
-        String username = player.getName();
-        String remoteIp = getRemoteIp(player);
-        boolean onlineMode = isOnlineMode();
-
-        disposables.add(storage.recordJoin(playerId, username, remoteIp, onlineMode, serverSessionId)
-            .subscribe(
-                () -> {},
-                err -> plugin.getLogger().warning("Failed to record player join for " + username + ": " + err.getMessage())
-            ));
-    }
-
-    private void recordDisconnect(Player player) {
-        UUID playerId = player.getUniqueId();
-
-        disposables.add(storage.recordDisconnect(playerId, serverSessionId)
-            .subscribe(
-                () -> {},
-                err -> plugin.getLogger().warning("Failed to record disconnect for " + player.getName() + ": " + err.getMessage())
-            ));
-    }
-
-    private void updateLastSeen() {
-        disposables.add(storage.updateLastSeen(serverSessionId)
-            .subscribe(
-                () -> {},
-                err -> plugin.getLogger().warning("Failed to update last seen: " + err.getMessage())
-            ));
-    }
-
-    private String getRemoteIp(Player player) {
+    private static String getRemoteIp(Player player) {
         InetSocketAddress address = player.getAddress();
         return address != null ? address.getAddress().getHostAddress() : "unknown";
     }
