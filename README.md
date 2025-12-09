@@ -19,8 +19,10 @@ A priority-based boss bar that displays contextual information:
 ### Teleportation System
 - `/tp <player>` - Request to teleport to another player
 - `/accept` / `/decline` - Respond to teleport requests (clickable buttons)
-- `/back` - Return to your previous location after teleporting
+- `/back` - Return to your death location or previous teleport location (persists across restarts)
 - Warmup countdown with movement cancellation
+- Safe teleportation: prevents suffocation by finding safe landing spots
+- Cannot teleport while in a vehicle
 - Particle effects (smoke + portal) and sound effects on teleport
 
 ### Home System
@@ -54,6 +56,7 @@ Themed messages at the start of each Minecraft day:
 
 - Paper/Spigot 1.21+
 - Java 21+
+- PostgreSQL 14+
 
 ## Building
 
@@ -74,23 +77,31 @@ The compiled JAR will be in `build/libs/` (use the `-all.jar` file which include
 Configuration is stored in `plugins/SiqiJoeyPlugin/config.yml`:
 
 ```yaml
+database:
+  host: localhost
+  port: 5432
+  database: minecraft
+  username: minecraft
+  password: secret
+  pool-size: 3
+
 teleport:
-  warmup-seconds: 5        # Countdown before teleporting
-  request-timeout-seconds: 60  # How long teleport requests last
-  movement-tolerance-blocks: 0.5  # How far you can move during warmup
+  warmup-seconds: 5
+  movement-tolerance-blocks: 0.5
+
+requests:
+  timeout-seconds: 60
 ```
 
 ## Data Storage
 
-Player data is stored in per-player directories:
-```
-plugins/JoeySiqi-MC/data/player-{uuid}/homes.json
-```
+All persistent data is stored in PostgreSQL:
+- **homes** - Player home locations with sharing support
+- **home_shares** - Tracks which homes are shared with which players
+- **back_locations** - Death and teleport-from locations for `/back`
+- **migration_state** - Tracks applied database migrations
 
-This structure:
-- Prevents race conditions when multiple players modify their homes
-- Allows easy backup/restore of individual player data
-- Scales well as more features are added
+Database migrations run automatically on startup.
 
 ## License
 

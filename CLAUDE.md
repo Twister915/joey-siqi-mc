@@ -101,10 +101,24 @@ Java records are used extensively for:
 - **Data models**: `Home`, `PendingTeleport`, `TeleportState`
 - **Internal state**: `BiomeState`, `PendingDelete`
 
-### Optional for Nullable Returns
-Methods that may not have a result return `Optional<T>`:
+### RxJava Types for Async Results
+Database operations return RxJava types:
+- `Maybe<T>` - Zero or one result (replaces `Optional<T>` for async)
+- `Single<T>` - Exactly one result
+- `Flowable<T>` - Multiple results (replaces `List<T>` for async)
+- `Completable` - No result, just success/failure
+
 ```java
-public Optional<Location> getBackLocation(UUID playerId)
+public Maybe<Home> getHome(UUID playerId, String name)      // 0 or 1
+public Single<Boolean> hasAnyHomes(UUID playerId)           // exactly 1
+public Flowable<Home> getHomes(UUID playerId)               // 0 to many
+public Completable setHome(UUID playerId, Home home)        // no result
+```
+
+### Optional for Sync Nullable Returns
+Synchronous methods that may not have a result return `Optional<T>`:
+```java
+public Optional<Location> findSafeLocation(Location destination)
 public Optional<BossBarState> getState(Player player)
 ```
 
@@ -150,16 +164,23 @@ Tracks both "confirmed" and "pending" biome to prevent spam when walking along b
 
 ### 2. Teleportation System (`teleport/`)
 
-Handles teleport requests between players, warmup countdowns, and location tracking.
+Handles teleport requests between players, warmup countdowns, location tracking, and safe teleportation.
 
 **Key Classes:**
-- `SafeTeleporter` - Warmup countdown, movement detection, particle/sound effects
+- `SafeTeleporter` - Warmup countdown, movement detection, safe location finding, particle/sound effects
 - `RequestManager` - Player-to-player teleport requests with expiry
-- `LocationTracker` - Tracks death and teleport-from locations for `/back`
+- `LocationTracker` - Tracks death and teleport-from locations for `/back` (persisted to PostgreSQL)
+- `BackLocationStorage` - Async PostgreSQL operations for back locations
+- `BackLocation` - Record with location type (DEATH or TELEPORT)
 - `Messages` - Formatted message utilities with clickable buttons
 - `PluginConfig` - Typed config record loaded from `config.yml`
 
 **Commands:** `/tp`, `/accept`, `/decline`, `/back`
+
+**Safety Features:**
+- Prevents teleporting while in a vehicle
+- Finds safe landing spots to prevent suffocation (searches up to 10 blocks vertically)
+- If no safe spot found, teleports anyway with a warning
 
 **Flow:**
 1. Player A runs `/tp PlayerB`
@@ -167,7 +188,13 @@ Handles teleport requests between players, warmup countdowns, and location track
 3. Player B clicks `[Accept]` → runs `/accept`
 4. `SafeTeleporter.teleport()` starts warmup countdown
 5. If player moves beyond tolerance, teleport cancels (shown in boss bar)
-6. On success, plays particle effects and records location for `/back`
+6. On success, finds safe location, plays particle effects, and records departure location for `/back`
+
+**Back Location Behavior:**
+- Death locations are automatically saved
+- Teleport departure locations are saved before each teleport
+- `/back` is symmetric: going back sets a new back location to where you came from
+- Back locations persist to PostgreSQL across server restarts
 
 **State Records:**
 - `TeleportState` - Progress calculation for active teleport
@@ -182,15 +209,17 @@ Persistent home locations with sharing support, stored in PostgreSQL.
 - `HomeStorage` - Async PostgreSQL operations via `StorageService`
 - `HomeCommand` - All `/home` subcommands (async)
 - `BedHomeListener` - Auto-saves first bed interaction as "home"
+- `HomeTabCompleter` - Tab completion for home names
 
 **Commands:** `/home [name]`, `/home set [name]`, `/home delete <name>`, `/home list`, `/home share`, `/home unshare`, `/home help`
 
 **Features:**
 - Defaults: `/home` → teleport to "home", `/home set` → set "home"
+- Home names are normalized (lowercase + trimmed) via `HomeStorage.normalizeName()`
 - Delete confirmation with clickable `[Confirm]` / `[Cancel]` buttons
 - Handles unloaded worlds gracefully (shows "world not loaded")
 - Shared homes accessible via `owner:homename` syntax
-- All database operations are async (return `Single<T>` or `Completable`)
+- All database operations are async (return `Maybe<T>`, `Flowable<T>`, or `Completable`)
 
 ### 4. Message Systems (`day/`, `welcome/`)
 
@@ -304,10 +333,24 @@ All persistent data is stored in PostgreSQL using async operations.
 ### StorageService Usage
 
 ```java
-// Query that returns a result
-public Single<Optional<Home>> getHome(UUID playerId, String name) {
+// Query that returns 0 or 1 result
+public Maybe<Home> getHome(UUID playerId, String name) {
+    return storage.queryMaybe(conn -> {
+        // Return result or null (null becomes empty Maybe)
+    });
+}
+
+// Query that returns exactly 1 result
+public Single<Boolean> hasAnyHomes(UUID playerId) {
     return storage.query(conn -> {
         // Use PreparedStatement, return result
+    });
+}
+
+// Query that returns multiple results
+public Flowable<Home> getHomes(UUID playerId) {
+    return storage.queryFlowable(conn -> {
+        // Return List<T>
     });
 }
 
@@ -326,49 +369,47 @@ Operations run on `Schedulers.io()` and results are observed on the main thread.
 SQL migrations live in `src/main/resources/migrations/` and follow the pattern:
 ```
 001_create_homes.sql
-002_add_indexes.sql
-003_create_warps.sql
+002_create_back_locations.sql
+003_homes_composite_primary_key.sql
 ```
 
 - Files are sorted by numeric prefix and run in order
 - Tracked in `migration_state` table with filename and SHA-256 checksum
 - Each migration runs in a transaction (rollback on failure)
 - Run synchronously at plugin startup before any storage components initialize
+- **Checksum verification**: If a migration file is modified after being applied, startup fails with an error
 
 ### Table Conventions
 
-Always include timestamp columns:
+Include timestamp columns where useful:
 ```sql
 CREATE TABLE example (
-    id BIGSERIAL PRIMARY KEY,
+    -- Use composite primary key when natural key exists
+    player_id UUID NOT NULL,
+    name VARCHAR(64) NOT NULL,
+    PRIMARY KEY (player_id, name),
     -- ... other columns ...
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 ```
 
+Prefer composite primary keys (e.g., `(player_id, name)`) over surrogate IDs when the natural key is stable and meaningful.
+
 ### Async Patterns
 
 Since database operations are async, command handlers use `.subscribe()`:
 
 ```java
-// Bad - trying to use sync API
-Optional<Home> home = storage.getHome(playerId, name); // Doesn't compile
-
-// Good - async with subscribe
+// Maybe<T> has 3 callbacks: onSuccess, onError, onComplete (empty)
 storage.getHome(playerId, name)
     .subscribe(
-        homeOpt -> {
-            if (homeOpt.isPresent()) {
-                teleportToHome(player, homeOpt.get());
-            } else {
-                error(player, "Home not found.");
-            }
-        },
-        err -> {
+        home -> teleportToHome(player, home),           // onSuccess - home found
+        err -> {                                         // onError
             plugin.getLogger().warning("Database error: " + err.getMessage());
             error(player, "Failed to load home.");
-        }
+        },
+        () -> error(player, "Home not found.")          // onComplete - no home
     );
 ```
 
@@ -376,7 +417,18 @@ For long subscribe bodies, extract to instance methods:
 ```java
 storage.getHome(playerId, name)
     .subscribe(
-        homeOpt -> handleHomeResult(player, homeOpt),
+        home -> handleHomeFound(player, home),
+        err -> handleDatabaseError(player, err),
+        () -> handleHomeNotFound(player)
+    );
+```
+
+For `Flowable<T>`, collect to list if needed:
+```java
+storage.getHomes(playerId)
+    .toList()
+    .subscribe(
+        homes -> displayHomeList(player, homes),
         err -> handleDatabaseError(player, err)
     );
 ```
