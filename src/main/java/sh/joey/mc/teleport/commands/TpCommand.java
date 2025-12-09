@@ -1,16 +1,14 @@
 package sh.joey.mc.teleport.commands;
 
+import com.destroystokyo.paper.event.server.AsyncTabCompleteEvent.Completion;
 import io.reactivex.rxjava3.core.Completable;
+import io.reactivex.rxjava3.core.Maybe;
 import net.kyori.adventure.text.Component;
-import org.bukkit.command.Command;
-import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
-import org.bukkit.command.TabCompleter;
 import org.bukkit.entity.Player;
 import org.bukkit.event.player.PlayerQuitEvent;
-import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
 import sh.joey.mc.SiqiJoeyPlugin;
+import sh.joey.mc.cmd.Command;
 import sh.joey.mc.confirm.ConfirmationManager;
 import sh.joey.mc.confirm.ConfirmationRequest;
 import sh.joey.mc.teleport.Messages;
@@ -23,7 +21,7 @@ import java.util.UUID;
 /**
  * /tp <player> command - sends a teleport request to another player.
  */
-public final class TpCommand implements CommandExecutor, TabCompleter {
+public final class TpCommand implements Command {
     private final SiqiJoeyPlugin plugin;
     private final PluginConfig config;
     private final SafeTeleporter safeTeleporter;
@@ -38,33 +36,57 @@ public final class TpCommand implements CommandExecutor, TabCompleter {
     }
 
     @Override
-    public boolean onCommand(@NotNull CommandSender sender, @NotNull Command command,
-                             @NotNull String label, @NotNull String[] args) {
-        if (!(sender instanceof Player player)) {
-            sender.sendMessage("This command can only be used by players.");
-            return true;
-        }
+    public String getName() {
+        return "tp";
+    }
 
-        if (args.length != 1) {
-            Messages.error(player, "Usage: /tp <player>");
-            return true;
-        }
+    @Override
+    public Completable handle(SiqiJoeyPlugin plugin, CommandSender sender, String[] args) {
+        return Completable.fromAction(() -> {
+            if (!(sender instanceof Player player)) {
+                sender.sendMessage("This command can only be used by players.");
+                return;
+            }
 
-        String targetName = args[0];
-        Player target = plugin.getServer().getPlayer(targetName);
+            if (args.length != 1) {
+                Messages.error(player, "Usage: /tp <player>");
+                return;
+            }
 
-        if (target == null) {
-            Messages.error(player, "Player '" + targetName + "' is not online.");
-            return true;
-        }
+            String targetName = args[0];
+            Player target = plugin.getServer().getPlayer(targetName);
 
-        if (target.equals(player)) {
-            Messages.error(player, "You can't teleport to yourself!");
-            return true;
-        }
+            if (target == null) {
+                Messages.error(player, "Player '" + targetName + "' is not online.");
+                return;
+            }
 
-        sendRequest(player, target);
-        return true;
+            if (target.equals(player)) {
+                Messages.error(player, "You can't teleport to yourself!");
+                return;
+            }
+
+            sendRequest(player, target);
+        });
+    }
+
+    @Override
+    public Maybe<List<Completion>> tabComplete(SiqiJoeyPlugin plugin, CommandSender sender, String[] args) {
+        return Maybe.fromCallable(() -> {
+            if (args.length != 1) {
+                return null;
+            }
+
+            String prefix = args[0].toLowerCase();
+            List<Completion> completions = plugin.getServer().getOnlinePlayers().stream()
+                    .map(Player::getName)
+                    .filter(name -> name.toLowerCase().startsWith(prefix))
+                    .filter(name -> !(sender instanceof Player p) || !name.equals(p.getName()))
+                    .map(Completion::completion)
+                    .toList();
+
+            return completions.isEmpty() ? null : completions;
+        });
     }
 
     private void sendRequest(Player requester, Player target) {
@@ -133,19 +155,5 @@ public final class TpCommand implements CommandExecutor, TabCompleter {
         });
 
         Messages.success(requester, "Request sent to " + target.getName() + "!");
-    }
-
-    @Override
-    public @Nullable List<String> onTabComplete(@NotNull CommandSender sender, @NotNull Command command,
-                                                 @NotNull String label, @NotNull String[] args) {
-        if (args.length == 1) {
-            String prefix = args[0].toLowerCase();
-            return plugin.getServer().getOnlinePlayers().stream()
-                    .map(Player::getName)
-                    .filter(name -> name.toLowerCase().startsWith(prefix))
-                    .filter(name -> !(sender instanceof Player p) || !name.equals(p.getName()))
-                    .toList();
-        }
-        return List.of();
     }
 }

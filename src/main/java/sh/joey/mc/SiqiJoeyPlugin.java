@@ -20,10 +20,10 @@ import sh.joey.mc.bossbar.WeatherChangeProvider;
 import sh.joey.mc.day.DayMessageProvider;
 import sh.joey.mc.welcome.JoinMessageProvider;
 import sh.joey.mc.welcome.ServerPingProvider;
+import sh.joey.mc.cmd.CmdExecutor;
 import sh.joey.mc.home.BedHomeListener;
 import sh.joey.mc.home.HomeCommand;
 import sh.joey.mc.home.HomeStorage;
-import sh.joey.mc.home.HomeTabCompleter;
 import sh.joey.mc.session.PlayerSessionStorage;
 import sh.joey.mc.session.PlayerSessionTracker;
 import sh.joey.mc.storage.DatabaseConfig;
@@ -102,21 +102,16 @@ public final class SiqiJoeyPlugin extends JavaPlugin {
         // Register teleport countdown provider (needs SafeTeleporter)
         bossBarManager.registerProvider(new TeleportCountdownProvider(safeTeleporter));
 
-        // Register teleport commands
-        var tpCommand = new TpCommand(this, config, safeTeleporter, confirmationManager);
-        getCommand("back").setExecutor(new BackCommand(this, locationTracker, safeTeleporter));
-        getCommand("tp").setExecutor(tpCommand);
-        getCommand("tp").setTabCompleter(tpCommand);
-        getCommand("accept").setExecutor(ConfirmCommands.accept(confirmationManager));
-        getCommand("decline").setExecutor(ConfirmCommands.decline(confirmationManager));
+        // Register commands using CmdExecutor
+        components.add(CmdExecutor.register(this, new BackCommand(this, locationTracker, safeTeleporter)));
+        components.add(CmdExecutor.register(this, new TpCommand(this, config, safeTeleporter, confirmationManager)));
+        components.add(CmdExecutor.register(this, ConfirmCommands.accept(confirmationManager)));
+        components.add(CmdExecutor.register(this, ConfirmCommands.decline(confirmationManager)));
 
         // Home system (uses PostgreSQL)
         var homeStorage = new HomeStorage(storageService);
-        var homeCommand = new HomeCommand(this, homeStorage, playerSessionStorage, safeTeleporter, confirmationManager);
-        getCommand("home").setExecutor(homeCommand);
-
-        var homeTabCompleter = new HomeTabCompleter(this, homeStorage, playerSessionStorage);
-        components.add(homeTabCompleter);
+        components.add(CmdExecutor.register(this,
+                new HomeCommand(this, homeStorage, playerSessionStorage, safeTeleporter, confirmationManager)));
 
         var bedHomeListener = new BedHomeListener(this, homeStorage);
         components.add(bedHomeListener);

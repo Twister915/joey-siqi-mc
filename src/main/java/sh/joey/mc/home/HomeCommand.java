@@ -1,5 +1,8 @@
 package sh.joey.mc.home;
 
+import com.destroystokyo.paper.event.server.AsyncTabCompleteEvent.Completion;
+import io.reactivex.rxjava3.core.Completable;
+import io.reactivex.rxjava3.core.Maybe;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.event.ClickEvent;
 import net.kyori.adventure.text.event.HoverEvent;
@@ -7,17 +10,17 @@ import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextDecoration;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
-import org.bukkit.command.Command;
-import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
-import org.jetbrains.annotations.NotNull;
 import sh.joey.mc.SiqiJoeyPlugin;
+import sh.joey.mc.cmd.Command;
 import sh.joey.mc.confirm.ConfirmationManager;
 import sh.joey.mc.confirm.ConfirmationRequest;
 import sh.joey.mc.session.PlayerSessionStorage;
 import sh.joey.mc.teleport.SafeTeleporter;
 
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -31,14 +34,15 @@ import java.util.UUID;
  * - /home share <name> <player> - share a home
  * - /home unshare <name> <player> - unshare a home
  */
-public final class HomeCommand implements CommandExecutor {
+public final class HomeCommand implements Command {
 
     private static final Component PREFIX = Component.text("[")
             .color(NamedTextColor.DARK_GRAY)
             .append(Component.text("Home").color(NamedTextColor.LIGHT_PURPLE).decorate(TextDecoration.BOLD))
             .append(Component.text("] ").color(NamedTextColor.DARK_GRAY));
-    static final Set<String> RESERVED_NAMES = Set.of("set", "delete", "list", "share", "unshare", "help");
+    private static final Set<String> RESERVED_NAMES = Set.of("set", "delete", "list", "share", "unshare", "help");
     private static final int CONFIRM_TIMEOUT_SECONDS = 30;
+    private static final int MAX_COMPLETIONS = 20;
 
     private final SiqiJoeyPlugin plugin;
     private final HomeStorage storage;
@@ -56,73 +60,188 @@ public final class HomeCommand implements CommandExecutor {
     }
 
     @Override
-    public boolean onCommand(@NotNull CommandSender sender, @NotNull Command command,
-                             @NotNull String label, @NotNull String[] args) {
-        if (!(sender instanceof Player player)) {
-            sender.sendMessage("This command can only be used by players.");
-            return true;
+    public String getName() {
+        return "home";
+    }
+
+    @Override
+    public Completable handle(SiqiJoeyPlugin plugin, CommandSender sender, String[] args) {
+        return Completable.defer(() -> {
+            if (!(sender instanceof Player player)) {
+                sender.sendMessage("This command can only be used by players.");
+                return Completable.complete();
+            }
+
+            if (args.length == 0) {
+                return handleTeleport(player, "home");
+            }
+
+            String subcommand = args[0].toLowerCase();
+            return switch (subcommand) {
+                case "set" -> handleSet(player, args);
+                case "delete" -> handleDelete(player, args);
+                case "list" -> handleList(player);
+                case "share" -> handleShare(player, args);
+                case "unshare" -> handleUnshare(player, args);
+                case "help" -> handleHelp(player);
+                default -> handleTeleport(player, args[0]);
+            };
+        });
+    }
+
+    @Override
+    public Maybe<List<Completion>> tabComplete(SiqiJoeyPlugin plugin, CommandSender sender, String[] args) {
+        return Maybe.defer(() -> {
+            if (!(sender instanceof Player player)) {
+                return Maybe.empty();
+            }
+
+            UUID playerId = player.getUniqueId();
+            String partial = args.length > 0 ? args[args.length - 1].toLowerCase() : "";
+            int argIndex = args.length;
+
+            if (argIndex == 1) {
+                return completeFirstArg(playerId, partial);
+            } else if (argIndex == 2) {
+                return completeSecondArg(playerId, args[0].toLowerCase(), partial);
+            } else if (argIndex == 3) {
+                return completeThirdArg(player, args[0].toLowerCase(), partial);
+            }
+
+            return Maybe.empty();
+        });
+    }
+
+    // --- Tab Completion ---
+
+    private Maybe<List<Completion>> completeFirstArg(UUID playerId, String partial) {
+        return storage.getHomes(playerId)
+                .toList()
+                .map(homes -> {
+                    List<Completion> completions = new ArrayList<>();
+
+                    // Add matching subcommands
+                    for (String cmd : RESERVED_NAMES) {
+                        if (cmd.startsWith(partial)) {
+                            completions.add(Completion.completion(cmd));
+                        }
+                    }
+
+                    // Add matching home names
+                    for (Home home : homes) {
+                        String name = formatHomeCompletion(home, playerId);
+                        if (name.toLowerCase().startsWith(partial)) {
+                            completions.add(Completion.completion(name));
+                        }
+                    }
+
+                    return completions;
+                })
+                .toMaybe();
+    }
+
+    private Maybe<List<Completion>> completeSecondArg(UUID playerId, String subcommand, String partial) {
+        if (!Set.of("delete", "share", "unshare").contains(subcommand)) {
+            return Maybe.empty();
         }
 
-        if (args.length == 0) {
-            handleTeleport(player, "home");
-            return true;
+        return storage.getHomes(playerId)
+                .filter(home -> home.isOwnedBy(playerId))
+                .map(Home::name)
+                .filter(name -> name.startsWith(partial))
+                .toList()
+                .map(names -> names.stream()
+                        .map(Completion::completion)
+                        .toList())
+                .toMaybe();
+    }
+
+    private Maybe<List<Completion>> completeThirdArg(Player player, String subcommand, String partial) {
+        if (!subcommand.equals("share") && !subcommand.equals("unshare")) {
+            return Maybe.empty();
         }
 
-        String subcommand = args[0].toLowerCase();
+        return sessionStorage.findUsernamesByPrefix(partial, MAX_COMPLETIONS)
+                .toList()
+                .map(dbNames -> {
+                    Set<String> names = new HashSet<>();
 
-        switch (subcommand) {
-            case "set" -> handleSet(player, args);
-            case "delete" -> handleDelete(player, args);
-            case "list" -> handleList(player);
-            case "share" -> handleShare(player, args);
-            case "unshare" -> handleUnshare(player, args);
-            case "help" -> showUsage(player);
-            default -> handleTeleport(player, args[0]);
+                    // Add online players
+                    for (Player online : Bukkit.getOnlinePlayers()) {
+                        String onlineName = online.getName();
+                        if (!online.equals(player) &&
+                                onlineName.toLowerCase().startsWith(partial.toLowerCase())) {
+                            names.add(onlineName);
+                        }
+                    }
+
+                    // Add database names (excludes self)
+                    for (String name : dbNames) {
+                        if (!name.equalsIgnoreCase(player.getName())) {
+                            names.add(name);
+                        }
+                    }
+
+                    return names.stream()
+                            .sorted(String.CASE_INSENSITIVE_ORDER)
+                            .limit(MAX_COMPLETIONS)
+                            .map(Completion::completion)
+                            .toList();
+                })
+                .toMaybe();
+    }
+
+    private String formatHomeCompletion(Home home, UUID playerId) {
+        if (home.isOwnedBy(playerId)) {
+            return home.name();
+        } else {
+            return home.ownerDisplayName() + ":" + home.name();
         }
-
-        return true;
     }
 
     // --- Set Home ---
 
-    private void handleSet(Player player, String[] args) {
-        String name = args.length < 2 ? "home" : HomeStorage.normalizeName(args[1]);
-        if (RESERVED_NAMES.contains(name)) {
-            error(player, "Cannot use '" + name + "' as a home name.");
-            return;
-        }
+    private Completable handleSet(Player player, String[] args) {
+        return Completable.defer(() -> {
+            String name = args.length < 2 ? "home" : HomeStorage.normalizeName(args[1]);
+            if (RESERVED_NAMES.contains(name)) {
+                error(player, "Cannot use '" + name + "' as a home name.");
+                return Completable.complete();
+            }
 
-        Home home = new Home(name, player.getUniqueId(), player.getLocation());
-        storage.setHome(player.getUniqueId(), home)
-                .observeOn(plugin.mainScheduler())
-                .subscribe(
-                        () -> success(player, "Home '" + name + "' has been set!"),
-                        err -> logAndError(player, "Failed to set home", err)
-                );
+            Home home = new Home(name, player.getUniqueId(), player.getLocation());
+            return storage.setHome(player.getUniqueId(), home)
+                    .observeOn(plugin.mainScheduler())
+                    .doOnComplete(() -> success(player, "Home '" + name + "' has been set!"))
+                    .doOnError(err -> logAndError(player, "Failed to set home", err))
+                    .onErrorComplete();
+        });
     }
 
     // --- Delete Home ---
 
-    private void handleDelete(Player player, String[] args) {
-        if (args.length < 2) {
-            error(player, "Usage: /home delete <name>");
-            return;
-        }
+    private Completable handleDelete(Player player, String[] args) {
+        return Completable.defer(() -> {
+            if (args.length < 2) {
+                error(player, "Usage: /home delete <name>");
+                return Completable.complete();
+            }
 
-        String name = HomeStorage.normalizeName(args[1]);
-        UUID playerId = player.getUniqueId();
+            String name = HomeStorage.normalizeName(args[1]);
+            UUID playerId = player.getUniqueId();
 
-        storage.getHome(playerId, name)
-                .filter(home -> home.isOwnedBy(playerId))
-                .observeOn(plugin.mainScheduler())
-                .subscribe(
-                        home -> onDeleteHomeFound(player, name),
-                        err -> logAndError(player, "Failed to check home", err),
-                        () -> error(player, "Home '" + name + "' not found.")
-                );
+            return storage.getHome(playerId, name)
+                    .filter(home -> home.isOwnedBy(playerId))
+                    .observeOn(plugin.mainScheduler())
+                    .doOnSuccess(home -> requestDeleteConfirmation(player, name))
+                    .doOnComplete(() -> error(player, "Home '" + name + "' not found."))
+                    .doOnError(err -> logAndError(player, "Failed to check home", err))
+                    .onErrorComplete()
+                    .ignoreElement();
+        });
     }
 
-    private void onDeleteHomeFound(Player player, String name) {
+    private void requestDeleteConfirmation(Player player, String name) {
         UUID playerId = player.getUniqueId();
 
         confirmationManager.request(player, new ConfirmationRequest() {
@@ -183,16 +302,15 @@ public final class HomeCommand implements CommandExecutor {
 
     // --- List Homes ---
 
-    private void handleList(Player player) {
+    private Completable handleList(Player player) {
         UUID playerId = player.getUniqueId();
-
-        storage.getHomes(playerId)
+        return storage.getHomes(playerId)
                 .toList()
                 .observeOn(plugin.mainScheduler())
-                .subscribe(
-                        homes -> displayHomeList(player, playerId, homes),
-                        err -> logAndError(player, "Failed to list homes", err)
-                );
+                .doOnSuccess(homes -> displayHomeList(player, playerId, homes))
+                .doOnError(err -> logAndError(player, "Failed to list homes", err))
+                .onErrorComplete()
+                .ignoreElement();
     }
 
     private void displayHomeList(Player player, UUID playerId, List<Home> allHomes) {
@@ -297,32 +415,34 @@ public final class HomeCommand implements CommandExecutor {
 
     // --- Share Home ---
 
-    private void handleShare(Player player, String[] args) {
-        if (args.length < 3) {
-            error(player, "Usage: /home share <name> <player>");
-            return;
-        }
+    private Completable handleShare(Player player, String[] args) {
+        return Completable.defer(() -> {
+            if (args.length < 3) {
+                error(player, "Usage: /home share <name> <player>");
+                return Completable.complete();
+            }
 
-        String name = HomeStorage.normalizeName(args[1]);
-        String targetName = args[2];
+            String name = HomeStorage.normalizeName(args[1]);
+            String targetName = args[2];
 
-        Player target = Bukkit.getPlayer(targetName);
-        if (target == null) {
-            error(player, "Player '" + targetName + "' not found.");
-            return;
-        }
+            Player target = Bukkit.getPlayer(targetName);
+            if (target == null) {
+                error(player, "Player '" + targetName + "' not found.");
+                return Completable.complete();
+            }
 
-        if (target.equals(player)) {
-            error(player, "You can't share a home with yourself.");
-            return;
-        }
+            if (target.equals(player)) {
+                error(player, "You can't share a home with yourself.");
+                return Completable.complete();
+            }
 
-        storage.shareHome(player.getUniqueId(), name, target.getUniqueId())
-                .observeOn(plugin.mainScheduler())
-                .subscribe(
-                        shared -> onShareResult(player, target, name, shared),
-                        err -> logAndError(player, "Failed to share home", err)
-                );
+            return storage.shareHome(player.getUniqueId(), name, target.getUniqueId())
+                    .observeOn(plugin.mainScheduler())
+                    .doOnSuccess(shared -> onShareResult(player, target, name, shared))
+                    .doOnError(err -> logAndError(player, "Failed to share home", err))
+                    .onErrorComplete()
+                    .ignoreElement();
+        });
     }
 
     private void onShareResult(Player player, Player target, String name, boolean shared) {
@@ -336,23 +456,25 @@ public final class HomeCommand implements CommandExecutor {
 
     // --- Unshare Home ---
 
-    private void handleUnshare(Player player, String[] args) {
-        if (args.length < 3) {
-            error(player, "Usage: /home unshare <name> <player>");
-            return;
-        }
+    private Completable handleUnshare(Player player, String[] args) {
+        return Completable.defer(() -> {
+            if (args.length < 3) {
+                error(player, "Usage: /home unshare <name> <player>");
+                return Completable.complete();
+            }
 
-        String name = HomeStorage.normalizeName(args[1]);
-        String targetName = args[2];
+            String name = HomeStorage.normalizeName(args[1]);
+            String targetName = args[2];
 
-        sessionStorage.resolvePlayerId(targetName)
-                .flatMapSingle(targetId -> storage.unshareHome(player.getUniqueId(), name, targetId))
-                .observeOn(plugin.mainScheduler())
-                .subscribe(
-                        unshared -> onUnshareResult(player, targetName, name, unshared),
-                        err -> logAndError(player, "Failed to unshare home", err),
-                        () -> error(player, "Player '" + targetName + "' not found.")
-                );
+            return sessionStorage.resolvePlayerId(targetName)
+                    .flatMapSingle(targetId -> storage.unshareHome(player.getUniqueId(), name, targetId))
+                    .observeOn(plugin.mainScheduler())
+                    .doOnSuccess(unshared -> onUnshareResult(player, targetName, name, unshared))
+                    .doOnComplete(() -> error(player, "Player '" + targetName + "' not found."))
+                    .doOnError(err -> logAndError(player, "Failed to unshare home", err))
+                    .onErrorComplete()
+                    .ignoreElement();
+        });
     }
 
     private void onUnshareResult(Player player, String targetName, String name, boolean unshared) {
@@ -365,38 +487,38 @@ public final class HomeCommand implements CommandExecutor {
 
     // --- Teleport ---
 
-    private void handleTeleport(Player player, String input) {
+    private Completable handleTeleport(Player player, String input) {
         if (input.contains(":")) {
-            handleSharedHomeTeleport(player, input);
+            return handleSharedHomeTeleport(player, input);
         } else {
-            handleOwnHomeTeleport(player, HomeStorage.normalizeName(input));
+            return handleOwnHomeTeleport(player, HomeStorage.normalizeName(input));
         }
     }
 
-    private void handleOwnHomeTeleport(Player player, String homeName) {
-        storage.getHome(player.getUniqueId(), homeName)
+    private Completable handleOwnHomeTeleport(Player player, String homeName) {
+        return storage.getHome(player.getUniqueId(), homeName)
                 .observeOn(plugin.mainScheduler())
-                .subscribe(
-                        home -> teleportToHome(player, home),
-                        err -> logAndError(player, "Failed to find home", err),
-                        () -> error(player, "Home '" + homeName + "' not found.")
-                );
+                .doOnSuccess(home -> teleportToHome(player, home))
+                .doOnComplete(() -> error(player, "Home '" + homeName + "' not found."))
+                .doOnError(err -> logAndError(player, "Failed to find home", err))
+                .onErrorComplete()
+                .ignoreElement();
     }
 
-    private void handleSharedHomeTeleport(Player player, String input) {
+    private Completable handleSharedHomeTeleport(Player player, String input) {
         String[] parts = input.split(":", 2);
         String ownerName = parts[0];
         String homeName = HomeStorage.normalizeName(parts[1]);
 
-        sessionStorage.resolvePlayerId(ownerName)
+        return sessionStorage.resolvePlayerId(ownerName)
                 .flatMap(ownerId -> storage.getHome(ownerId, homeName))
                 .filter(home -> home.isSharedWith(player.getUniqueId()))
                 .observeOn(plugin.mainScheduler())
-                .subscribe(
-                        home -> teleportToHome(player, home),
-                        err -> logAndError(player, "Failed to find home", err),
-                        () -> error(player, "Home '" + input + "' not found or not shared with you.")
-                );
+                .doOnSuccess(home -> teleportToHome(player, home))
+                .doOnComplete(() -> error(player, "Home '" + input + "' not found or not shared with you."))
+                .doOnError(err -> logAndError(player, "Failed to find home", err))
+                .onErrorComplete()
+                .ignoreElement();
     }
 
     private void teleportToHome(Player player, Home home) {
@@ -411,6 +533,10 @@ public final class HomeCommand implements CommandExecutor {
     }
 
     // --- Help ---
+
+    private Completable handleHelp(Player player) {
+        return Completable.fromAction(() -> showUsage(player));
+    }
 
     private void showUsage(Player player) {
         player.sendMessage(PREFIX.append(Component.text("Home Commands:").color(NamedTextColor.WHITE)));

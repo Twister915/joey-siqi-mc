@@ -1,5 +1,6 @@
 package sh.joey.mc.home;
 
+import io.reactivex.rxjava3.core.Completable;
 import io.reactivex.rxjava3.disposables.CompositeDisposable;
 import io.reactivex.rxjava3.disposables.Disposable;
 import net.kyori.adventure.text.Component;
@@ -37,7 +38,26 @@ public final class BedHomeListener implements Disposable {
                 .filter(event -> event.getAction().isRightClick())
                 .filter(event -> event.getClickedBlock() != null)
                 .filter(event -> isBed(event.getClickedBlock().getType()))
-                .subscribe(this::handleBedInteraction));
+                .flatMapCompletable(this::saveFirstHomeIfNeeded)
+                .subscribe());
+    }
+
+    Completable saveFirstHomeIfNeeded(PlayerInteractEvent event) {
+        return storage.hasAnyHomes(event.getPlayer().getUniqueId())
+                .filter(hasHomes -> !hasHomes)
+                .flatMapCompletable(ignored -> saveFirstHome(event));
+    }
+
+    Completable saveFirstHome(PlayerInteractEvent event) {
+        Player player = event.getPlayer();
+        UUID playerId = event.getPlayer().getUniqueId();
+        Location location = player.getLocation();
+
+        return storage.setHome(playerId, new Home("home", playerId, location))
+                .observeOn(plugin.mainScheduler())
+                .doOnComplete(() -> notifyHomeSaved(player))
+                .doOnError(err -> plugin.getLogger().warning("Failed to save first home: " + err.getMessage()))
+                .onErrorComplete();
     }
 
     @Override
@@ -48,24 +68,6 @@ public final class BedHomeListener implements Disposable {
     @Override
     public boolean isDisposed() {
         return disposables.isDisposed();
-    }
-
-    private void handleBedInteraction(PlayerInteractEvent event) {
-        Player player = event.getPlayer();
-        UUID playerId = player.getUniqueId();
-        Location location = player.getLocation();
-
-        storage.hasAnyHomes(playerId)
-                .filter(hasHomes -> !hasHomes) // Only continue if no homes
-                .flatMapCompletable(ignored -> {
-                    Home home = new Home("home", playerId, location);
-                    return storage.setHome(playerId, home);
-                })
-                .observeOn(plugin.mainScheduler())
-                .subscribe(
-                        () -> notifyHomeSaved(player),
-                        err -> plugin.getLogger().warning("Failed to save first home: " + err.getMessage())
-                );
     }
 
     private void notifyHomeSaved(Player player) {

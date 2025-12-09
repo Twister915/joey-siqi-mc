@@ -1,12 +1,11 @@
 package sh.joey.mc.teleport.commands;
 
+import io.reactivex.rxjava3.core.Completable;
 import org.bukkit.Location;
-import org.bukkit.command.Command;
-import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
-import org.jetbrains.annotations.NotNull;
 import sh.joey.mc.SiqiJoeyPlugin;
+import sh.joey.mc.cmd.Command;
 import sh.joey.mc.teleport.BackLocation;
 import sh.joey.mc.teleport.LocationTracker;
 import sh.joey.mc.teleport.Messages;
@@ -17,7 +16,7 @@ import java.util.logging.Logger;
 /**
  * /back command - returns player to death location or last teleport-from location.
  */
-public final class BackCommand implements CommandExecutor {
+public final class BackCommand implements Command {
     private final Logger logger;
     private final LocationTracker locationTracker;
     private final SafeTeleporter safeTeleporter;
@@ -29,29 +28,34 @@ public final class BackCommand implements CommandExecutor {
     }
 
     @Override
-    public boolean onCommand(@NotNull CommandSender sender, @NotNull Command command,
-                             @NotNull String label, @NotNull String[] args) {
-        if (!(sender instanceof Player player)) {
-            sender.sendMessage("This command can only be used by players.");
-            return true;
-        }
+    public String getName() {
+        return "back";
+    }
 
-        if (safeTeleporter.hasPendingTeleport(player.getUniqueId())) {
-            Messages.warning(player, "You already have a teleport in progress!");
-            return true;
-        }
+    @Override
+    public Completable handle(SiqiJoeyPlugin plugin, CommandSender sender, String[] args) {
+        return Completable.defer(() -> {
+            if (!(sender instanceof Player player)) {
+                sender.sendMessage("This command can only be used by players.");
+                return Completable.complete();
+            }
 
-        locationTracker.getBackLocation(player.getUniqueId())
-                .subscribe(
-                        backLocation -> handleBackLocation(player, backLocation),
-                        err -> {
-                            logger.warning("Failed to get back location: " + err.getMessage());
-                            Messages.error(player, "Failed to retrieve your back location.");
-                        },
-                        () -> Messages.error(player, "You don't have anywhere to go back to!")
-                );
+            if (safeTeleporter.hasPendingTeleport(player.getUniqueId())) {
+                Messages.warning(player, "You already have a teleport in progress!");
+                return Completable.complete();
+            }
 
-        return true;
+            return locationTracker.getBackLocation(player.getUniqueId())
+                    .observeOn(plugin.mainScheduler())
+                    .doOnSuccess(backLocation -> handleBackLocation(player, backLocation))
+                    .doOnComplete(() -> Messages.error(player, "You don't have anywhere to go back to!"))
+                    .doOnError(err -> {
+                        logger.warning("Failed to get back location: " + err.getMessage());
+                        Messages.error(player, "Failed to retrieve your back location.");
+                    })
+                    .onErrorComplete()
+                    .ignoreElement();
+        });
     }
 
     private void handleBackLocation(Player player, BackLocation backLocation) {

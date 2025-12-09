@@ -8,7 +8,6 @@ import org.jetbrains.annotations.NotNull;
 import sh.joey.mc.SiqiJoeyPlugin;
 
 import java.util.List;
-import java.util.Optional;
 
 public final class CmdExecutor implements CommandExecutor {
 
@@ -17,7 +16,11 @@ public final class CmdExecutor implements CommandExecutor {
 
     public static Disposable register(SiqiJoeyPlugin plugin, Command handler) {
         CmdExecutor executor = new CmdExecutor(plugin, handler);
-        plugin.getCommand(handler.getName()).setExecutor(executor);
+        var cmd = plugin.getCommand(handler.getName());
+        if (cmd == null) {
+            throw new IllegalStateException("Command '" + handler.getName() + "' not registered in plugin.yml");
+        }
+        cmd.setExecutor(executor);
         return executor.watchTabCompletes();
     }
 
@@ -37,30 +40,40 @@ public final class CmdExecutor implements CommandExecutor {
                     return lowerBuffer.startsWith(prefix1) || lowerBuffer.startsWith(prefix2);
                 })
                 .subscribe(event -> {
-                    String buffer = event.getBuffer();
-                    int startAt = 0;
-                    while (buffer.length() > startAt && buffer.charAt(startAt) == '/') {
-                        startAt++;
-                    }
-
-                    startAt += prefix1.length();
-                    if (startAt < buffer.length()) {
-                        String[] args = buffer.substring(startAt).split(" ");
-                        Optional<List<AsyncTabCompleteEvent.Completion>> completions = handler.tabComplete(event.getSender(), args)
-                                .map(Optional::of)
-                                .defaultIfEmpty(Optional.empty())
-                                .blockingGet();
-                        if (completions.isPresent()) {
-                            event.setHandled(true);
-                            event.completions(completions.get());
+                    try {
+                        String buffer = event.getBuffer();
+                        int startAt = 0;
+                        while (buffer.length() > startAt && buffer.charAt(startAt) == '/') {
+                            startAt++;
                         }
+
+                        startAt += prefix1.length();
+                        String remainder = startAt < buffer.length() ? buffer.substring(startAt) : "";
+                        String[] args = remainder.isEmpty() ? new String[]{""} : remainder.split(" ", -1);
+
+                        handler.tabComplete(plugin, event.getSender(), args)
+                                .onErrorComplete()
+                                .blockingSubscribe(completions -> {
+                                    event.setHandled(true);
+                                    event.completions(completions);
+                                });
+                    } catch (Exception e) {
+                        plugin.getLogger().warning("Tab complete exception: " + e.getMessage());
                     }
                 });
     }
 
     @Override
     public boolean onCommand(@NotNull CommandSender sender, org.bukkit.command.@NotNull Command command, @NotNull String label, @NotNull String @NotNull [] args) {
-        handler.handle(plugin, sender, args).subscribe();
+        try {
+            handler.handle(plugin, sender, args)
+                    .subscribe(
+                            () -> {},
+                            err -> plugin.getLogger().warning("Command error: " + err.getMessage())
+                    );
+        } catch (Exception e) {
+            plugin.getLogger().warning("Command exception: " + e.getMessage());
+        }
         return true;
     }
 }
