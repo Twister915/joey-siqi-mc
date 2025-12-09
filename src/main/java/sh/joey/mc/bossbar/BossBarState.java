@@ -12,4 +12,11 @@ public record BossBarState(
         float progress,
         BarStyle style
 ) {
+    /**
+     * Returns a new BossBarState with the specified progress, keeping other fields unchanged.
+     * Used for efficient caching when only progress changes between ticks.
+     */
+    public BossBarState withProgress(float newProgress) {
+        return new BossBarState(title, color, newProgress, style);
+    }
 }
