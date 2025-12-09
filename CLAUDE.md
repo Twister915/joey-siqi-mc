@@ -253,10 +253,10 @@ Handles teleport requests between players, warmup countdowns, location tracking,
 
 ### 4. Home System (`home/`)
 
-Persistent home locations with sharing support, stored in PostgreSQL.
+Persistent home locations with sharing support, stored in PostgreSQL with soft delete.
 
 **Key Classes:**
-- `Home` - Record with location data and `Set<UUID> sharedWith`
+- `Home` - Record with `id` (UUID), location data, and `Set<UUID> sharedWith`
 - `HomeStorage` - Async PostgreSQL operations via `StorageService`
 - `HomeCommand` - All `/home` subcommands (async)
 - `BedHomeListener` - Auto-saves first bed interaction as "home"
@@ -271,6 +271,13 @@ Persistent home locations with sharing support, stored in PostgreSQL.
 - Handles unloaded worlds gracefully (shows "world not loaded")
 - Shared homes accessible via `owner:homename` syntax
 - All database operations are async (return `Maybe<T>`, `Flowable<T>`, or `Completable`)
+
+**Soft Delete & UUID Identity:**
+- Each home has a UUID `id` (primary key) rather than `(player_id, name)`
+- Deleting a home sets `deleted_at` timestamp rather than removing the row
+- Replacing a home (same name, new location) soft-deletes the old one and inserts a new row
+- Shares reference `home_id`, so they're scoped to a specific home version
+- Partial unique index ensures only one active home per `(player_id, name)`
 
 ### 5. Message Systems (`day/`, `welcome/`)
 

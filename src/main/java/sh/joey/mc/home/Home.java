@@ -12,6 +12,7 @@ import java.util.UUID;
  * Represents a saved home location.
  */
 public record Home(
+        UUID id,
         String name,
         UUID ownerId,
         UUID worldId,
@@ -22,8 +23,12 @@ public record Home(
         float yaw,
         Set<UUID> sharedWith
 ) {
+    /**
+     * Creates a new home with a generated UUID.
+     */
     public Home(String name, UUID ownerId, Location location) {
         this(
+                UUID.randomUUID(),
                 name,
                 ownerId,
                 location.getWorld().getUID(),
@@ -58,12 +63,12 @@ public record Home(
     public Home withSharedPlayer(UUID playerId) {
         Set<UUID> newShared = new HashSet<>(sharedWith);
         newShared.add(playerId);
-        return new Home(name, ownerId, worldId, x, y, z, pitch, yaw, newShared);
+        return new Home(id, name, ownerId, worldId, x, y, z, pitch, yaw, newShared);
     }
 
     public Home withoutSharedPlayer(UUID playerId) {
         Set<UUID> newShared = new HashSet<>(sharedWith);
         newShared.remove(playerId);
-        return new Home(name, ownerId, worldId, x, y, z, pitch, yaw, newShared);
+        return new Home(id, name, ownerId, worldId, x, y, z, pitch, yaw, newShared);
     }
 }
