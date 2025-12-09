@@ -61,6 +61,7 @@ public final class BedHomeListener implements Disposable {
                     Home home = new Home("home", playerId, location);
                     return storage.setHome(playerId, home);
                 })
+                .observeOn(plugin.mainScheduler())
                 .subscribe(
                         () -> notifyHomeSaved(player),
                         err -> plugin.getLogger().warning("Failed to save first home: " + err.getMessage())

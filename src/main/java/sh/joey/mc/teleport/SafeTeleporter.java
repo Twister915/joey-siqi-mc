@@ -271,9 +271,9 @@ public final class SafeTeleporter implements Disposable {
             pending.countdownTask().dispose();
         }
 
-        // Record current location before teleporting (for /back)
+        // Record current location (async) before teleporting (for /back)
         Location departureLocation = player.getLocation().clone();
-        locationTracker.recordTeleportFrom(playerId, departureLocation);
+        locationTracker.recordTeleportFrom(playerId, departureLocation).subscribe();
 
         // Play departure effects
         playTeleportEffects(departureLocation, true);

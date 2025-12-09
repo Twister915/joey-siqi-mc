@@ -3,7 +3,6 @@ package sh.joey.mc.storage;
 import io.reactivex.rxjava3.core.Completable;
 import io.reactivex.rxjava3.core.Flowable;
 import io.reactivex.rxjava3.core.Maybe;
-import io.reactivex.rxjava3.core.Scheduler;
 import io.reactivex.rxjava3.core.Single;
 import io.reactivex.rxjava3.schedulers.Schedulers;
 
@@ -17,16 +16,14 @@ import java.util.List;
 public final class StorageService {
 
     private final DatabaseService database;
-    private final Scheduler mainScheduler;
 
-    public StorageService(DatabaseService database, Scheduler mainScheduler) {
+    public StorageService(DatabaseService database) {
         this.database = database;
-        this.mainScheduler = mainScheduler;
     }
 
     /**
      * Execute a database query that returns a result.
-     * Runs on IO thread pool, observes on main thread.
+     * Runs on IO thread pool.
      *
      * @param operation the database operation to execute
      * @param <T> the type of the result
@@ -38,30 +35,12 @@ public final class StorageService {
                 return operation.apply(conn);
             }
         })
-        .subscribeOn(Schedulers.io())
-        .observeOn(mainScheduler);
-    }
-
-    /**
-     * Execute a database query that returns a result, staying on the IO thread.
-     * Safe for use with blockingGet() from the main thread.
-     *
-     * @param operation the database operation to execute
-     * @param <T> the type of the result
-     * @return a Single that emits the result on the IO thread
-     */
-    public <T> Single<T> queryBlocking(SqlFunction<Connection, T> operation) {
-        return Single.<T>fromCallable(() -> {
-            try (Connection conn = database.getConnection()) {
-                return operation.apply(conn);
-            }
-        })
         .subscribeOn(Schedulers.io());
     }
 
     /**
      * Execute a database query that may or may not return a result.
-     * Runs on IO thread pool, observes on main thread.
+     * Runs on IO thread pool.
      *
      * @param operation the database operation to execute (returns null if no result)
      * @param <T> the type of the result
@@ -73,13 +52,12 @@ public final class StorageService {
                 return operation.apply(conn);
             }
         })
-        .subscribeOn(Schedulers.io())
-        .observeOn(mainScheduler);
+        .subscribeOn(Schedulers.io());
     }
 
     /**
      * Execute a database query that returns multiple results.
-     * Runs on IO thread pool, emits items on main thread.
+     * Runs on IO thread pool.
      *
      * @param operation the database operation to execute
      * @param <T> the type of each result item
@@ -92,13 +70,12 @@ public final class StorageService {
             }
         })
         .subscribeOn(Schedulers.io())
-        .observeOn(mainScheduler)
         .flattenAsFlowable(list -> list);
     }
 
     /**
      * Execute a database operation that doesn't return a value.
-     * Runs on IO thread pool, completes on main thread.
+     * Runs on IO thread pool.
      *
      * @param operation the database operation to execute
      * @return a Completable that completes on the main thread
@@ -109,7 +86,6 @@ public final class StorageService {
                 operation.accept(conn);
             }
         })
-        .subscribeOn(Schedulers.io())
-        .observeOn(mainScheduler);
+        .subscribeOn(Schedulers.io());
     }
 }

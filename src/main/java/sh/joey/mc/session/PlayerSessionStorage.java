@@ -95,7 +95,7 @@ public final class PlayerSessionStorage {
      * @return a Single emitting the number of orphaned sessions that were fixed
      */
     public Single<Integer> fixOrphanedSessions(UUID currentServerSessionId) {
-        return storage.queryBlocking(conn -> {
+        return storage.query(conn -> {
             String sql = """
                 UPDATE player_sessions
                 SET disconnected_at = last_seen_at

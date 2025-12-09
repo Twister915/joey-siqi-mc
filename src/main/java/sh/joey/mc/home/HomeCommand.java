@@ -94,6 +94,7 @@ public final class HomeCommand implements CommandExecutor {
 
         Home home = new Home(name, player.getUniqueId(), player.getLocation());
         storage.setHome(player.getUniqueId(), home)
+                .observeOn(plugin.mainScheduler())
                 .subscribe(
                         () -> success(player, "Home '" + name + "' has been set!"),
                         err -> logAndError(player, "Failed to set home", err)
@@ -113,6 +114,7 @@ public final class HomeCommand implements CommandExecutor {
 
         storage.getHome(playerId, name)
                 .filter(home -> home.isOwnedBy(playerId))
+                .observeOn(plugin.mainScheduler())
                 .subscribe(
                         home -> onDeleteHomeFound(player, name),
                         err -> logAndError(player, "Failed to check home", err),
@@ -147,6 +149,7 @@ public final class HomeCommand implements CommandExecutor {
             @Override
             public void onAccept() {
                 storage.deleteHome(playerId, name)
+                        .observeOn(plugin.mainScheduler())
                         .subscribe(
                                 deleted -> onDeleteResult(player, name, deleted),
                                 err -> logAndError(player, "Failed to delete home", err)
@@ -185,6 +188,7 @@ public final class HomeCommand implements CommandExecutor {
 
         storage.getHomes(playerId)
                 .toList()
+                .observeOn(plugin.mainScheduler())
                 .subscribe(
                         homes -> displayHomeList(player, playerId, homes),
                         err -> logAndError(player, "Failed to list homes", err)
@@ -314,6 +318,7 @@ public final class HomeCommand implements CommandExecutor {
         }
 
         storage.shareHome(player.getUniqueId(), name, target.getUniqueId())
+                .observeOn(plugin.mainScheduler())
                 .subscribe(
                         shared -> onShareResult(player, target, name, shared),
                         err -> logAndError(player, "Failed to share home", err)
@@ -342,6 +347,7 @@ public final class HomeCommand implements CommandExecutor {
 
         sessionStorage.resolvePlayerId(targetName)
                 .flatMapSingle(targetId -> storage.unshareHome(player.getUniqueId(), name, targetId))
+                .observeOn(plugin.mainScheduler())
                 .subscribe(
                         unshared -> onUnshareResult(player, targetName, name, unshared),
                         err -> logAndError(player, "Failed to unshare home", err),
@@ -369,6 +375,7 @@ public final class HomeCommand implements CommandExecutor {
 
     private void handleOwnHomeTeleport(Player player, String homeName) {
         storage.getHome(player.getUniqueId(), homeName)
+                .observeOn(plugin.mainScheduler())
                 .subscribe(
                         home -> teleportToHome(player, home),
                         err -> logAndError(player, "Failed to find home", err),
@@ -384,6 +391,7 @@ public final class HomeCommand implements CommandExecutor {
         sessionStorage.resolvePlayerId(ownerName)
                 .flatMap(ownerId -> storage.getHome(ownerId, homeName))
                 .filter(home -> home.isSharedWith(player.getUniqueId()))
+                .observeOn(plugin.mainScheduler())
                 .subscribe(
                         home -> teleportToHome(player, home),
                         err -> logAndError(player, "Failed to find home", err),

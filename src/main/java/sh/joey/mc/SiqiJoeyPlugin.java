@@ -63,7 +63,7 @@ public final class SiqiJoeyPlugin extends JavaPlugin {
         migrationRunner.run();
 
         // Create storage service
-        var storageService = new StorageService(database, schedulers.mainThread());
+        var storageService = new StorageService(database);
 
         // Player session tracking (early - for player ID lookups)
         var playerSessionStorage = new PlayerSessionStorage(storageService);

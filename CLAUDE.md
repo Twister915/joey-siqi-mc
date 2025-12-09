@@ -539,3 +539,4 @@ storage.getHomes(playerId)
     );
 ```
 - Can you stop doing this pattern where you call .subscribe inside the handler of other .subscribe? You should almost never do this.
+- I have changed the database code to not always go back to the main thread. It is up to the caller to observe on the main thread when doing database operations. You will need to go back to the main thread (`observeOn(plugin.mainThread()`) when you need to affect things happening in the game as a result of an async operation.

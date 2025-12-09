@@ -52,13 +52,11 @@ public final class LocationTracker implements Disposable {
     /**
      * Records a teleport-from location for /back.
      */
-    public void recordTeleportFrom(UUID playerId, Location location) {
+    public Completable recordTeleportFrom(UUID playerId, Location location) {
         BackLocation backLocation = BackLocation.from(playerId, BackLocation.LocationType.TELEPORT, location);
-        disposables.add(storage.saveLocation(backLocation)
-                .subscribe(
-                        () -> {},
-                        err -> plugin.getLogger().warning("Failed to save teleport location: " + err.getMessage())
-                ));
+        return storage.saveLocation(backLocation)
+                .doOnError(err -> plugin.getLogger().warning("Failed to save teleport location: " + err.getMessage()))
+                .onErrorComplete();
     }
 
     /**
