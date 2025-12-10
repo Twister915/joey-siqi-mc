@@ -22,3 +22,6 @@ commands:
   home:
     description: Manage your saved home locations
     usage: /home [set|delete|list|share|unshare] [name] [player]
+  ontime:
+    description: View your or another player's online time
+    usage: /ontime [player]

@@ -88,6 +88,27 @@ public final class PlayerSessionStorage {
     }
 
     /**
+     * Close all active sessions for this server run.
+     * Called during graceful shutdown to avoid orphaned sessions.
+     *
+     * @return a Single emitting the number of sessions closed
+     */
+    public Single<Integer> closeAllSessions(UUID serverSessionId) {
+        return storage.query(conn -> {
+            String sql = """
+                UPDATE player_sessions
+                SET disconnected_at = NOW(), last_seen_at = NOW()
+                WHERE server_session_id = ? AND disconnected_at IS NULL
+                """;
+
+            try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+                stmt.setObject(1, serverSessionId);
+                return stmt.executeUpdate();
+            }
+        });
+    }
+
+    /**
      * Fix orphaned sessions from previous server runs (e.g., after a crash).
      * Sets disconnected_at = last_seen_at for any sessions not belonging to the current server.
      * Uses queryBlocking() so it's safe to call .blockingGet() from the main thread.
@@ -207,6 +228,57 @@ public final class PlayerSessionStorage {
                 }
             }
             return usernames;
+        });
+    }
+
+    /**
+     * Get total lifetime online time for a player from the player_online_time view.
+     * Returns the duration in seconds, or empty if the player has no sessions.
+     */
+    public Maybe<Long> getLifetimeOnlineTime(UUID playerId) {
+        return storage.queryMaybe(conn -> {
+            String sql = """
+                SELECT EXTRACT(EPOCH FROM online_time)::bigint AS seconds
+                FROM player_online_time
+                WHERE player_id = ?
+                """;
+
+            try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+                stmt.setObject(1, playerId);
+
+                try (ResultSet rs = stmt.executeQuery()) {
+                    if (rs.next()) {
+                        return rs.getLong("seconds");
+                    }
+                    return null;
+                }
+            }
+        });
+    }
+
+    /**
+     * Get the start time of a player's current session.
+     * Returns empty if the player has no active session for this server run.
+     */
+    public Maybe<java.time.Instant> getCurrentSessionStart(UUID playerId, UUID serverSessionId) {
+        return storage.queryMaybe(conn -> {
+            String sql = """
+                SELECT connected_at
+                FROM player_sessions
+                WHERE player_id = ? AND server_session_id = ? AND disconnected_at IS NULL
+                """;
+
+            try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+                stmt.setObject(1, playerId);
+                stmt.setObject(2, serverSessionId);
+
+                try (ResultSet rs = stmt.executeQuery()) {
+                    if (rs.next()) {
+                        return rs.getTimestamp("connected_at").toInstant();
+                    }
+                    return null;
+                }
+            }
         });
     }
 }

@@ -20,8 +20,12 @@ public final class PlayerSessionTracker implements Disposable {
 
     private final UUID serverSessionId = UUID.randomUUID();
     private final CompositeDisposable disposables = new CompositeDisposable();
+    private final SiqiJoeyPlugin plugin;
+    private final PlayerSessionStorage storage;
 
     public PlayerSessionTracker(SiqiJoeyPlugin plugin, PlayerSessionStorage storage) {
+        this.plugin = plugin;
+        this.storage = storage;
         plugin.getLogger().info("server session id is " + serverSessionId);
         // Fix orphaned sessions from previous server runs (blocking on startup)
         int fixed = storage.fixOrphanedSessions(serverSessionId).blockingGet();
@@ -73,9 +77,23 @@ public final class PlayerSessionTracker implements Disposable {
         return Bukkit.getOnlineMode();
     }
 
+    public UUID getServerSessionId() {
+        return serverSessionId;
+    }
+
     @Override
     public void dispose() {
         disposables.dispose();
+
+        // Gracefully close all active sessions on shutdown
+        try {
+            int closed = storage.closeAllSessions(serverSessionId).blockingGet();
+            if (closed > 0) {
+                plugin.getLogger().info("Closed " + closed + " player session(s) on shutdown");
+            }
+        } catch (Exception e) {
+            plugin.getLogger().warning("Failed to close sessions on shutdown: " + e.getMessage());
+        }
     }
 
     @Override
