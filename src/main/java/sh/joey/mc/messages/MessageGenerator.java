@@ -33,13 +33,13 @@ public final class MessageGenerator {
     public static String generateDayMessage(Player player) {
         int roll = random.nextInt(100);
 
-        if (roll < 30) {
+        if (roll < 15) {
             String contextMessage = getPlayerContextMessage(player, MessageType.DAY);
             if (contextMessage != null) {
                 return contextMessage;
             }
             return pickDayMessage();
-        } else if (roll < 60) {
+        } else if (roll < 45) {
             return getProceduralMessage(MessageType.DAY);
         } else {
             return pickDayMessage();
@@ -693,6 +693,12 @@ public final class MessageGenerator {
     private static String getPlayerContextMessage(Player player, MessageType type) {
         World world = player.getWorld();
         List<String> candidates = new ArrayList<>();
+        List<String> biomeCandidates = new ArrayList<>();  // Separate list for biome (lower priority)
+
+        // ===== HIGH-VARIETY CONTEXTS (prioritized) =====
+        addNearbyEntityMessages(player, world, candidates);
+        addInventoryStateMessages(player, candidates);
+        addNearbyBlockMessages(player, world, candidates);
 
         // ===== PLAYER STATE =====
         addHealthMessages(player, candidates);
@@ -715,8 +721,8 @@ public final class MessageGenerator {
         }
         addWeatherMessages(world, candidates, type);
 
-        // ===== BIOME-SPECIFIC =====
-        addBiomeMessages(player, world, candidates);
+        // ===== BIOME-SPECIFIC (lower priority - fallback only) =====
+        addBiomeMessages(player, world, biomeCandidates);
 
         // ===== DIMENSION-SPECIFIC =====
         addDimensionMessages(player, world, candidates, type);
@@ -727,6 +733,11 @@ public final class MessageGenerator {
         // ===== JOIN-SPECIFIC =====
         if (type == MessageType.JOIN) {
             addJoinSpecificMessages(player, world, candidates);
+        }
+
+        // Only use biome messages if no other context found
+        if (candidates.isEmpty() && !biomeCandidates.isEmpty()) {
+            candidates.addAll(biomeCandidates);
         }
 
         if (candidates.isEmpty()) {
@@ -1113,6 +1124,376 @@ public final class MessageGenerator {
             candidates.add("You brave the night! The monsters are active.");
             candidates.add("Joining at night? Bold. Very bold.");
             candidates.add("The moon watches your arrival. So do the mobs.");
+        }
+    }
+
+    // ========================================
+    // HIGH-VARIETY CONTEXT HELPERS (NEW)
+    // ========================================
+
+    private static void addNearbyEntityMessages(Player player, World world, List<String> candidates) {
+        java.util.Collection<org.bukkit.entity.Entity> nearby = world.getNearbyEntities(
+                player.getLocation(),
+                30, 30, 30,
+                entity -> entity instanceof org.bukkit.entity.LivingEntity && !(entity instanceof Player)
+        );
+
+        if (nearby.isEmpty()) {
+            return;
+        }
+
+        // Count entities by type
+        java.util.Map<org.bukkit.entity.EntityType, Integer> counts = new java.util.HashMap<>();
+        for (org.bukkit.entity.Entity entity : nearby) {
+            counts.merge(entity.getType(), 1, Integer::sum);
+        }
+
+        // Generate messages based on counts
+        for (java.util.Map.Entry<org.bukkit.entity.EntityType, Integer> entry : counts.entrySet()) {
+            int count = entry.getValue();
+            org.bukkit.entity.EntityType type = entry.getKey();
+
+            switch (type) {
+                case CHICKEN -> {
+                    if (count >= 20) {
+                        candidates.add("The chickens are making quite the racket this morning.");
+                        candidates.add("Your chicken farm is thriving!");
+                        candidates.add(count + " chickens! That's a lot of eggs.");
+                    }
+                }
+                case COW -> {
+                    if (count >= 10) {
+                        candidates.add("The cows are mooing for their breakfast.");
+                        candidates.add("The cattle lowing fills the air.");
+                        candidates.add("Your herd of " + count + " cows grazes peacefully.");
+                    }
+                }
+                case SHEEP -> {
+                    if (count >= 10) {
+                        candidates.add("The sheep have multiplied overnight. Again.");
+                        candidates.add("Your flock grazes peacefully nearby.");
+                        candidates.add(count + " sheep! Time for a shearing session.");
+                    }
+                }
+                case PIG -> {
+                    if (count >= 8) {
+                        candidates.add("The pigs snuffle around looking for breakfast.");
+                        candidates.add("Your pig farm oinks with life.");
+                        candidates.add(count + " pigs nearby. Bacon for days.");
+                    }
+                }
+                case VILLAGER -> {
+                    if (count >= 3) {
+                        candidates.add("The villagers are already up and trading.");
+                        candidates.add("Your neighbors greet the dawn with their usual 'Hmm.'");
+                        candidates.add(count + " villagers nearby. The trading hall is active.");
+                    }
+                }
+                case CAT -> {
+                    if (count >= 2) {
+                        candidates.add("The cats are napping in the sun. Join them?");
+                        candidates.add("Your cats watch you with knowing eyes.");
+                        candidates.add("The cats have taken over. You just live here now.");
+                    }
+                }
+                case WOLF -> {
+                    if (count >= 2) {
+                        candidates.add("Your dogs are happy to see you. As always.");
+                        candidates.add("The pack greets the new day with tail wags.");
+                        candidates.add(count + " loyal companions guard your home.");
+                    }
+                }
+                case HORSE -> {
+                    if (count >= 2) {
+                        candidates.add("Your horses neigh a good morning.");
+                        candidates.add("The stables are full and ready.");
+                        candidates.add(count + " horses stand ready for adventure.");
+                    }
+                }
+                case IRON_GOLEM -> {
+                    if (count >= 1) {
+                        candidates.add("The iron golem stands watch. Silently. Judging.");
+                        candidates.add("Your guardian watches over the morning.");
+                    }
+                }
+                case ZOMBIE -> {
+                    if (count >= 1) {
+                        candidates.add("Leftover mobs from the night lurk nearby. Clean up duty!");
+                        candidates.add("Some zombies didn't burn in time. Weapon up.");
+                    }
+                }
+                case SKELETON -> {
+                    if (count >= 1) {
+                        candidates.add("A skeleton survived the sunrise. Deal with it before it deals with you.");
+                        candidates.add("Skeletons nearby. Hope you brought a shield.");
+                    }
+                }
+                case CREEPER -> {
+                    if (count >= 1) {
+                        candidates.add("A creeper survived the night. Hunt it down before it hunts you.");
+                        candidates.add("Creeper detected nearby. Stay alert.");
+                    }
+                }
+            }
+        }
+    }
+
+    private static void addInventoryStateMessages(Player player, List<String> candidates) {
+        org.bukkit.inventory.PlayerInventory inventory = player.getInventory();
+
+        // Count filled slots
+        int filledSlots = 0;
+        int foodItems = 0;
+        int diamonds = 0;
+        int emeralds = 0;
+        int netheriteIngots = 0;
+        int shulkerBoxes = 0;
+        int enderPearls = 0;
+        int rockets = 0;
+
+        for (org.bukkit.inventory.ItemStack item : inventory.getContents()) {
+            if (item != null && item.getType() != org.bukkit.Material.AIR) {
+                filledSlots++;
+
+                org.bukkit.Material type = item.getType();
+                int amount = item.getAmount();
+
+                // Count specific items
+                if (type == org.bukkit.Material.DIAMOND) {
+                    diamonds += amount;
+                } else if (type == org.bukkit.Material.EMERALD) {
+                    emeralds += amount;
+                } else if (type == org.bukkit.Material.NETHERITE_INGOT) {
+                    netheriteIngots += amount;
+                } else if (type.name().contains("SHULKER_BOX")) {
+                    shulkerBoxes += amount;
+                } else if (type == org.bukkit.Material.ENDER_PEARL) {
+                    enderPearls += amount;
+                } else if (type == org.bukkit.Material.FIREWORK_ROCKET) {
+                    rockets += amount;
+                } else if (type.isEdible()) {
+                    foodItems += amount;
+                }
+            }
+        }
+
+        // Full inventory messages
+        if (filledSlots >= 33) {
+            candidates.add("Your inventory is nearly full. Time to organize?");
+            candidates.add("27 slots. 27 problems. Wait, 36. Wait, more with armor.");
+            candidates.add("One day you'll organize. Today is not that day.");
+        }
+
+        // Low food messages
+        if (foodItems <= 2) {
+            candidates.add("Running low on food. Time to raid the farm.");
+            candidates.add("Your food supply is dangerously low.");
+        }
+
+        // Valuable items messages
+        if (diamonds >= 16) {
+            candidates.add("Your pockets are heavy with diamonds. Riches!");
+            candidates.add(diamonds + " diamonds in your inventory. Enchanting time?");
+        }
+
+        if (emeralds >= 32) {
+            candidates.add("All those emeralds. The villagers are waiting.");
+            candidates.add(emeralds + " emeralds! The trading hall calls.");
+        }
+
+        if (netheriteIngots >= 4) {
+            candidates.add("Your netherite stash is impressive.");
+            candidates.add(netheriteIngots + " netherite ingots. The endgame approaches.");
+        }
+
+        if (shulkerBoxes >= 4) {
+            candidates.add("Your shulker box collection grows. Organization level: expert.");
+        }
+
+        if (enderPearls >= 16) {
+            candidates.add("Ready to teleport at a moment's notice. Nice pearl collection.");
+            candidates.add(enderPearls + " ender pearls. The Enderman farm paid off.");
+        }
+
+        if (rockets >= 64) {
+            candidates.add("Loaded up with rockets. Time to fly!");
+            candidates.add(rockets + " rockets! The sky is calling.");
+        }
+    }
+
+    private static void addNearbyBlockMessages(Player player, World world, List<String> candidates) {
+        org.bukkit.Location playerLoc = player.getLocation();
+        int radius = 20;
+        int sampleRate = 3; // Check every 3rd block to avoid expensive full scan
+
+        // Counters for different block types
+        boolean hasFurnace = false;
+        boolean hasBlastFurnace = false;
+        boolean hasSmoker = false;
+        boolean hasBrewingStand = false;
+        boolean hasEnchantingTable = false;
+        boolean hasAnvil = false;
+        boolean hasBeacon = false;
+        int bedCount = 0;
+        int chestCount = 0;
+
+        boolean hasWheat = false;
+        boolean hasCarrots = false;
+        boolean hasPotatoes = false;
+        boolean hasBeetroot = false;
+        boolean hasNetherWart = false;
+        boolean hasMelon = false;
+        boolean hasPumpkin = false;
+        boolean hasSugarCane = false;
+        boolean hasBamboo = false;
+        boolean hasFullyGrownCrops = false;
+        int farmlandCount = 0;
+
+        // Sample blocks in radius
+        for (int x = -radius; x <= radius; x += sampleRate) {
+            for (int y = -radius / 2; y <= radius / 2; y += sampleRate) {
+                for (int z = -radius; z <= radius; z += sampleRate) {
+                    org.bukkit.Location loc = playerLoc.clone().add(x, y, z);
+                    org.bukkit.block.Block block = world.getBlockAt(loc);
+                    org.bukkit.Material type = block.getType();
+
+                    // Functional blocks
+                    switch (type) {
+                        case FURNACE -> hasFurnace = true;
+                        case BLAST_FURNACE -> hasBlastFurnace = true;
+                        case SMOKER -> hasSmoker = true;
+                        case BREWING_STAND -> hasBrewingStand = true;
+                        case ENCHANTING_TABLE -> hasEnchantingTable = true;
+                        case ANVIL, CHIPPED_ANVIL, DAMAGED_ANVIL -> hasAnvil = true;
+                        case BEACON -> hasBeacon = true;
+                        case CHEST, TRAPPED_CHEST -> chestCount++;
+                    }
+
+                    // Bed detection (any bed color)
+                    if (type.name().contains("_BED")) {
+                        bedCount++;
+                    }
+
+                    // Crops
+                    switch (type) {
+                        case WHEAT -> {
+                            hasWheat = true;
+                            if (block.getBlockData() instanceof org.bukkit.block.data.Ageable ageable) {
+                                if (ageable.getAge() == ageable.getMaximumAge()) {
+                                    hasFullyGrownCrops = true;
+                                }
+                            }
+                        }
+                        case CARROTS -> {
+                            hasCarrots = true;
+                            if (block.getBlockData() instanceof org.bukkit.block.data.Ageable ageable) {
+                                if (ageable.getAge() == ageable.getMaximumAge()) {
+                                    hasFullyGrownCrops = true;
+                                }
+                            }
+                        }
+                        case POTATOES -> {
+                            hasPotatoes = true;
+                            if (block.getBlockData() instanceof org.bukkit.block.data.Ageable ageable) {
+                                if (ageable.getAge() == ageable.getMaximumAge()) {
+                                    hasFullyGrownCrops = true;
+                                }
+                            }
+                        }
+                        case BEETROOTS -> {
+                            hasBeetroot = true;
+                            if (block.getBlockData() instanceof org.bukkit.block.data.Ageable ageable) {
+                                if (ageable.getAge() == ageable.getMaximumAge()) {
+                                    hasFullyGrownCrops = true;
+                                }
+                            }
+                        }
+                        case NETHER_WART -> hasNetherWart = true;
+                        case MELON -> hasMelon = true;
+                        case PUMPKIN, CARVED_PUMPKIN -> hasPumpkin = true;
+                        case SUGAR_CANE -> hasSugarCane = true;
+                        case BAMBOO -> hasBamboo = true;
+                        case FARMLAND -> farmlandCount++;
+                    }
+                }
+            }
+        }
+
+        // Generate messages for functional blocks
+        if (hasFurnace) {
+            candidates.add("The furnaces have cooled overnight.");
+            candidates.add("Time to fire up the smelters.");
+        }
+        if (hasBlastFurnace) {
+            candidates.add("The blast furnace awaits your ores.");
+        }
+        if (hasSmoker) {
+            candidates.add("The smoker is ready for a fresh catch.");
+        }
+        if (hasBrewingStand) {
+            candidates.add("The brewing stand bubbles. Alchemy awaits.");
+            candidates.add("Time to brew some potions?");
+        }
+        if (hasEnchantingTable) {
+            candidates.add("Your enchanting table is calling.");
+            candidates.add("The enchantment table hums with magical energy.");
+        }
+        if (hasAnvil) {
+            candidates.add("Your anvil is one repair closer to breaking.");
+            candidates.add("The anvil stands ready for repairs.");
+        }
+        if (hasBeacon) {
+            candidates.add("The beacon's light shines bright. You've made it.");
+            candidates.add("Your beacon pulses with power.");
+        }
+        if (bedCount >= 3) {
+            candidates.add("Multiple beds nearby. Quite the sleeping quarters.");
+            candidates.add("Your bedroom is well-stocked with backup beds.");
+        }
+        if (chestCount >= 20) {
+            candidates.add("Your storage system is... extensive.");
+            candidates.add("All those chests. Somewhere, an item waits to be found.");
+        }
+
+        // Generate messages for crops
+        if (hasFullyGrownCrops) {
+            candidates.add("The crops are fully grown. Harvest time!");
+            candidates.add("Your farm is ready to harvest.");
+        }
+        if (hasWheat) {
+            candidates.add("The wheat looks ready to harvest.");
+            candidates.add("Golden wheat waves in the breeze.");
+        }
+        if (hasCarrots) {
+            candidates.add("The carrots are growing nicely.");
+            candidates.add("Time to check on the carrot patch.");
+        }
+        if (hasPotatoes) {
+            candidates.add("The potato farm thrives.");
+            candidates.add("Your potatoes are coming along well.");
+        }
+        if (hasBeetroot) {
+            candidates.add("The beetroots add color to your farm.");
+        }
+        if (hasNetherWart) {
+            candidates.add("Your nether wart farm is producing.");
+            candidates.add("The nether wart grows in its crimson glory.");
+        }
+        if (hasMelon) {
+            candidates.add("The melons are ripe for harvest.");
+        }
+        if (hasPumpkin) {
+            candidates.add("Pumpkins dot your farm. Autumn vibes year-round.");
+        }
+        if (hasSugarCane) {
+            candidates.add("Sugar cane grows tall by the water.");
+        }
+        if (hasBamboo) {
+            candidates.add("The bamboo forest rustles nearby.");
+        }
+        if (farmlandCount >= 10) {
+            candidates.add("Your farm stretches out. The farmer's life.");
+            candidates.add("Tending the land. Honest work.");
         }
     }
 }

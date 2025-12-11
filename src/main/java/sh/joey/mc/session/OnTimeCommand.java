@@ -137,10 +137,6 @@ public final class OnTimeCommand implements Command {
         return storage.resolvePlayerId(targetName)
                 .flatMap(playerId -> storage.getLifetimeOnlineTime(playerId)
                         .map(lifetime -> new OnTimeResult(targetName, 0, lifetime, false)))
-                .switchIfEmpty(Maybe.defer(() -> {
-                    return storage.findUsernameById(null)
-                            .flatMap(name -> Maybe.<OnTimeResult>empty());
-                }))
                 .observeOn(plugin.mainScheduler())
                 .doOnSuccess(result -> displayResult(viewer, result))
                 .doOnComplete(() -> error(viewer, "Player '" + targetName + "' not found."))
