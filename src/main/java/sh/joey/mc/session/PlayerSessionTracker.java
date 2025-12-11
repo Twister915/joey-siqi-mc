@@ -62,6 +62,7 @@ public final class PlayerSessionTracker implements Disposable {
 
         // Periodic heartbeat (every 30 seconds)
         disposables.add(plugin.interval(30, TimeUnit.SECONDS)
+            .filter(ignored -> !Bukkit.getOnlinePlayers().isEmpty())
             .flatMapCompletable(tick -> storage.updateLastSeen(serverSessionId)
                 .doOnError(err -> plugin.getLogger().warning("Failed to update last seen: " + err.getMessage()))
                 .onErrorComplete())
