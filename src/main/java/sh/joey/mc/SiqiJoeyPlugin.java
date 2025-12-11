@@ -18,6 +18,7 @@ import sh.joey.mc.bossbar.TimeOfDayProvider;
 import sh.joey.mc.bossbar.TeleportCountdownProvider;
 import sh.joey.mc.bossbar.WeatherChangeProvider;
 import sh.joey.mc.day.DayMessageProvider;
+import sh.joey.mc.day.DayMessageDebugCommand;
 import sh.joey.mc.welcome.JoinMessageProvider;
 import sh.joey.mc.welcome.ServerPingProvider;
 import sh.joey.mc.cmd.CmdExecutor;
@@ -122,6 +123,7 @@ public final class SiqiJoeyPlugin extends JavaPlugin {
         // Day message system
         var dayMessageProvider = new DayMessageProvider(this);
         components.add(dayMessageProvider);
+        components.add(CmdExecutor.register(this, new DayMessageDebugCommand()));
 
         // Welcome message systems
         var joinMessageProvider = new JoinMessageProvider(this);

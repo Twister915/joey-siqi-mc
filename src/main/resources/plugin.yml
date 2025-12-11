@@ -25,3 +25,6 @@ commands:
   ontime:
     description: View your or another player's online time
     usage: /ontime [player]
+  daymsgdebug:
+    description: Debug command to show all possible contextual day messages
+    usage: /daymsgdebug

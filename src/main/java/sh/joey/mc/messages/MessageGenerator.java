@@ -7,7 +7,6 @@ import org.jetbrains.annotations.Nullable;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
-import java.util.concurrent.ThreadLocalRandom;
 
 import static sh.joey.mc.messages.WordBanks.*;
 
@@ -18,7 +17,7 @@ import static sh.joey.mc.messages.WordBanks.*;
  */
 public final class MessageGenerator {
 
-    private static final Random random = ThreadLocalRandom.current();
+    private static final Random random = new Random();
 
     private MessageGenerator() {}
 
@@ -750,8 +749,9 @@ public final class MessageGenerator {
     // ========================================
     // CONTEXT HELPER METHODS
     // ========================================
+    // Public for debug command access
 
-    private static void addHealthMessages(Player player, List<String> candidates) {
+    public static void addHealthMessages(Player player, List<String> candidates) {
         double health = player.getHealth();
         double maxHealth = player.getAttribute(org.bukkit.attribute.Attribute.MAX_HEALTH).getValue();
 
@@ -765,7 +765,7 @@ public final class MessageGenerator {
         }
     }
 
-    private static void addHungerMessages(Player player, List<String> candidates) {
+    public static void addHungerMessages(Player player, List<String> candidates) {
         int foodLevel = player.getFoodLevel();
 
         if (foodLevel <= 6) {
@@ -777,7 +777,7 @@ public final class MessageGenerator {
         }
     }
 
-    private static void addExperienceMessages(Player player, List<String> candidates) {
+    public static void addExperienceMessages(Player player, List<String> candidates) {
         int level = player.getLevel();
 
         if (level >= 30) {
@@ -789,7 +789,7 @@ public final class MessageGenerator {
         }
     }
 
-    private static void addArmorMessages(Player player, List<String> candidates) {
+    public static void addArmorMessages(Player player, List<String> candidates) {
         var helmet = player.getInventory().getHelmet();
         var chestplate = player.getInventory().getChestplate();
 
@@ -816,7 +816,7 @@ public final class MessageGenerator {
         }
     }
 
-    private static void addHeldItemMessages(Player player, List<String> candidates, MessageType type) {
+    public static void addHeldItemMessages(Player player, List<String> candidates, MessageType type) {
         var mainHand = player.getInventory().getItemInMainHand();
         String itemType = mainHand.getType().name();
 
@@ -837,7 +837,7 @@ public final class MessageGenerator {
         }
     }
 
-    private static void addYLevelMessages(Player player, List<String> candidates) {
+    public static void addYLevelMessages(Player player, List<String> candidates) {
         int y = player.getLocation().getBlockY();
 
         if (y < -50) {
@@ -856,7 +856,7 @@ public final class MessageGenerator {
         }
     }
 
-    private static void addUndergroundMessages(Player player, World world, List<String> candidates, MessageType type) {
+    public static void addUndergroundMessages(Player player, World world, List<String> candidates, MessageType type) {
         int highestBlockY = world.getHighestBlockYAt(player.getLocation());
 
         if (player.getLocation().getBlockY() < highestBlockY - 10) {
@@ -871,7 +871,7 @@ public final class MessageGenerator {
         }
     }
 
-    private static void addWaterMessages(Player player, List<String> candidates, MessageType type) {
+    public static void addWaterMessages(Player player, List<String> candidates, MessageType type) {
         if (player.isInWater()) {
             if (type == MessageType.DAY) {
                 candidates.add("Starting the day in water. Refreshing!");
@@ -882,7 +882,7 @@ public final class MessageGenerator {
         }
     }
 
-    private static void addVehicleMessages(Player player, List<String> candidates, MessageType type) {
+    public static void addVehicleMessages(Player player, List<String> candidates, MessageType type) {
         if (player.isInsideVehicle()) {
             var vehicle = player.getVehicle();
             if (vehicle != null) {
@@ -906,7 +906,7 @@ public final class MessageGenerator {
         }
     }
 
-    private static void addDayMilestoneMessages(World world, List<String> candidates) {
+    public static void addDayMilestoneMessages(World world, List<String> candidates) {
         long dayNumber = (world.getFullTime() / 24000) + 1;
 
         if (dayNumber == 1) {
@@ -925,7 +925,7 @@ public final class MessageGenerator {
         }
     }
 
-    private static void addDifficultyMessages(World world, List<String> candidates) {
+    public static void addDifficultyMessages(World world, List<String> candidates) {
         switch (world.getDifficulty()) {
             case PEACEFUL -> {
                 candidates.add("Peaceful mode. Relax, no monsters today.");
@@ -938,7 +938,7 @@ public final class MessageGenerator {
         }
     }
 
-    private static void addMoonPhaseMessages(World world, List<String> candidates) {
+    public static void addMoonPhaseMessages(World world, List<String> candidates) {
         int moonPhase = (int) ((world.getFullTime() / 24000) % 8);
 
         switch (moonPhase) {
@@ -958,7 +958,7 @@ public final class MessageGenerator {
         }
     }
 
-    private static void addWeatherMessages(World world, List<String> candidates, MessageType type) {
+    public static void addWeatherMessages(World world, List<String> candidates, MessageType type) {
         if (world.hasStorm()) {
             if (world.isThundering()) {
                 if (type == MessageType.DAY) {
@@ -986,7 +986,7 @@ public final class MessageGenerator {
         }
     }
 
-    private static void addBiomeMessages(Player player, World world, List<String> candidates) {
+    public static void addBiomeMessages(Player player, World world, List<String> candidates) {
         var biome = world.getBiome(player.getLocation());
         String biomeName = biome.getKey().getKey().toLowerCase();
 
@@ -1049,7 +1049,7 @@ public final class MessageGenerator {
         }
     }
 
-    private static void addDimensionMessages(Player player, World world, List<String> candidates, MessageType type) {
+    public static void addDimensionMessages(Player player, World world, List<String> candidates, MessageType type) {
         if (world.getEnvironment() == World.Environment.NETHER) {
             if (type == MessageType.JOIN) {
                 candidates.add("You spawn in the Nether?! Brave choice.");
@@ -1080,7 +1080,7 @@ public final class MessageGenerator {
         }
     }
 
-    private static void addSpecialSituationMessages(Player player, List<String> candidates, MessageType type) {
+    public static void addSpecialSituationMessages(Player player, List<String> candidates, MessageType type) {
         if (player.isGliding()) {
             candidates.add("Soaring through the sky! What a way to " + (type == MessageType.DAY ? "start the day" : "arrive") + ".");
             candidates.add("Gliding" + (type == MessageType.DAY ? " at dawn" : " in") + ". The world looks different from up here.");
@@ -1100,7 +1100,7 @@ public final class MessageGenerator {
         }
     }
 
-    private static void addJoinSpecificMessages(Player player, World world, List<String> candidates) {
+    public static void addJoinSpecificMessages(Player player, World world, List<String> candidates) {
         // First join ever
         if (!player.hasPlayedBefore()) {
             candidates.clear(); // Override everything
@@ -1131,7 +1131,7 @@ public final class MessageGenerator {
     // HIGH-VARIETY CONTEXT HELPERS (NEW)
     // ========================================
 
-    private static void addNearbyEntityMessages(Player player, World world, List<String> candidates) {
+    public static void addNearbyEntityMessages(Player player, World world, List<String> candidates) {
         java.util.Collection<org.bukkit.entity.Entity> nearby = world.getNearbyEntities(
                 player.getLocation(),
                 30, 30, 30,
@@ -1238,7 +1238,7 @@ public final class MessageGenerator {
         }
     }
 
-    private static void addInventoryStateMessages(Player player, List<String> candidates) {
+    public static void addInventoryStateMessages(Player player, List<String> candidates) {
         org.bukkit.inventory.PlayerInventory inventory = player.getInventory();
 
         // Count filled slots
@@ -1321,7 +1321,7 @@ public final class MessageGenerator {
         }
     }
 
-    private static void addNearbyBlockMessages(Player player, World world, List<String> candidates) {
+    public static void addNearbyBlockMessages(Player player, World world, List<String> candidates) {
         org.bukkit.Location playerLoc = player.getLocation();
         int radius = 20;
         int sampleRate = 3; // Check every 3rd block to avoid expensive full scan
