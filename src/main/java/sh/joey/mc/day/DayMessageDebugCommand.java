@@ -13,6 +13,8 @@ import sh.joey.mc.SiqiJoeyPlugin;
 import sh.joey.mc.cmd.Command;
 import sh.joey.mc.messages.MessageGenerator;
 import sh.joey.mc.messages.MessageGenerator.ContextProvider;
+import sh.joey.mc.pagination.ChatPaginator;
+import sh.joey.mc.pagination.PaginatedItem;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -36,65 +38,7 @@ public final class DayMessageDebugCommand implements Command {
             .append(Component.text("DEBUG").color(NamedTextColor.RED))
             .append(Component.text("] ").color(NamedTextColor.GOLD));
 
-    // Minecraft chat shows exactly 20 lines. We emit exactly 20 lines per page so each page
-    // completely clears the previous from the buffer.
-    // Fixed overhead: 3 header lines + 3 footer lines = 6 lines
-    // Content area: 20 - 6 = 14 lines for messages and category headers
-    private static final int CONTENT_LINES_PER_PAGE = 14;
-
-    // Minecraft default chat width in pixels
-    private static final int CHAT_WIDTH_PIXELS = 320;
-
-    // Message prefix "  • " width in pixels (2 spaces + bullet + space)
     private static final String MESSAGE_PREFIX = "  • ";
-
-    // Content line types for pagination - each represents exactly one chat line
-    private sealed interface ContentLine permits CategoryHeader, EmptyLine, MessageLine {}
-    private record CategoryHeader(String name) implements ContentLine {}
-    private record EmptyLine() implements ContentLine {}
-    private record MessageLine(String message, int visualLines) implements ContentLine {}
-
-    /**
-     * Returns the pixel width of a character in Minecraft's default font.
-     * Based on Minecraft 1.19+ bitmap font glyph widths.
-     * Each character also has 1px spacing after it.
-     */
-    private static int getCharWidth(char c) {
-        return switch (c) {
-            // Narrow characters (1-2px)
-            case 'i', 'l', '!', '|' -> 2;
-            case '.', ',', ':', ';', '\'', '`' -> 2;
-            // Slightly narrow (3-4px)
-            case 'I', 't', 'f', 'k', '"', '(', ')', '[', ']', '{', '}', '<', '>' -> 4;
-            case ' ' -> 4;
-            // Wide characters (6-7px)
-            case 'm', 'w', 'M', 'W', '@', '~' -> 6;
-            // Bullet point
-            case '•', '▸' -> 2;
-            // Default for most alphanumeric (5px)
-            default -> 6;
-        };
-    }
-
-    /**
-     * Calculates the pixel width of a string in Minecraft's default font.
-     */
-    private static int calculatePixelWidth(String text) {
-        int width = 0;
-        for (char c : text.toCharArray()) {
-            width += getCharWidth(c);
-        }
-        return width;
-    }
-
-    /**
-     * Calculates how many visual lines a message will take, accounting for word wrap.
-     */
-    private static int calculateVisualLines(String message) {
-        String fullLine = MESSAGE_PREFIX + message;
-        int width = calculatePixelWidth(fullLine);
-        return (int) Math.ceil((double) width / CHAT_WIDTH_PIXELS);
-    }
 
     @Override
     public String getName() {
@@ -237,137 +181,32 @@ public final class DayMessageDebugCommand implements Command {
     }
 
     /**
-     * Shows all messages with pagination.
-     * Emits exactly 20 lines per page to perfectly fill the Minecraft chat window.
-     * Accounts for word-wrapped messages that take multiple visual lines.
+     * Shows all messages with pagination using the ChatPaginator.
      */
     private void showAllPaginated(Player player, Map<String, List<String>> messagesByCategory, int page, int totalMessages) {
-        // Flatten all content into lines, calculating visual lines for each message
-        List<ContentLine> allLines = new ArrayList<>();
-        String currentCategory = null;
-        for (Map.Entry<String, List<String>> categoryEntry : messagesByCategory.entrySet()) {
-            String category = categoryEntry.getKey();
-            for (String message : categoryEntry.getValue()) {
-                if (!category.equals(currentCategory)) {
-                    if (currentCategory != null) {
-                        allLines.add(new EmptyLine()); // separator between categories
-                    }
-                    allLines.add(new CategoryHeader(category));
-                    currentCategory = category;
-                }
-                int visualLines = calculateVisualLines(message);
-                allLines.add(new MessageLine(message, visualLines));
+        ChatPaginator paginator = new ChatPaginator()
+                .title(PREFIX.append(Component.text("All Messages").color(NamedTextColor.GOLD).decorate(TextDecoration.BOLD)))
+                .subtitle(Component.text("Showing " + totalMessages + " messages across " + messagesByCategory.size() + " categories").color(NamedTextColor.YELLOW))
+                .command(p -> "/daymsgdebug " + p)
+                .backButton("Back to Summary", "/daymsgdebug");
+
+        boolean first = true;
+        for (Map.Entry<String, List<String>> entry : messagesByCategory.entrySet()) {
+            if (!first) {
+                paginator.add(PaginatedItem.empty());
+            }
+            first = false;
+
+            paginator.section(entry.getKey());
+
+            for (String message : entry.getValue()) {
+                String plainText = MESSAGE_PREFIX + message;
+                Component component = Component.text(MESSAGE_PREFIX).color(NamedTextColor.DARK_GRAY)
+                        .append(Component.text(message).color(NamedTextColor.WHITE));
+                paginator.add(PaginatedItem.wrapping(component, plainText));
             }
         }
 
-        // Build pages by counting visual lines, not content items
-        List<List<ContentLine>> pages = new ArrayList<>();
-        List<ContentLine> currentPage = new ArrayList<>();
-        int currentPageVisualLines = 0;
-
-        for (ContentLine line : allLines) {
-            int lineVisualLines = switch (line) {
-                case CategoryHeader ignored -> 1;
-                case EmptyLine ignored -> 1;
-                case MessageLine(String ignored, int vl) -> vl;
-            };
-
-            // If adding this line would exceed page limit, start a new page
-            // (but always add at least one item per page to avoid infinite loop)
-            if (currentPageVisualLines + lineVisualLines > CONTENT_LINES_PER_PAGE && !currentPage.isEmpty()) {
-                pages.add(currentPage);
-                currentPage = new ArrayList<>();
-                currentPageVisualLines = 0;
-            }
-
-            currentPage.add(line);
-            currentPageVisualLines += lineVisualLines;
-        }
-        if (!currentPage.isEmpty()) {
-            pages.add(currentPage);
-        }
-
-        int totalPages = Math.max(1, pages.size());
-
-        // Clamp page number
-        page = Math.max(1, Math.min(page, totalPages));
-
-        List<ContentLine> pageContent = pages.isEmpty() ? List.of() : pages.get(page - 1);
-
-        // === HEADER (3 lines) ===
-        player.sendMessage(PREFIX.append(Component.text("All Messages - Page " + page + "/" + totalPages).color(NamedTextColor.GOLD).decorate(TextDecoration.BOLD)));
-        player.sendMessage(Component.text("Showing " + totalMessages + " messages across " + messagesByCategory.size() + " categories").color(NamedTextColor.YELLOW));
-        player.sendMessage(Component.empty());
-
-        // === CONTENT (14 visual lines) ===
-        int visualLinesEmitted = 0;
-        for (ContentLine line : pageContent) {
-            switch (line) {
-                case CategoryHeader(String name) -> {
-                    player.sendMessage(Component.text("▸ " + name).color(NamedTextColor.AQUA).decorate(TextDecoration.BOLD));
-                    visualLinesEmitted += 1;
-                }
-                case EmptyLine() -> {
-                    player.sendMessage(Component.empty());
-                    visualLinesEmitted += 1;
-                }
-                case MessageLine(String message, int visualLines) -> {
-                    player.sendMessage(Component.text("  • ").color(NamedTextColor.DARK_GRAY)
-                            .append(Component.text(message).color(NamedTextColor.WHITE)));
-                    visualLinesEmitted += visualLines;
-                }
-            }
-        }
-
-        // Pad remaining content lines to ensure exactly 14 visual lines
-        while (visualLinesEmitted < CONTENT_LINES_PER_PAGE) {
-            player.sendMessage(Component.empty());
-            visualLinesEmitted++;
-        }
-
-        // === FOOTER (3 lines) ===
-        player.sendMessage(Component.empty());
-        player.sendMessage(buildNavigation(page, totalPages));
-        player.sendMessage(Component.text("[Back to Summary]").color(NamedTextColor.GRAY)
-                .clickEvent(ClickEvent.runCommand("/daymsgdebug"))
-                .hoverEvent(HoverEvent.showText(Component.text("Return to summary view"))));
-    }
-
-    private Component buildNavigation(int page, int totalPages) {
-        Component navigation = Component.empty();
-
-        // Previous button
-        if (page > 1) {
-            navigation = navigation.append(Component.text("[◀ Prev] ").color(NamedTextColor.AQUA)
-                    .clickEvent(ClickEvent.runCommand("/daymsgdebug " + (page - 1)))
-                    .hoverEvent(HoverEvent.showText(Component.text("Go to page " + (page - 1)))));
-        } else {
-            navigation = navigation.append(Component.text("[◀ Prev] ").color(NamedTextColor.DARK_GRAY));
-        }
-
-        // Page numbers (show up to 5 around current)
-        int startPage = Math.max(1, page - 2);
-        int endPage = Math.min(totalPages, page + 2);
-
-        for (int p = startPage; p <= endPage; p++) {
-            if (p == page) {
-                navigation = navigation.append(Component.text("[" + p + "] ").color(NamedTextColor.GREEN).decorate(TextDecoration.BOLD));
-            } else {
-                navigation = navigation.append(Component.text("[" + p + "] ").color(NamedTextColor.YELLOW)
-                        .clickEvent(ClickEvent.runCommand("/daymsgdebug " + p))
-                        .hoverEvent(HoverEvent.showText(Component.text("Go to page " + p))));
-            }
-        }
-
-        // Next button
-        if (page < totalPages) {
-            navigation = navigation.append(Component.text("[Next ▶]").color(NamedTextColor.AQUA)
-                    .clickEvent(ClickEvent.runCommand("/daymsgdebug " + (page + 1)))
-                    .hoverEvent(HoverEvent.showText(Component.text("Go to page " + (page + 1)))));
-        } else {
-            navigation = navigation.append(Component.text("[Next ▶]").color(NamedTextColor.DARK_GRAY));
-        }
-
-        return navigation;
+        paginator.sendPage(player, page);
     }
 }

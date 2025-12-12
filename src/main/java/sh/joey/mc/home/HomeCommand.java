@@ -16,6 +16,8 @@ import sh.joey.mc.SiqiJoeyPlugin;
 import sh.joey.mc.cmd.Command;
 import sh.joey.mc.confirm.ConfirmationManager;
 import sh.joey.mc.confirm.ConfirmationRequest;
+import sh.joey.mc.pagination.ChatPaginator;
+import sh.joey.mc.pagination.PaginatedItem;
 import sh.joey.mc.session.PlayerSessionStorage;
 import sh.joey.mc.teleport.SafeTeleporter;
 
@@ -80,7 +82,7 @@ public final class HomeCommand implements Command {
             return switch (subcommand) {
                 case "set" -> handleSet(player, args);
                 case "delete" -> handleDelete(player, args);
-                case "list" -> handleList(player);
+                case "list" -> handleList(player, args);
                 case "share" -> handleShare(player, args);
                 case "unshare" -> handleUnshare(player, args);
                 case "help" -> handleHelp(player);
@@ -302,18 +304,27 @@ public final class HomeCommand implements Command {
 
     // --- List Homes ---
 
-    private Completable handleList(Player player) {
+    private Completable handleList(Player player, String[] args) {
         UUID playerId = player.getUniqueId();
+        int page = 1;
+        if (args.length >= 2) {
+            try {
+                page = Integer.parseInt(args[1]);
+            } catch (NumberFormatException ignored) {
+                // Invalid page number, use default
+            }
+        }
+        int finalPage = page;
         return storage.getHomes(playerId)
                 .toList()
                 .observeOn(plugin.mainScheduler())
-                .doOnSuccess(homes -> displayHomeList(player, playerId, homes))
+                .doOnSuccess(homes -> displayHomeList(player, playerId, homes, finalPage))
                 .doOnError(err -> logAndError(player, "Failed to list homes", err))
                 .onErrorComplete()
                 .ignoreElement();
     }
 
-    private void displayHomeList(Player player, UUID playerId, List<Home> allHomes) {
+    private void displayHomeList(Player player, UUID playerId, List<Home> allHomes, int page) {
         if (allHomes.isEmpty()) {
             info(player, "You don't have any homes. Use /home set <name> to create one.");
             return;
@@ -326,20 +337,28 @@ public final class HomeCommand implements Command {
         Location playerLoc = player.getLocation();
         UUID playerWorldId = playerLoc.getWorld().getUID();
 
-        List<Home> sortedHomes = sortHomesByDistance(ownedHomes, playerLoc, playerWorldId);
+        List<Home> sortedOwned = sortHomesByDistance(ownedHomes, playerLoc, playerWorldId);
 
-        player.sendMessage(PREFIX.append(Component.text("Your Homes:").color(NamedTextColor.WHITE)));
+        ChatPaginator paginator = new ChatPaginator()
+                .title(PREFIX.append(Component.text("Your Homes").color(NamedTextColor.WHITE)))
+                .subtitle(Component.text(ownedHomes.size() + " owned, " + sharedHomes.size() + " shared").color(NamedTextColor.GRAY))
+                .command(p -> "/home list " + p);
 
-        for (Home home : sortedHomes) {
-            player.sendMessage(formatOwnedHomeEntry(home, playerLoc, playerWorldId));
+        // Add owned homes
+        for (Home home : sortedOwned) {
+            paginator.add(PaginatedItem.simple(formatOwnedHomeEntry(home, playerLoc, playerWorldId)));
         }
 
+        // Add shared homes section if any
         if (!sharedHomes.isEmpty()) {
-            player.sendMessage(PREFIX.append(Component.text("Shared with you:").color(NamedTextColor.WHITE)));
+            paginator.add(PaginatedItem.empty());
+            paginator.section("Shared with you");
             for (Home home : sharedHomes) {
-                player.sendMessage(formatSharedHomeEntry(home));
+                paginator.add(PaginatedItem.simple(formatSharedHomeEntry(home)));
             }
         }
+
+        paginator.sendPage(player, page);
     }
 
     private List<Home> sortHomesByDistance(List<Home> homes, Location playerLoc, UUID playerWorldId) {
