@@ -16,6 +16,8 @@ import org.bukkit.event.player.PlayerQuitEvent;
 import sh.joey.mc.SiqiJoeyPlugin;
 import sh.joey.mc.confirm.ConfirmationManager;
 import sh.joey.mc.confirm.ConfirmationRequest;
+import sh.joey.mc.multiworld.PlayerWorldPositionStorage;
+import sh.joey.mc.multiworld.WorldsConfig;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -38,6 +40,8 @@ public final class SafeTeleporter implements Disposable {
     private final PluginConfig config;
     private final LocationTracker locationTracker;
     private final ConfirmationManager confirmationManager;
+    private final PlayerWorldPositionStorage worldPositionStorage;
+    private final WorldsConfig worldsConfig;
     private final Map<UUID, PendingTeleport> pendingTeleports = new HashMap<>();
     private final Map<UUID, Long> cancelledTeleports = new HashMap<>();
 
@@ -83,11 +87,15 @@ public final class SafeTeleporter implements Disposable {
     }
 
     public SafeTeleporter(SiqiJoeyPlugin plugin, PluginConfig config, LocationTracker locationTracker,
-                          ConfirmationManager confirmationManager) {
+                          ConfirmationManager confirmationManager,
+                          PlayerWorldPositionStorage worldPositionStorage,
+                          WorldsConfig worldsConfig) {
         this.plugin = plugin;
         this.config = config;
         this.locationTracker = locationTracker;
         this.confirmationManager = confirmationManager;
+        this.worldPositionStorage = worldPositionStorage;
+        this.worldsConfig = worldsConfig;
 
         // Movement detection
         disposables.add(plugin.watchEvent(EventPriority.MONITOR, PlayerMoveEvent.class)
@@ -118,6 +126,7 @@ public final class SafeTeleporter implements Disposable {
     /**
      * Initiates a safe teleport with warmup. Player must not move during countdown.
      * If the destination is unsafe, prompts the player for confirmation first.
+     * If the player's current world has teleport_warmup: false, teleports instantly.
      *
      * @param player      The player to teleport
      * @param destination Where to teleport
@@ -144,8 +153,23 @@ public final class SafeTeleporter implements Disposable {
             return;
         }
 
+        // Check if current world has warmup disabled
+        if (shouldSkipWarmup(player)) {
+            executeTeleportUnsafe(player, safeLocation.get(), onComplete);
+            return;
+        }
+
         // Safe location found - proceed with warmup
         startWarmup(player, safeLocation.get(), onComplete);
+    }
+
+    /**
+     * Checks if teleport warmup should be skipped for the player's current world.
+     */
+    private boolean shouldSkipWarmup(Player player) {
+        String worldName = player.getWorld().getName().toLowerCase();
+        var worldConfig = worldsConfig.worlds().get(worldName);
+        return worldConfig != null && !worldConfig.teleportWarmup();
     }
 
     private void requestUnsafeTeleportConfirmation(Player player, Location destination,
@@ -274,6 +298,13 @@ public final class SafeTeleporter implements Disposable {
         // Record current location (async) before teleporting (for /back)
         Location departureLocation = player.getLocation().clone();
         locationTracker.recordTeleportFrom(playerId, departureLocation).subscribe();
+
+        // Save world position before cross-world teleport (for /world return-to-position)
+        if (destination.getWorld() != null && !destination.getWorld().equals(departureLocation.getWorld())) {
+            worldPositionStorage.savePosition(playerId, departureLocation)
+                    .subscribe(() -> {}, err -> plugin.getLogger().warning(
+                            "Failed to save world position for " + player.getName() + ": " + err.getMessage()));
+        }
 
         // Play departure effects
         playTeleportEffects(departureLocation, true);

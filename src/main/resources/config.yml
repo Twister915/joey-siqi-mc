@@ -17,3 +17,42 @@ teleport:
 requests:
   # How long a teleport request stays valid (in seconds)
   timeout-seconds: 60
+
+# Multi-world configuration
+# Worlds listed here will be created/loaded on startup
+# Default Minecraft worlds (world, world_nether, world_the_end) use "default" inventory group
+# See doc/multiworld.md for full documentation
+worlds:
+  # Add default worlds to enable gamemode switching when returning:
+  # world:
+  #   gamemode: SURVIVAL
+  #   inventory_group: default
+  # world_nether:
+  #   gamemode: SURVIVAL
+  #   inventory_group: default
+  #   hidden: true
+  # world_the_end:
+  #   gamemode: SURVIVAL
+  #   inventory_group: default
+  #   hidden: true
+  #
+  # Example creative superflat world with no mobs:
+  # creative:
+  #   dimension: overworld
+  #   gamemode: CREATIVE
+  #   superflat: true
+  #   structures: false
+  #   generator_settings: '{"layers":[{"block":"minecraft:bedrock","height":1},{"block":"minecraft:dirt","height":2},{"block":"minecraft:grass_block","height":1}],"biome":"minecraft:plains"}'
+  #   difficulty: peaceful
+  #   game_rules:
+  #     doMobSpawning: false
+  #     doDaylightCycle: false
+  #   inventory_group: creative
+  #
+  # Example survival world with custom seed:
+  # survival2:
+  #   seed: 12345
+  #   dimension: overworld
+  #   gamemode: SURVIVAL
+  #   difficulty: hard
+  #   inventory_group: survival2
