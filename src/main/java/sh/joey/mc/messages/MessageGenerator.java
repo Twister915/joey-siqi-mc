@@ -2182,7 +2182,8 @@ public final class MessageGenerator {
             candidates.add("No spawn point set! Sleep in a bed before something goes wrong.");
             candidates.add("You're spawn point is at world spawn. Risky business.");
             candidates.add("Find a bed and claim it. Respawning at spawn is never fun.");
-        } else {
+        } else if (player.getWorld().equals(spawnLocation.getWorld())) {
+            // Only calculate distance if in the same world
             double distance = player.getLocation().distance(spawnLocation);
             if (distance > 5000) {
                 candidates.add("You're " + (int) distance + " blocks from your bed. That's quite the journey back if you die.");

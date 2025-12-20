@@ -28,3 +28,6 @@ commands:
   daymsgdebug:
     description: Debug command to show all possible contextual day messages
     usage: /daymsgdebug
+  world:
+    description: Navigate between configured worlds
+    usage: /world [name]

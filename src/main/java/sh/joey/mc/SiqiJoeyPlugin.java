@@ -42,6 +42,15 @@ import sh.joey.mc.teleport.commands.BackCommand;
 import sh.joey.mc.teleport.commands.TpCommand;
 import sh.joey.mc.rx.BukkitSchedulers;
 import sh.joey.mc.world.TimePassingMonitor;
+import sh.joey.mc.inventory.InventorySnapshotStorage;
+import sh.joey.mc.multiworld.GamemodeManager;
+import sh.joey.mc.multiworld.InventoryGroupManager;
+import sh.joey.mc.multiworld.InventoryGroupStorage;
+import sh.joey.mc.multiworld.PlayerWorldPositionStorage;
+import sh.joey.mc.multiworld.WorldCommand;
+import sh.joey.mc.multiworld.WorldManager;
+import sh.joey.mc.multiworld.WorldPositionTracker;
+import sh.joey.mc.multiworld.WorldsConfig;
 
 @SuppressWarnings("unused")
 public final class SiqiJoeyPlugin extends JavaPlugin {
@@ -100,7 +109,14 @@ public final class SiqiJoeyPlugin extends JavaPlugin {
         var locationTracker = new LocationTracker(this, backLocationStorage);
         components.add(locationTracker);
 
-        var safeTeleporter = new SafeTeleporter(this, config, locationTracker, confirmationManager);
+        // World position storage (used by SafeTeleporter for cross-world position tracking)
+        var playerWorldPositionStorage = new PlayerWorldPositionStorage(storageService);
+
+        // Load worlds config early (SafeTeleporter needs it for instant teleport check)
+        var worldsConfig = WorldsConfig.load(this);
+
+        var safeTeleporter = new SafeTeleporter(this, config, locationTracker, confirmationManager,
+                playerWorldPositionStorage, worldsConfig);
         components.add(safeTeleporter);
 
         // Register teleport countdown provider (needs SafeTeleporter)
@@ -135,6 +151,27 @@ public final class SiqiJoeyPlugin extends JavaPlugin {
         // Monitor to verify time pauses when server is empty
         var timePassingMonitor = new TimePassingMonitor(this);
         components.add(timePassingMonitor);
+
+        // Multi-world system
+        var inventorySnapshotStorage = new InventorySnapshotStorage(storageService);
+
+        var worldManager = new WorldManager(this, worldsConfig);
+        worldManager.loadWorlds();
+
+        var inventoryGroupStorage = new InventoryGroupStorage(storageService);
+
+        var gamemodeManager = new GamemodeManager(this, worldManager);
+        components.add(gamemodeManager);
+
+        var inventoryGroupManager = new InventoryGroupManager(
+                this, worldManager, inventorySnapshotStorage, inventoryGroupStorage);
+        components.add(inventoryGroupManager);
+
+        var worldPositionTracker = new WorldPositionTracker(this, playerWorldPositionStorage);
+        components.add(worldPositionTracker);
+
+        components.add(CmdExecutor.register(this,
+                new WorldCommand(this, worldManager, safeTeleporter, playerWorldPositionStorage)));
 
         getLogger().info("Plugin enabled!");
     }

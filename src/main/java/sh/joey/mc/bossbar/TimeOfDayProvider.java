@@ -1,6 +1,7 @@
 package sh.joey.mc.bossbar;
 
 import org.bukkit.ChatColor;
+import org.bukkit.GameRule;
 import org.bukkit.World;
 import org.bukkit.boss.BarColor;
 import org.bukkit.boss.BarStyle;
@@ -44,6 +45,12 @@ public final class TimeOfDayProvider implements BossBarProvider {
 
         // Only show for overworld-type environments
         if (world.getEnvironment() != World.Environment.NORMAL) {
+            return Optional.empty();
+        }
+
+        // Hide if daylight cycle is disabled (time frozen)
+        Boolean doDaylightCycle = world.getGameRuleValue(GameRule.DO_DAYLIGHT_CYCLE);
+        if (doDaylightCycle != null && !doDaylightCycle) {
             return Optional.empty();
         }
 
