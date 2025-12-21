@@ -15,16 +15,23 @@ The compiled JAR will be in `build/libs/` (use the `-all.jar` file which include
 ```
 src/main/java/sh/joey/mc/
 ├── SiqiJoeyPlugin.java      # Main plugin entry point
+├── Json.java                 # Shared Gson instance
 ├── rx/                       # RxJava integration (schedulers, event observables)
 ├── storage/                  # PostgreSQL database layer
+├── cmd/                      # Command abstraction utilities
 ├── bossbar/                  # Priority-based boss bar system
 ├── confirm/                  # Unified confirmation system for yes/no prompts
 ├── teleport/                 # Teleportation with warmup/requests
 ├── home/                     # Home saving and teleportation
 ├── session/                  # Player session tracking
 ├── day/                      # Daily message system
-├── welcome/                  # Join messages and MOTD
-└── world/                    # World monitoring utilities
+├── welcome/                  # Join/leave/chat messages, MOTD
+├── death/                    # Custom death messages
+├── world/                    # World monitoring utilities
+├── multiworld/               # Multi-world management
+├── inventory/                # Inventory snapshot storage
+├── pagination/               # Chat pagination utilities
+└── messages/                 # Shared message generation (word banks)
 ```
 
 ## Architecture & Patterns
@@ -354,6 +361,61 @@ if (roll < 30) {
 }
 ```
 
+### 7. Command System (`cmd/`)
+
+A minimal abstraction for command registration with automatic disposal.
+
+**Key Classes:**
+- `Command` - Interface with `execute(sender, args)`, `name()`, and `tabComplete()`
+- `CmdExecutor` - Registers commands and returns `Disposable` for cleanup
+
+**Usage:**
+```java
+components.add(CmdExecutor.register(plugin, new MyCommand(plugin)));
+```
+
+**Pattern:** One class per command, implements `Command` interface. Commands are disposable and cleaned up on plugin disable.
+
+### 8. Multi-World System (`multiworld/`)
+
+Create and manage custom worlds with separate inventories, gamemodes, and game rules. See [doc/multiworld.md](doc/multiworld.md) for configuration.
+
+**Key Classes:**
+- `WorldManager` - Creates/loads worlds from config, manages world lifecycle
+- `WorldConfig` - Per-world settings record (dimension, gamemode, seed, rules)
+- `WorldsConfig` - Loads all world configs from `config.yml`
+- `InventoryGroupManager` - Saves/restores player inventory when switching groups
+- `GamemodeManager` - Sets player gamemode on world change
+- `WorldPositionTracker` - Tracks player positions for world return
+- `PlayerWorldPositionStorage` - PostgreSQL storage for positions
+- `WorldCommand` - `/world` command for listing and teleporting
+
+**Features:**
+- Separate inventory groups per world
+- Per-world gamemode enforcement
+- Position memory (return to where you were)
+- Custom game rules per world
+- Instant teleport option (skip warmup)
+
+### 9. Custom Message Providers
+
+Components that customize Minecraft's default messages to match the plugin's visual style.
+
+**ConnectionMessageProvider** (`welcome/`):
+- Replaces join/leave broadcasts with `[+] PlayerName` / `[-] PlayerName`
+- Uses green plus, red minus, gray brackets and name
+
+**DeathMessageProvider** (`death/`):
+- Replaces all vanilla death messages with 150+ custom variants
+- Color scheme: victim `GRAY`, killer `RED`, message text `DARK_GRAY`
+- Categories: environmental, entity attacks, PvP, explosions, projectiles, misc
+- `DeathMessages` class contains all variant lists organized by `DamageCause`
+
+**ChatMessageProvider** (`welcome/`):
+- Formats chat as `PlayerName: message`
+- Uses Paper's `AsyncChatEvent` with custom renderer
+- Colors: name `GRAY`, colon `DARK_GRAY`, message `WHITE`
+
 ---
 
 ## Common Conventions
@@ -395,6 +457,7 @@ Each system has a consistent prefix:
 - Home: `[Home]` (light purple)
 - Day: `[☀]` (gold/yellow)
 - Join: `[★]` (gold/yellow)
+- World: `[World]` (gold)
 
 ---
 
@@ -477,6 +540,10 @@ SQL migrations live in `src/main/resources/migrations/` and follow the pattern:
 003_homes_composite_primary_key.sql
 004_home_soft_delete.sql
 005_create_player_sessions.sql
+006_create_inventory_snapshots.sql
+007_create_inventory_group_snapshots.sql
+008_create_player_world_positions.sql
+009_world_positions_use_uuid.sql
 ```
 
 - Files are sorted by numeric prefix and run in order

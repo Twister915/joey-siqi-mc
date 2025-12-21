@@ -53,6 +53,23 @@ Themed messages at the start of each Minecraft day:
 - Context-aware (night, storms, empty server)
 - Mix of inviting, humorous, and mysterious messages
 
+### Multi-World System
+Create and manage custom worlds with separate configurations. See [doc/multiworld.md](doc/multiworld.md) for details.
+- `/world` - List all worlds (click to teleport)
+- `/world <name>` - Teleport to a specific world
+- **Separate inventories** - Different inventory groups per world
+- **Per-world gamemodes** - Survival in main world, creative in build world
+- **Position memory** - Returns you to where you were in each world
+
+### Custom Messages
+All server messages styled to match the plugin's visual theme:
+- **Join/Leave**: `[+] PlayerName` (green plus) / `[-] PlayerName` (red minus)
+- **Death**: 150+ humorous variants for all death types
+- **Chat**: `PlayerName: message` format with gray name
+
+### Player Stats
+- `/ontime` - View your current session time and total playtime
+
 ## Requirements
 
 - Paper/Spigot 1.21+
@@ -101,6 +118,9 @@ All persistent data is stored in PostgreSQL:
 - **home_shares** - Tracks which homes are shared with which players
 - **back_locations** - Death and teleport-from locations for `/back`
 - **player_sessions** - Player connection history for ID lookups and online time tracking
+- **inventory_snapshots** - Player inventory, health, XP saves per inventory group
+- **inventory_group_snapshots** - Tracks which inventory group each player is in
+- **player_world_positions** - Last position in each world for position memory
 - **migration_state** - Tracks applied database migrations
 
 Database migrations run automatically on startup.
