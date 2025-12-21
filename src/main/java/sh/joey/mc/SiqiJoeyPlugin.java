@@ -19,6 +19,8 @@ import sh.joey.mc.bossbar.TeleportCountdownProvider;
 import sh.joey.mc.bossbar.WeatherChangeProvider;
 import sh.joey.mc.day.DayMessageProvider;
 import sh.joey.mc.day.DayMessageDebugCommand;
+import sh.joey.mc.death.DeathMessageProvider;
+import sh.joey.mc.welcome.ConnectionMessageProvider;
 import sh.joey.mc.welcome.JoinMessageProvider;
 import sh.joey.mc.welcome.ServerPingProvider;
 import sh.joey.mc.cmd.CmdExecutor;
@@ -142,11 +144,18 @@ public final class SiqiJoeyPlugin extends JavaPlugin {
         components.add(CmdExecutor.register(this, new DayMessageDebugCommand()));
 
         // Welcome message systems
+        var connectionMessageProvider = new ConnectionMessageProvider(this);
+        components.add(connectionMessageProvider);
+
         var joinMessageProvider = new JoinMessageProvider(this);
         components.add(joinMessageProvider);
 
         var serverPingProvider = new ServerPingProvider(this);
         components.add(serverPingProvider);
+
+        // Death message system
+        var deathMessageProvider = new DeathMessageProvider(this);
+        components.add(deathMessageProvider);
 
         // Monitor to verify time pauses when server is empty
         var timePassingMonitor = new TimePassingMonitor(this);
