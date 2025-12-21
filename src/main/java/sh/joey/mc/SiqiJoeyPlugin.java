@@ -20,6 +20,7 @@ import sh.joey.mc.bossbar.WeatherChangeProvider;
 import sh.joey.mc.day.DayMessageProvider;
 import sh.joey.mc.day.DayMessageDebugCommand;
 import sh.joey.mc.death.DeathMessageProvider;
+import sh.joey.mc.welcome.ChatMessageProvider;
 import sh.joey.mc.welcome.ConnectionMessageProvider;
 import sh.joey.mc.welcome.JoinMessageProvider;
 import sh.joey.mc.welcome.ServerPingProvider;
@@ -152,6 +153,9 @@ public final class SiqiJoeyPlugin extends JavaPlugin {
 
         var serverPingProvider = new ServerPingProvider(this);
         components.add(serverPingProvider);
+
+        var chatMessageProvider = new ChatMessageProvider(this);
+        components.add(chatMessageProvider);
 
         // Death message system
         var deathMessageProvider = new DeathMessageProvider(this);
