@@ -89,6 +89,19 @@ public record WorldsConfig(Map<String, WorldConfig> worlds) {
             // Parse teleport warmup (default true - use warmup; false = instant teleport)
             boolean teleportWarmup = worldSection.getBoolean("teleport_warmup", true);
 
+            // Parse fixed time (optional, 0-24000)
+            OptionalLong time;
+            if (worldSection.contains("time")) {
+                time = OptionalLong.of(worldSection.getLong("time"));
+            } else {
+                time = OptionalLong.empty();
+            }
+
+            // Parse fixed weather (optional)
+            Optional<WorldConfig.Weather> weather = Optional.ofNullable(
+                    worldSection.getString("weather"))
+                    .map(WorldConfig.Weather::fromString);
+
             WorldConfig worldConfig = new WorldConfig(
                     worldName.toLowerCase(),
                     seed,
@@ -101,7 +114,9 @@ public record WorldsConfig(Map<String, WorldConfig> worlds) {
                     difficulty,
                     Collections.unmodifiableMap(gameRules),
                     inventoryGroup.toLowerCase(),
-                    teleportWarmup
+                    teleportWarmup,
+                    time,
+                    weather
             );
 
             worlds.put(worldName.toLowerCase(), worldConfig);

@@ -20,9 +20,11 @@ import java.util.OptionalLong;
  * @param structures        Whether to generate structures (villages, etc.) - only for new worlds
  * @param hidden            If true, world is not shown in /world list and cannot be teleported to directly
  * @param difficulty        Optional difficulty setting for this world
- * @param gameRules         Game rule overrides (e.g., doMobSpawning=false)
+ * @param gameRules         Game rule overrides (e.g., spawn_mobs=false)
  * @param inventoryGroup    The inventory group this world belongs to
  * @param teleportWarmup    If false, teleports from this world are instant (no warmup countdown)
+ * @param time              Optional fixed time (0-24000). Use with advance_time game rule set to false.
+ * @param weather           Optional fixed weather (CLEAR, RAIN, THUNDER). Use with advance_weather game rule set to false.
  */
 public record WorldConfig(
         String name,
@@ -36,8 +38,30 @@ public record WorldConfig(
         Optional<Difficulty> difficulty,
         Map<String, String> gameRules,
         String inventoryGroup,
-        boolean teleportWarmup
+        boolean teleportWarmup,
+        OptionalLong time,
+        Optional<Weather> weather
 ) {
+    /**
+     * Weather states that can be set on a world.
+     */
+    public enum Weather {
+        CLEAR,
+        RAIN,
+        THUNDER;
+
+        public static Weather fromString(String value) {
+            if (value == null) {
+                return null;
+            }
+            return switch (value.toLowerCase()) {
+                case "rain", "rainy" -> RAIN;
+                case "thunder", "storm", "thunderstorm" -> THUNDER;
+                case "clear", "sunny" -> CLEAR;
+                default -> null;
+            };
+        }
+    }
     /**
      * World dimensions with their corresponding Bukkit Environment.
      */

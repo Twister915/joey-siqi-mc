@@ -2,6 +2,8 @@ package sh.joey.mc.multiworld;
 
 import org.bukkit.Bukkit;
 import org.bukkit.GameRule;
+import org.bukkit.NamespacedKey;
+import org.bukkit.Registry;
 import org.bukkit.World;
 import org.bukkit.WorldCreator;
 import org.bukkit.WorldType;
@@ -80,13 +82,36 @@ public final class WorldManager {
         // Apply difficulty
         config.difficulty().ifPresent(world::setDifficulty);
 
+        // Apply fixed time
+        config.time().ifPresent(time -> world.setFullTime(time));
+
+        // Apply fixed weather
+        config.weather().ifPresent(weather -> {
+            switch (weather) {
+                case CLEAR -> {
+                    world.setStorm(false);
+                    world.setThundering(false);
+                }
+                case RAIN -> {
+                    world.setStorm(true);
+                    world.setThundering(false);
+                }
+                case THUNDER -> {
+                    world.setStorm(true);
+                    world.setThundering(true);
+                }
+            }
+        });
+
         // Apply game rules
         for (var entry : config.gameRules().entrySet()) {
             String ruleName = entry.getKey();
             String value = entry.getValue();
 
+            NamespacedKey key = NamespacedKey.minecraft(ruleName);
+
             @SuppressWarnings("unchecked")
-            GameRule<Object> rule = (GameRule<Object>) GameRule.getByName(ruleName);
+            GameRule<Object> rule = (GameRule<Object>) Registry.GAME_RULE.get(key);
             if (rule == null) {
                 logger.warning("Unknown game rule '" + ruleName + "' for world " + world.getName());
                 continue;

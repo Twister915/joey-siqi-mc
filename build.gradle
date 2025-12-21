@@ -15,11 +15,11 @@ repositories {
 }
 
 dependencies {
-    compileOnly 'io.papermc.paper:paper-api:1.21.10-R0.1-SNAPSHOT'
+    compileOnly 'io.papermc.paper:paper-api:1.21.11-R0.1-SNAPSHOT'
     compileOnly 'com.google.code.gson:gson:2.10.1' // Provided by Paper at runtime
     implementation 'io.reactivex.rxjava3:rxjava:3.1.12'
     implementation 'com.zaxxer:HikariCP:5.1.0'
-    implementation 'org.postgresql:postgresql:42.7.4'
+    implementation 'org.postgresql:postgresql:42.7.7'
 }
 
 tasks.named('build') {
