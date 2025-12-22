@@ -26,6 +26,7 @@ worlds:
       doDaylightCycle: false
     inventory_group: creative
     teleport_warmup: false
+    disable_advancements: true
 ```
 
 ### Config Options
@@ -43,6 +44,7 @@ worlds:
 | `game_rules` | map | (none) | Game rule overrides (see below) |
 | `inventory_group` | string | (world name) | Inventory group name |
 | `teleport_warmup` | boolean | `true` | If false, teleports from this world are instant (no countdown) |
+| `disable_advancements` | boolean | `false` | If true, players cannot earn advancements in this world |
 
 ## Superflat Generator Settings
 
@@ -163,6 +165,7 @@ worlds:
       doDaylightCycle: false
     inventory_group: creative
     teleport_warmup: false
+    disable_advancements: true
 ```
 
 **Note:** Add `world` to config if you want gamemode to switch back to SURVIVAL when returning from creative worlds.

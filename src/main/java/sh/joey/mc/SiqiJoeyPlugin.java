@@ -46,6 +46,7 @@ import sh.joey.mc.teleport.commands.TpCommand;
 import sh.joey.mc.rx.BukkitSchedulers;
 import sh.joey.mc.world.TimePassingMonitor;
 import sh.joey.mc.inventory.InventorySnapshotStorage;
+import sh.joey.mc.multiworld.AdvancementBlocker;
 import sh.joey.mc.multiworld.GamemodeManager;
 import sh.joey.mc.multiworld.InventoryGroupManager;
 import sh.joey.mc.multiworld.InventoryGroupStorage;
@@ -175,6 +176,9 @@ public final class SiqiJoeyPlugin extends JavaPlugin {
 
         var gamemodeManager = new GamemodeManager(this, worldManager);
         components.add(gamemodeManager);
+
+        var advancementBlocker = new AdvancementBlocker(this, worldManager);
+        components.add(advancementBlocker);
 
         var inventoryGroupManager = new InventoryGroupManager(
                 this, worldManager, inventorySnapshotStorage, inventoryGroupStorage);

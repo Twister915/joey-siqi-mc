@@ -25,6 +25,7 @@ import java.util.OptionalLong;
  * @param teleportWarmup    If false, teleports from this world are instant (no warmup countdown)
  * @param time              Optional fixed time (0-24000). Use with advance_time game rule set to false.
  * @param weather           Optional fixed weather (CLEAR, RAIN, THUNDER). Use with advance_weather game rule set to false.
+ * @param disableAdvancements If true, players cannot earn advancements in this world
  */
 public record WorldConfig(
         String name,
@@ -40,7 +41,8 @@ public record WorldConfig(
         String inventoryGroup,
         boolean teleportWarmup,
         OptionalLong time,
-        Optional<Weather> weather
+        Optional<Weather> weather,
+        boolean disableAdvancements
 ) {
     /**
      * Weather states that can be set on a world.

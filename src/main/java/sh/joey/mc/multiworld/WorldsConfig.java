@@ -102,6 +102,9 @@ public record WorldsConfig(Map<String, WorldConfig> worlds) {
                     worldSection.getString("weather"))
                     .map(WorldConfig.Weather::fromString);
 
+            // Parse disable advancements (default false)
+            boolean disableAdvancements = worldSection.getBoolean("disable_advancements", false);
+
             WorldConfig worldConfig = new WorldConfig(
                     worldName.toLowerCase(),
                     seed,
@@ -116,7 +119,8 @@ public record WorldsConfig(Map<String, WorldConfig> worlds) {
                     inventoryGroup.toLowerCase(),
                     teleportWarmup,
                     time,
-                    weather
+                    weather,
+                    disableAdvancements
             );
 
             worlds.put(worldName.toLowerCase(), worldConfig);

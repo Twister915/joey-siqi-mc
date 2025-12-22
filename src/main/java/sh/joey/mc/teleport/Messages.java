@@ -57,10 +57,11 @@ public final class Messages {
     }
 
     public static void countdown(Player player, int seconds) {
+        String unit = seconds == 1 ? "second" : "seconds";
         player.sendMessage(PREFIX
                 .append(Component.text("Teleporting in ").color(NamedTextColor.GRAY))
                 .append(Component.text(seconds).color(NamedTextColor.AQUA).decorate(TextDecoration.BOLD))
-                .append(Component.text(" seconds... Don't move!").color(NamedTextColor.GRAY)));
+                .append(Component.text(" " + unit + "... Don't move!").color(NamedTextColor.GRAY)));
     }
 
     public static void teleportCancelled(Player player) {
