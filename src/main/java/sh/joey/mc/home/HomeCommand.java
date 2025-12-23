@@ -67,6 +67,11 @@ public final class HomeCommand implements Command {
     }
 
     @Override
+    public String getPermission() {
+        return "smp.home";
+    }
+
+    @Override
     public Completable handle(SiqiJoeyPlugin plugin, CommandSender sender, String[] args) {
         return Completable.defer(() -> {
             if (!(sender instanceof Player player)) {

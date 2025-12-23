@@ -33,6 +33,11 @@ public final class BackCommand implements Command {
     }
 
     @Override
+    public String getPermission() {
+        return "smp.back";
+    }
+
+    @Override
     public Completable handle(SiqiJoeyPlugin plugin, CommandSender sender, String[] args) {
         return Completable.defer(() -> {
             if (!(sender instanceof Player player)) {

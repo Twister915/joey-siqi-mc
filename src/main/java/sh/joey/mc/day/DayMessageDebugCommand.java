@@ -46,6 +46,11 @@ public final class DayMessageDebugCommand implements Command {
     }
 
     @Override
+    public String getPermission() {
+        return "smp.debug";
+    }
+
+    @Override
     public Completable handle(SiqiJoeyPlugin plugin, CommandSender sender, String[] args) {
         return Completable.fromAction(() -> {
             if (!(sender instanceof Player player)) {

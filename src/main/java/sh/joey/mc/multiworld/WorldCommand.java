@@ -57,6 +57,11 @@ public final class WorldCommand implements Command {
     }
 
     @Override
+    public String getPermission() {
+        return "smp.world";
+    }
+
+    @Override
     public Completable handle(SiqiJoeyPlugin plugin, CommandSender sender, String[] args) {
         if (!(sender instanceof Player player)) {
             sender.sendMessage("This command can only be used by players.");

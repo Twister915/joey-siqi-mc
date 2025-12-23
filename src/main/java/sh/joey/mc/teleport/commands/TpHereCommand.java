@@ -19,16 +19,16 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * /tp <player> command - sends a teleport request to another player.
+ * /tphere <player> command - sends a request to teleport a player to you.
  */
-public final class TpCommand implements Command {
+public final class TpHereCommand implements Command {
     private final SiqiJoeyPlugin plugin;
     private final PluginConfig config;
     private final SafeTeleporter safeTeleporter;
     private final ConfirmationManager confirmationManager;
 
-    public TpCommand(SiqiJoeyPlugin plugin, PluginConfig config, SafeTeleporter safeTeleporter,
-                     ConfirmationManager confirmationManager) {
+    public TpHereCommand(SiqiJoeyPlugin plugin, PluginConfig config, SafeTeleporter safeTeleporter,
+                         ConfirmationManager confirmationManager) {
         this.plugin = plugin;
         this.config = config;
         this.safeTeleporter = safeTeleporter;
@@ -37,12 +37,12 @@ public final class TpCommand implements Command {
 
     @Override
     public String getName() {
-        return "tp";
+        return "tphere";
     }
 
     @Override
     public String getPermission() {
-        return "smp.tp";
+        return "smp.tphere";
     }
 
     @Override
@@ -54,7 +54,7 @@ public final class TpCommand implements Command {
             }
 
             if (args.length != 1) {
-                Messages.error(player, "Usage: /tp <player>");
+                Messages.error(player, "Usage: /tphere <player>");
                 return;
             }
 
@@ -67,7 +67,7 @@ public final class TpCommand implements Command {
             }
 
             if (target.equals(player)) {
-                Messages.error(player, "You can't teleport to yourself!");
+                Messages.error(player, "You can't teleport yourself to yourself!");
                 return;
             }
 
@@ -106,7 +106,7 @@ public final class TpCommand implements Command {
 
             @Override
             public String promptText() {
-                return requester.getName() + " wants to teleport to you!";
+                return requester.getName() + " wants to teleport you to them!";
             }
 
             @Override
@@ -114,9 +114,9 @@ public final class TpCommand implements Command {
                 Player req = plugin.getServer().getPlayer(requesterId);
                 Player tgt = plugin.getServer().getPlayer(targetId);
                 if (req != null && tgt != null) {
-                    Messages.success(tgt, "Accepted teleport from " + req.getName() + "!");
+                    Messages.success(tgt, "Accepted teleport to " + req.getName() + "!");
                     Messages.success(req, tgt.getName() + " accepted your request!");
-                    safeTeleporter.teleport(req, tgt.getLocation(), s -> {});
+                    safeTeleporter.teleport(tgt, req.getLocation(), s -> {});
                 }
             }
 

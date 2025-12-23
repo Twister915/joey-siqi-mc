@@ -2,6 +2,8 @@ package sh.joey.mc.cmd;
 
 import com.destroystokyo.paper.event.server.AsyncTabCompleteEvent;
 import io.reactivex.rxjava3.disposables.Disposable;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 import org.jetbrains.annotations.NotNull;
@@ -29,6 +31,11 @@ public final class CmdExecutor implements CommandExecutor {
         this.handler = handler;
     }
 
+    private boolean hasPermission(CommandSender sender) {
+        String permission = handler.getPermission();
+        return permission == null || sender.hasPermission(permission);
+    }
+
     private Disposable watchTabCompletes() {
         String prefix1 = handler.getName().toLowerCase() + " ";
         String prefix2 = "/" + prefix1;
@@ -39,6 +46,7 @@ public final class CmdExecutor implements CommandExecutor {
                     String lowerBuffer = event.getBuffer().toLowerCase();
                     return lowerBuffer.startsWith(prefix1) || lowerBuffer.startsWith(prefix2);
                 })
+                .filter(event -> hasPermission(event.getSender()))
                 .subscribe(event -> {
                     try {
                         String buffer = event.getBuffer();
@@ -65,6 +73,12 @@ public final class CmdExecutor implements CommandExecutor {
 
     @Override
     public boolean onCommand(@NotNull CommandSender sender, org.bukkit.command.@NotNull Command command, @NotNull String label, @NotNull String @NotNull [] args) {
+        if (!hasPermission(sender)) {
+            sender.sendMessage(Component.text("You don't have permission to use this command.")
+                    .color(NamedTextColor.RED));
+            return true;
+        }
+
         try {
             handler.handle(plugin, sender, args)
                     .subscribe(

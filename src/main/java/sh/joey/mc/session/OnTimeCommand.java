@@ -44,6 +44,11 @@ public final class OnTimeCommand implements Command {
     }
 
     @Override
+    public String getPermission() {
+        return "smp.ontime";
+    }
+
+    @Override
     public Completable handle(SiqiJoeyPlugin plugin, CommandSender sender, String[] args) {
         return Completable.defer(() -> {
             if (args.length == 0) {

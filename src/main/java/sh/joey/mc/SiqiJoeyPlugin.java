@@ -43,6 +43,7 @@ import sh.joey.mc.teleport.PluginConfig;
 import sh.joey.mc.teleport.SafeTeleporter;
 import sh.joey.mc.teleport.commands.BackCommand;
 import sh.joey.mc.teleport.commands.TpCommand;
+import sh.joey.mc.teleport.commands.TpHereCommand;
 import sh.joey.mc.rx.BukkitSchedulers;
 import sh.joey.mc.world.TimePassingMonitor;
 import sh.joey.mc.inventory.InventorySnapshotStorage;
@@ -55,6 +56,25 @@ import sh.joey.mc.multiworld.WorldCommand;
 import sh.joey.mc.multiworld.WorldManager;
 import sh.joey.mc.multiworld.WorldPositionTracker;
 import sh.joey.mc.multiworld.WorldsConfig;
+import sh.joey.mc.permissions.DisplayManager;
+import sh.joey.mc.permissions.PermissionAttacher;
+import sh.joey.mc.permissions.PermissionCache;
+import sh.joey.mc.permissions.PermissionResolver;
+import sh.joey.mc.permissions.PermissionStorage;
+import sh.joey.mc.permissions.cmd.PermCommand;
+import sh.joey.mc.utility.ClearCommand;
+import sh.joey.mc.utility.GiveCommand;
+import sh.joey.mc.utility.ItemCommand;
+import sh.joey.mc.utility.ListCommand;
+import sh.joey.mc.utility.RemoveCommand;
+import sh.joey.mc.utility.SetSpawnCommand;
+import sh.joey.mc.utility.SpawnCommand;
+import sh.joey.mc.utility.SpawnStorage;
+import sh.joey.mc.utility.SuicideCommand;
+import sh.joey.mc.utility.TimeCommand;
+import sh.joey.mc.utility.WarpCommand;
+import sh.joey.mc.utility.WarpStorage;
+import sh.joey.mc.utility.WeatherCommand;
 
 @SuppressWarnings("unused")
 public final class SiqiJoeyPlugin extends JavaPlugin {
@@ -86,6 +106,19 @@ public final class SiqiJoeyPlugin extends JavaPlugin {
         components.add(playerSessionTracker);
         components.add(CmdExecutor.register(this,
                 new OnTimeCommand(this, playerSessionStorage, playerSessionTracker)));
+
+        // Permission system
+        var permissionStorage = new PermissionStorage(storageService);
+        var permissionResolver = new PermissionResolver(permissionStorage);
+        var permissionCache = new PermissionCache(this, permissionResolver);
+        components.add(permissionCache);
+        var permissionAttacher = new PermissionAttacher(this, permissionCache);
+        components.add(permissionAttacher);
+        var displayManager = new DisplayManager(this, permissionCache);
+        components.add(displayManager);
+        components.add(CmdExecutor.register(this,
+                new PermCommand(this, permissionStorage, playerSessionStorage,
+                        permissionCache, permissionAttacher, displayManager)));
 
         // Boss bar system with priority-based providers
         var bossBarManager = new BossBarManager(this);
@@ -129,6 +162,7 @@ public final class SiqiJoeyPlugin extends JavaPlugin {
         // Register commands using CmdExecutor
         components.add(CmdExecutor.register(this, new BackCommand(this, locationTracker, safeTeleporter)));
         components.add(CmdExecutor.register(this, new TpCommand(this, config, safeTeleporter, confirmationManager)));
+        components.add(CmdExecutor.register(this, new TpHereCommand(this, config, safeTeleporter, confirmationManager)));
         components.add(CmdExecutor.register(this, ConfirmCommands.accept(confirmationManager)));
         components.add(CmdExecutor.register(this, ConfirmCommands.decline(confirmationManager)));
 
@@ -155,7 +189,7 @@ public final class SiqiJoeyPlugin extends JavaPlugin {
         var serverPingProvider = new ServerPingProvider(this);
         components.add(serverPingProvider);
 
-        var chatMessageProvider = new ChatMessageProvider(this);
+        var chatMessageProvider = new ChatMessageProvider(this, displayManager);
         components.add(chatMessageProvider);
 
         // Death message system
@@ -189,6 +223,27 @@ public final class SiqiJoeyPlugin extends JavaPlugin {
 
         components.add(CmdExecutor.register(this,
                 new WorldCommand(this, worldManager, safeTeleporter, playerWorldPositionStorage)));
+
+        // Utility commands
+        components.add(CmdExecutor.register(this, new ClearCommand("clear", confirmationManager)));
+        components.add(CmdExecutor.register(this, new ClearCommand("ci", confirmationManager)));
+        components.add(CmdExecutor.register(this, new ItemCommand("item")));
+        components.add(CmdExecutor.register(this, new ItemCommand("i")));
+        components.add(CmdExecutor.register(this, new GiveCommand()));
+        components.add(CmdExecutor.register(this, new TimeCommand()));
+        components.add(CmdExecutor.register(this, new WeatherCommand()));
+        components.add(CmdExecutor.register(this, new ListCommand()));
+        components.add(CmdExecutor.register(this, new SuicideCommand(confirmationManager)));
+        components.add(CmdExecutor.register(this, new RemoveCommand()));
+
+        // Warp system
+        var warpStorage = new WarpStorage(storageService);
+        components.add(CmdExecutor.register(this, new WarpCommand(this, warpStorage, safeTeleporter)));
+
+        // Spawn system
+        var spawnStorage = new SpawnStorage(storageService);
+        components.add(CmdExecutor.register(this, new SpawnCommand(this, spawnStorage, safeTeleporter)));
+        components.add(CmdExecutor.register(this, new SetSpawnCommand(this, spawnStorage)));
 
         getLogger().info("Plugin enabled!");
     }
