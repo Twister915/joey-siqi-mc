@@ -5,6 +5,7 @@ import net.kyori.adventure.text.event.ClickEvent;
 import net.kyori.adventure.text.event.HoverEvent;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextDecoration;
+import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 
 import java.util.ArrayList;
@@ -19,7 +20,7 @@ import java.util.function.Function;
  * - Calculating visual line counts (accounting for word wrap)
  * - Building pages that fit exactly in Minecraft's 20-line chat window
  * - Rendering clickable navigation
- * - Compact mode for single-page content
+ * - Console-friendly output (no padding, item-count pagination)
  */
 public final class ChatPaginator {
 
@@ -30,7 +31,7 @@ public final class ChatPaginator {
     private String backButtonText;
     private String backButtonCommand;
 
-    // Fixed line counts for full pagination mode
+    // Fixed line counts for full pagination mode (players only)
     // Header: title + subtitle + blank = 3 lines
     // Footer: blank + navigation + back button = 3 lines
     // Content: 20 - 3 - 3 = 14 lines
@@ -38,8 +39,12 @@ public final class ChatPaginator {
     private static final int FOOTER_LINES = 3;
     private static final int CONTENT_LINES_PER_PAGE = ChatMetrics.CHAT_VISIBLE_LINES - HEADER_LINES - FOOTER_LINES;
 
-    // Cached page data (built lazily)
-    private List<List<PaginatedItem>> pages;
+    // Console uses simpler item-count pagination
+    private static final int CONSOLE_ITEMS_PER_PAGE = 15;
+
+    // Cached page data (built lazily, separate for player vs console)
+    private List<List<PaginatedItem>> playerPages;
+    private List<List<PaginatedItem>> consolePages;
 
     /**
      * Sets the title shown at the top of each page.
@@ -81,7 +86,8 @@ public final class ChatPaginator {
      */
     public ChatPaginator add(PaginatedItem item) {
         this.items.add(item);
-        this.pages = null; // invalidate cache
+        this.playerPages = null;
+        this.consolePages = null;
         return this;
     }
 
@@ -90,7 +96,8 @@ public final class ChatPaginator {
      */
     public ChatPaginator addAll(Collection<PaginatedItem> items) {
         this.items.addAll(items);
-        this.pages = null;
+        this.playerPages = null;
+        this.consolePages = null;
         return this;
     }
 
@@ -103,14 +110,6 @@ public final class ChatPaginator {
     }
 
     /**
-     * Returns the total number of pages.
-     */
-    public int totalPages() {
-        buildPagesIfNeeded();
-        return Math.max(1, pages.size());
-    }
-
-    /**
      * Returns the total number of items.
      */
     public int totalItems() {
@@ -118,25 +117,28 @@ public final class ChatPaginator {
     }
 
     /**
-     * Sends the specified page to the player.
-     * Always emits exactly 20 lines to fill the Minecraft chat window.
+     * Sends the specified page to the sender.
+     * For players: fills the 20-line chat window with padding.
+     * For console: simple output without padding or clickable elements.
      */
-    public void sendPage(Player player, int page) {
-        buildPagesIfNeeded();
+    public void sendPage(CommandSender sender, int page) {
+        boolean isPlayer = sender instanceof Player;
+        List<List<PaginatedItem>> pages = isPlayer ? buildPlayerPages() : buildConsolePages();
 
         int totalPages = Math.max(1, pages.size());
-
-        // Clamp page to valid range
         page = Math.max(1, Math.min(page, totalPages));
 
-        sendFullPage(player, page, totalPages);
+        if (isPlayer) {
+            sendPlayerPage(sender, pages, page, totalPages);
+        } else {
+            sendConsolePage(sender, pages, page, totalPages);
+        }
     }
 
     /**
-     * Sends a full paginated page (exactly 20 lines).
-     * Padding is emitted first so content appears at the bottom of the chat window.
+     * Sends a page formatted for players (with padding and clickable navigation).
      */
-    private void sendFullPage(Player player, int page, int totalPages) {
+    private void sendPlayerPage(CommandSender sender, List<List<PaginatedItem>> pages, int page, int totalPages) {
         List<PaginatedItem> pageContent = pages.isEmpty() ? List.of() : pages.get(page - 1);
 
         // Calculate content visual lines
@@ -148,46 +150,75 @@ public final class ChatPaginator {
         // === PADDING (emitted first, so it appears at top) ===
         int paddingLines = CONTENT_LINES_PER_PAGE - contentVisualLines;
         for (int i = 0; i < paddingLines; i++) {
-            player.sendMessage(Component.empty());
+            sender.sendMessage(Component.empty());
         }
 
         // === HEADER (3 lines) ===
         if (title != null) {
-            // Append page indicator to title
-            player.sendMessage(title.append(Component.text(" - Page " + page + "/" + totalPages)
+            sender.sendMessage(title.append(Component.text(" - Page " + page + "/" + totalPages)
                 .color(NamedTextColor.GRAY)
                 .decoration(TextDecoration.BOLD, false)));
         } else {
-            player.sendMessage(Component.text("Page " + page + "/" + totalPages).color(NamedTextColor.GOLD));
+            sender.sendMessage(Component.text("Page " + page + "/" + totalPages).color(NamedTextColor.GOLD));
         }
         if (subtitle != null) {
-            player.sendMessage(subtitle);
+            sender.sendMessage(subtitle);
         } else {
-            player.sendMessage(Component.empty());
+            sender.sendMessage(Component.empty());
         }
-        player.sendMessage(Component.empty());
+        sender.sendMessage(Component.empty());
 
         // === CONTENT ===
         for (PaginatedItem item : pageContent) {
-            player.sendMessage(item.render());
+            sender.sendMessage(item.render());
         }
 
         // === FOOTER (3 lines) ===
-        player.sendMessage(Component.empty());
-        player.sendMessage(buildNavigation(page, totalPages));
+        sender.sendMessage(Component.empty());
+        sender.sendMessage(buildPlayerNavigation(page, totalPages));
         if (backButtonText != null && backButtonCommand != null) {
-            player.sendMessage(Component.text("[" + backButtonText + "]").color(NamedTextColor.GRAY)
+            sender.sendMessage(Component.text("[" + backButtonText + "]").color(NamedTextColor.GRAY)
                 .clickEvent(ClickEvent.runCommand(backButtonCommand))
                 .hoverEvent(HoverEvent.showText(Component.text("Click to go back"))));
         } else {
-            player.sendMessage(Component.empty());
+            sender.sendMessage(Component.empty());
         }
     }
 
     /**
-     * Builds the navigation bar with prev/next buttons and page numbers.
+     * Sends a page formatted for console (no padding, no clickable elements).
      */
-    private Component buildNavigation(int page, int totalPages) {
+    private void sendConsolePage(CommandSender sender, List<List<PaginatedItem>> pages, int page, int totalPages) {
+        List<PaginatedItem> pageContent = pages.isEmpty() ? List.of() : pages.get(page - 1);
+
+        // === HEADER ===
+        if (title != null) {
+            sender.sendMessage(title.append(Component.text(" - Page " + page + "/" + totalPages)
+                .color(NamedTextColor.GRAY)
+                .decoration(TextDecoration.BOLD, false)));
+        } else {
+            sender.sendMessage(Component.text("Page " + page + "/" + totalPages).color(NamedTextColor.GOLD));
+        }
+        if (subtitle != null) {
+            sender.sendMessage(subtitle);
+        }
+
+        // === CONTENT ===
+        for (PaginatedItem item : pageContent) {
+            sender.sendMessage(item.render());
+        }
+
+        // === FOOTER (only if multiple pages) ===
+        if (totalPages > 1 && commandBuilder != null) {
+            sender.sendMessage(Component.text("Use " + commandBuilder.apply(page) + " <page> to navigate")
+                .color(NamedTextColor.GRAY));
+        }
+    }
+
+    /**
+     * Builds the navigation bar with prev/next buttons for players.
+     */
+    private Component buildPlayerNavigation(int page, int totalPages) {
         if (commandBuilder == null) {
             return Component.text("Page " + page + " of " + totalPages).color(NamedTextColor.GRAY);
         }
@@ -232,16 +263,16 @@ public final class ChatPaginator {
     }
 
     /**
-     * Builds pages by accumulating visual line counts.
+     * Builds pages for players by accumulating visual line counts.
      */
-    private void buildPagesIfNeeded() {
-        if (pages != null) {
-            return;
+    private List<List<PaginatedItem>> buildPlayerPages() {
+        if (playerPages != null) {
+            return playerPages;
         }
 
-        pages = new ArrayList<>();
+        playerPages = new ArrayList<>();
         if (items.isEmpty()) {
-            return;
+            return playerPages;
         }
 
         List<PaginatedItem> currentPage = new ArrayList<>();
@@ -253,7 +284,7 @@ public final class ChatPaginator {
             // If adding this item would exceed page limit, start a new page
             // (but always add at least one item per page to avoid infinite loop)
             if (currentPageVisualLines + itemVisualLines > CONTENT_LINES_PER_PAGE && !currentPage.isEmpty()) {
-                pages.add(currentPage);
+                playerPages.add(currentPage);
                 currentPage = new ArrayList<>();
                 currentPageVisualLines = 0;
             }
@@ -263,7 +294,39 @@ public final class ChatPaginator {
         }
 
         if (!currentPage.isEmpty()) {
-            pages.add(currentPage);
+            playerPages.add(currentPage);
         }
+
+        return playerPages;
+    }
+
+    /**
+     * Builds pages for console by simple item count.
+     */
+    private List<List<PaginatedItem>> buildConsolePages() {
+        if (consolePages != null) {
+            return consolePages;
+        }
+
+        consolePages = new ArrayList<>();
+        if (items.isEmpty()) {
+            return consolePages;
+        }
+
+        List<PaginatedItem> currentPage = new ArrayList<>();
+
+        for (PaginatedItem item : items) {
+            if (currentPage.size() >= CONSOLE_ITEMS_PER_PAGE) {
+                consolePages.add(currentPage);
+                currentPage = new ArrayList<>();
+            }
+            currentPage.add(item);
+        }
+
+        if (!currentPage.isEmpty()) {
+            consolePages.add(currentPage);
+        }
+
+        return consolePages;
     }
 }

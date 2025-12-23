@@ -13,6 +13,9 @@ commands:
   tp:
     description: Send a teleport request to another player
     usage: /tp <player>
+  tphere:
+    description: Request to teleport a player to you
+    usage: /tphere <player>
   accept:
     description: Accept a pending confirmation request
     usage: /accept
@@ -31,3 +34,145 @@ commands:
   world:
     description: Navigate between configured worlds
     usage: /world [name]
+  perm:
+    description: Manage permissions and groups
+    usage: /perm <group|player|reload>
+  clear:
+    description: Clear your inventory or another player's inventory
+    usage: /clear [player]
+  ci:
+    description: Clear your inventory (alias for /clear)
+    usage: /ci [player]
+  item:
+    description: Give yourself an item
+    usage: /item <material> [amount]
+  i:
+    description: Give yourself an item (alias for /item)
+    usage: /i <material> [amount]
+  give:
+    description: Give a player an item
+    usage: /give <player> <material> [amount]
+  time:
+    description: Set the time in the current world
+    usage: /time <day|night|noon|midnight|sunrise|sunset|ticks>
+  weather:
+    description: Set the weather in the current world
+    usage: /weather <clear|rain|thunder>
+  list:
+    description: List online players
+    usage: /list
+  warp:
+    description: Teleport to a warp point
+    usage: /warp [name|set|delete|list]
+  spawn:
+    description: Teleport to the world spawn point
+    usage: /spawn
+  setspawn:
+    description: Set the spawn point for the current world
+    usage: /setspawn
+  suicide:
+    description: Kill yourself to respawn
+    usage: /suicide
+  remove:
+    description: Remove entities around you
+    usage: /remove <type|all> [radius]
+
+permissions:
+  smp.*:
+    description: All SMP permissions
+    default: op
+    children:
+      smp.tp: true
+      smp.tphere: true
+      smp.back: true
+      smp.home: true
+      smp.ontime: true
+      smp.world: true
+      smp.clear: true
+      smp.clear.others: true
+      smp.item: true
+      smp.give: true
+      smp.time: true
+      smp.weather: true
+      smp.list: true
+      smp.warp: true
+      smp.warp.set: true
+      smp.spawn: true
+      smp.setspawn: true
+      smp.suicide: true
+      smp.remove: true
+      smp.perm.admin: true
+      smp.debug: true
+
+  smp.tp:
+    description: Send teleport requests to other players
+
+  smp.tphere:
+    description: Request to teleport players to you
+
+  smp.back:
+    description: Return to death or previous teleport location
+
+  smp.home:
+    description: Use home commands (set, delete, teleport, share)
+
+  smp.ontime:
+    description: View online time statistics
+
+  smp.world:
+    description: Navigate between configured worlds
+
+  smp.clear:
+    description: Clear your own inventory
+
+  smp.clear.others:
+    description: Clear other players' inventories
+    default: op
+
+  smp.item:
+    description: Give yourself items
+    default: op
+
+  smp.give:
+    description: Give items to other players
+    default: op
+
+  smp.time:
+    description: Change the time in your current world
+    default: op
+
+  smp.weather:
+    description: Change the weather in your current world
+    default: op
+
+  smp.list:
+    description: List online players
+
+  smp.warp:
+    description: Teleport to warp points
+
+  smp.warp.set:
+    description: Create, update, and delete warp points
+    default: op
+
+  smp.spawn:
+    description: Teleport to world spawn
+
+  smp.setspawn:
+    description: Set the world spawn point
+    default: op
+
+  smp.suicide:
+    description: Kill yourself to respawn
+
+  smp.remove:
+    description: Remove entities around you
+    default: op
+
+  smp.perm.admin:
+    description: Manage permissions and groups
+    default: op
+
+  smp.debug:
+    description: Use debug commands
+    default: op
