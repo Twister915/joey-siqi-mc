@@ -18,6 +18,10 @@ requests:
   # How long a teleport request stays valid (in seconds)
   timeout-seconds: 60
 
+# Tips system - sends helpful tips to players every 5 minutes
+tips:
+  enabled: true
+
 # Multi-world configuration
 # Worlds listed here will be created/loaded on startup
 # Default Minecraft worlds (world, world_nether, world_the_end) use "default" inventory group

@@ -79,6 +79,15 @@ commands:
   seed:
     description: Show the seed for the current world
     usage: /seed
+  survival:
+    description: Teleport to the survival world
+    usage: /survival
+  creative:
+    description: Teleport to the creative world
+    usage: /creative
+  superflat:
+    description: Teleport to the superflat world
+    usage: /superflat
 
 permissions:
   smp.*:

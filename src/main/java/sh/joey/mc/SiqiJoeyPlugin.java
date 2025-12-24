@@ -77,6 +77,10 @@ import sh.joey.mc.utility.TimeCommand;
 import sh.joey.mc.utility.WarpCommand;
 import sh.joey.mc.utility.WarpStorage;
 import sh.joey.mc.utility.WeatherCommand;
+import sh.joey.mc.tips.TipsConfig;
+import sh.joey.mc.tips.TipsProvider;
+import sh.joey.mc.multiworld.WorldAliasCommand;
+import sh.joey.mc.tablist.TablistProvider;
 
 @SuppressWarnings("unused")
 public final class SiqiJoeyPlugin extends JavaPlugin {
@@ -225,8 +229,22 @@ public final class SiqiJoeyPlugin extends JavaPlugin {
         var worldPositionTracker = new WorldPositionTracker(this, playerWorldPositionStorage);
         components.add(worldPositionTracker);
 
-        components.add(CmdExecutor.register(this,
-                new WorldCommand(this, worldManager, safeTeleporter, playerWorldPositionStorage)));
+        var worldCommand = new WorldCommand(this, worldManager, safeTeleporter, playerWorldPositionStorage);
+        components.add(CmdExecutor.register(this, worldCommand));
+
+        // World alias commands
+        components.add(CmdExecutor.register(this, new WorldAliasCommand("survival", "world", worldCommand)));
+        components.add(CmdExecutor.register(this, new WorldAliasCommand("creative", "creative", worldCommand)));
+        components.add(CmdExecutor.register(this, new WorldAliasCommand("superflat", "superflat", worldCommand)));
+
+        // Tips system
+        var tipsConfig = TipsConfig.load(this);
+        var tipsProvider = new TipsProvider(this, tipsConfig);
+        components.add(tipsProvider);
+
+        // Tablist header/footer
+        var tablistProvider = new TablistProvider(this);
+        components.add(tablistProvider);
 
         // Utility commands
         components.add(CmdExecutor.register(this, new ClearCommand("clear", confirmationManager)));
