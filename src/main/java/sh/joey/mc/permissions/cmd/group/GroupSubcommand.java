@@ -393,7 +393,19 @@ public final class GroupSubcommand {
                 .command(p -> "/perm group " + group.canonicalName() + " grants " + p)
                 .backButton("Back", "/perm group " + group.canonicalName() + " inspect");
 
-        for (PermissionGrant grant : group.grants()) {
+        // Sort grants: world-specific first (sorted by world name), then global last
+        List<PermissionGrant> sorted = group.grants().stream()
+                .sorted((a, b) -> {
+                    // Global (null) sorts last
+                    if (a.worldId() == null && b.worldId() == null) return 0;
+                    if (a.worldId() == null) return 1;
+                    if (b.worldId() == null) return -1;
+                    // Both have worlds - sort by world name
+                    return getWorldName(a.worldId()).compareToIgnoreCase(getWorldName(b.worldId()));
+                })
+                .toList();
+
+        for (PermissionGrant grant : sorted) {
             String worldStr = grant.worldId() == null ? "global" : getWorldName(grant.worldId());
             String stateStr = grant.state() ? "✓ ALLOW" : "✗ DENY";
             NamedTextColor stateColor = grant.state() ? NamedTextColor.GREEN : NamedTextColor.RED;
@@ -535,7 +547,7 @@ public final class GroupSubcommand {
                         .append(Component.text("[View]")
                                 .color(NamedTextColor.YELLOW)
                                 .decorate(TextDecoration.UNDERLINED)
-                                .clickEvent(ClickEvent.runCommand("/perm group " + group.canonicalName() + " list grants")))));
+                                .clickEvent(ClickEvent.runCommand("/perm group " + group.canonicalName() + " grants")))));
 
         paginator.sendPage(sender, page);
     }
