@@ -51,6 +51,7 @@ import sh.joey.mc.multiworld.AdvancementBlocker;
 import sh.joey.mc.multiworld.GamemodeManager;
 import sh.joey.mc.multiworld.InventoryGroupManager;
 import sh.joey.mc.multiworld.InventoryGroupStorage;
+import sh.joey.mc.multiworld.PlayerLastWorldStorage;
 import sh.joey.mc.multiworld.PlayerWorldPositionStorage;
 import sh.joey.mc.multiworld.WorldCommand;
 import sh.joey.mc.multiworld.WorldManager;
@@ -67,6 +68,7 @@ import sh.joey.mc.utility.GiveCommand;
 import sh.joey.mc.utility.ItemCommand;
 import sh.joey.mc.utility.ListCommand;
 import sh.joey.mc.utility.RemoveCommand;
+import sh.joey.mc.utility.SeedCommand;
 import sh.joey.mc.utility.SetSpawnCommand;
 import sh.joey.mc.utility.SpawnCommand;
 import sh.joey.mc.utility.SpawnStorage;
@@ -207,15 +209,17 @@ public final class SiqiJoeyPlugin extends JavaPlugin {
         worldManager.loadWorlds();
 
         var inventoryGroupStorage = new InventoryGroupStorage(storageService);
+        var playerLastWorldStorage = new PlayerLastWorldStorage(storageService);
 
-        var gamemodeManager = new GamemodeManager(this, worldManager);
+        var gamemodeManager = new GamemodeManager(this, worldManager, playerLastWorldStorage);
         components.add(gamemodeManager);
 
         var advancementBlocker = new AdvancementBlocker(this, worldManager);
         components.add(advancementBlocker);
 
         var inventoryGroupManager = new InventoryGroupManager(
-                this, worldManager, inventorySnapshotStorage, inventoryGroupStorage);
+                this, worldManager, inventorySnapshotStorage, inventoryGroupStorage,
+                playerLastWorldStorage, playerWorldPositionStorage);
         components.add(inventoryGroupManager);
 
         var worldPositionTracker = new WorldPositionTracker(this, playerWorldPositionStorage);
@@ -235,6 +239,7 @@ public final class SiqiJoeyPlugin extends JavaPlugin {
         components.add(CmdExecutor.register(this, new ListCommand()));
         components.add(CmdExecutor.register(this, new SuicideCommand(confirmationManager)));
         components.add(CmdExecutor.register(this, new RemoveCommand()));
+        components.add(CmdExecutor.register(this, new SeedCommand()));
 
         // Warp system
         var warpStorage = new WarpStorage(storageService);

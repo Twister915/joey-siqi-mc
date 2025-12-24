@@ -76,6 +76,9 @@ commands:
   remove:
     description: Remove entities around you
     usage: /remove <type|all> [radius]
+  seed:
+    description: Show the seed for the current world
+    usage: /seed
 
 permissions:
   smp.*:
@@ -101,6 +104,7 @@ permissions:
       smp.setspawn: true
       smp.suicide: true
       smp.remove: true
+      smp.seed: true
       smp.perm.admin: true
       smp.debug: true
 
@@ -167,6 +171,10 @@ permissions:
 
   smp.remove:
     description: Remove entities around you
+    default: op
+
+  smp.seed:
+    description: View world seed
     default: op
 
   smp.perm.admin:

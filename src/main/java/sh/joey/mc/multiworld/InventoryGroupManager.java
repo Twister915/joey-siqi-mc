@@ -1,12 +1,15 @@
 package sh.joey.mc.multiworld;
 
+import io.reactivex.rxjava3.core.Maybe;
 import io.reactivex.rxjava3.disposables.CompositeDisposable;
 import io.reactivex.rxjava3.disposables.Disposable;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
+import org.bukkit.Bukkit;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
 import org.bukkit.event.player.PlayerChangedWorldEvent;
+import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import sh.joey.mc.SiqiJoeyPlugin;
 import sh.joey.mc.inventory.InventorySnapshot;
@@ -25,6 +28,9 @@ import java.util.logging.Logger;
  * 2. Update the pivot table for the source group
  * 3. Load the snapshot for the target group (if exists)
  * 4. Apply the snapshot or clear inventory (first time in group)
+ * <p>
+ * Also handles the case where a player joins but their last world no longer exists,
+ * requiring an inventory swap from the old group to the current world's group.
  */
 public final class InventoryGroupManager implements Disposable {
 
@@ -38,6 +44,8 @@ public final class InventoryGroupManager implements Disposable {
     private final WorldManager worldManager;
     private final InventorySnapshotStorage snapshotStorage;
     private final InventoryGroupStorage groupStorage;
+    private final PlayerLastWorldStorage lastWorldStorage;
+    private final PlayerWorldPositionStorage positionStorage;
     private final Logger logger;
 
     // Track pending transitions to handle rapid world changes
@@ -47,21 +55,29 @@ public final class InventoryGroupManager implements Disposable {
             SiqiJoeyPlugin plugin,
             WorldManager worldManager,
             InventorySnapshotStorage snapshotStorage,
-            InventoryGroupStorage groupStorage
+            InventoryGroupStorage groupStorage,
+            PlayerLastWorldStorage lastWorldStorage,
+            PlayerWorldPositionStorage positionStorage
     ) {
         this.plugin = plugin;
         this.worldManager = worldManager;
         this.snapshotStorage = snapshotStorage;
         this.groupStorage = groupStorage;
+        this.lastWorldStorage = lastWorldStorage;
+        this.positionStorage = positionStorage;
         this.logger = plugin.getLogger();
 
         // Watch for world changes
         disposables.add(plugin.watchEvent(PlayerChangedWorldEvent.class)
                 .subscribe(this::handleWorldChange));
 
-        // Clean up on player quit
+        // Handle join - check for deleted world inventory swap
+        disposables.add(plugin.watchEvent(PlayerJoinEvent.class)
+                .subscribe(this::handleJoin));
+
+        // Save last world and clean up on player quit
         disposables.add(plugin.watchEvent(PlayerQuitEvent.class)
-                .subscribe(event -> pendingTransitions.remove(event.getPlayer().getUniqueId())));
+                .subscribe(this::handleQuit));
     }
 
     private void handleWorldChange(PlayerChangedWorldEvent event) {
@@ -72,6 +88,9 @@ public final class InventoryGroupManager implements Disposable {
 
         String fromGroup = worldManager.getInventoryGroup(fromWorld);
         String toGroup = worldManager.getInventoryGroup(toWorld);
+
+        // Update last world tracking
+        saveLastWorld(player, toWorld, toGroup);
 
         // Same group - no inventory switch needed
         if (fromGroup.equals(toGroup)) {
@@ -100,6 +119,112 @@ public final class InventoryGroupManager implements Disposable {
                         snapshot -> applySnapshot(player, snapshot, toGroup),
                         err -> handleTransitionError(player, err),
                         () -> applyEmptyInventory(player, toGroup)
+                );
+    }
+
+    private void handleJoin(PlayerJoinEvent event) {
+        Player player = event.getPlayer();
+        UUID playerId = player.getUniqueId();
+        World currentWorld = player.getWorld();
+        String currentGroup = worldManager.getInventoryGroup(currentWorld);
+
+        // Check if player was in a world that no longer exists
+        lastWorldStorage.getLastWorld(playerId)
+                .observeOn(plugin.mainScheduler())
+                .subscribe(
+                        lastWorld -> handleStaleWorldCheck(player, lastWorld, currentWorld, currentGroup),
+                        err -> logger.warning("Failed to check last world for " + player.getName() + ": " + err.getMessage()),
+                        () -> saveLastWorld(player, currentWorld, currentGroup) // No last world recorded, just save current
+                );
+    }
+
+    private void handleStaleWorldCheck(Player player, PlayerLastWorldStorage.LastWorld lastWorld,
+                                        World currentWorld, String currentGroup) {
+        UUID playerId = player.getUniqueId();
+
+        // Check if the last world UUID still exists
+        World previousWorld = Bukkit.getWorld(lastWorld.worldUuid());
+
+        if (previousWorld != null) {
+            // Last world still exists - just update last world tracking
+            saveLastWorld(player, currentWorld, currentGroup);
+            return;
+        }
+
+        // Last world no longer exists!
+        String previousGroup = lastWorld.inventoryGroup();
+
+        // If same inventory group, nothing to swap
+        if (previousGroup.equals(currentGroup)) {
+            logger.info(player.getName() + "'s last world no longer exists, but same inventory group - no swap needed");
+            saveLastWorld(player, currentWorld, currentGroup);
+            return;
+        }
+
+        // Need to swap inventory from previous group to current group
+        logger.info(player.getName() + "'s last world no longer exists - swapping inventory from '" +
+                previousGroup + "' to '" + currentGroup + "'");
+
+        // Mark as transitioning
+        pendingTransitions.put(playerId, currentGroup);
+
+        // Capture their current (stale) inventory and save it to the old group
+        Map<String, Object> labels = Map.of(
+                "source", "stale_world_recovery",
+                "from_group", previousGroup,
+                "to_group", currentGroup
+        );
+        InventorySnapshot currentSnapshot = InventorySnapshot.capture(player, labels);
+
+        // Save stale inventory, then load correct group's inventory
+        snapshotStorage.save(currentSnapshot)
+                .flatMapCompletable(snapshotId ->
+                        groupStorage.setSnapshotForGroup(playerId, previousGroup, snapshotId))
+                .andThen(groupStorage.getSnapshotForGroup(playerId, currentGroup))
+                .flatMap(snapshotStorage::getById)
+                .observeOn(plugin.mainScheduler())
+                .doOnTerminate(() -> saveLastWorld(player, currentWorld, currentGroup))
+                .subscribe(
+                        snapshot -> {
+                            applySnapshot(player, snapshot, currentGroup);
+                            teleportToSavedPosition(player, currentWorld);
+                        },
+                        err -> handleTransitionError(player, err),
+                        () -> {
+                            applyEmptyInventory(player, currentGroup);
+                            teleportToSavedPosition(player, currentWorld);
+                        }
+                );
+    }
+
+    private void teleportToSavedPosition(Player player, World world) {
+        positionStorage.getPosition(player.getUniqueId(), world)
+                .observeOn(plugin.mainScheduler())
+                .subscribe(
+                        location -> {
+                            player.teleport(location);
+                            logger.info("Teleported " + player.getName() + " to saved position in " + world.getName());
+                        },
+                        err -> logger.warning("Failed to load position for " + player.getName() + ": " + err.getMessage()),
+                        () -> {} // No saved position - player stays at spawn
+                );
+    }
+
+    private void handleQuit(PlayerQuitEvent event) {
+        Player player = event.getPlayer();
+        pendingTransitions.remove(player.getUniqueId());
+
+        // Save their last world
+        World world = player.getWorld();
+        String group = worldManager.getInventoryGroup(world);
+        saveLastWorld(player, world, group);
+    }
+
+    private void saveLastWorld(Player player, World world, String inventoryGroup) {
+        lastWorldStorage.setLastWorld(player.getUniqueId(), world.getUID(), inventoryGroup)
+                .subscribe(
+                        () -> {},
+                        err -> logger.warning("Failed to save last world for " + player.getName() + ": " + err.getMessage())
                 );
     }
 
