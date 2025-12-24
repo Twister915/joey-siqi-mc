@@ -31,7 +31,9 @@ src/main/java/sh/joey/mc/
 ├── multiworld/               # Multi-world management
 ├── inventory/                # Inventory snapshot storage
 ├── pagination/               # Chat pagination utilities
-└── messages/                 # Shared message generation (word banks)
+├── messages/                 # Shared message generation (word banks)
+├── permissions/              # Permission system (groups, grants, display)
+└── utility/                  # Utility commands (clear, item, give, time, weather, etc.)
 ```
 
 ## Architecture & Patterns
@@ -227,13 +229,14 @@ Handles teleport requests between players, warmup countdowns, location tracking,
 **Key Classes:**
 - `SafeTeleporter` - Warmup countdown, movement detection, safe location finding, unsafe teleport confirmation, particle/sound effects
 - `TpCommand` - `/tp <player>` command with teleport request handling via ConfirmationManager
+- `TpHereCommand` - `/tphere <player>` command to request a player teleport to you
 - `LocationTracker` - Tracks death and teleport-from locations for `/back` (persisted to PostgreSQL)
 - `BackLocationStorage` - Async PostgreSQL operations for back locations
 - `BackLocation` - Record with location type (DEATH or TELEPORT)
 - `Messages` - Formatted message utilities with PREFIX constant
 - `PluginConfig` - Typed config record loaded from `config.yml`
 
-**Commands:** `/tp`, `/accept`, `/decline`, `/back`
+**Commands:** `/tp`, `/tphere`, `/accept`, `/decline`, `/back`
 
 **Safety Features:**
 - Prevents teleporting while in a vehicle
@@ -363,16 +366,22 @@ if (roll < 30) {
 
 ### 7. Command System (`cmd/`)
 
-A minimal abstraction for command registration with automatic disposal.
+A minimal abstraction for command registration with automatic disposal and permission checking.
 
 **Key Classes:**
-- `Command` - Interface with `execute(sender, args)`, `name()`, and `tabComplete()`
-- `CmdExecutor` - Registers commands and returns `Disposable` for cleanup
+- `Command` - Interface with `handle(plugin, sender, args)`, `getName()`, `getPermission()`, and `tabComplete()`
+- `CmdExecutor` - Registers commands, checks permissions, and returns `Disposable` for cleanup
 
 **Usage:**
 ```java
 components.add(CmdExecutor.register(plugin, new MyCommand(plugin)));
 ```
+
+**Permission Checking:**
+- Commands return a permission string via `getPermission()` (or null for no permission)
+- `CmdExecutor` checks permissions before calling `handle()` and `tabComplete()`
+- Users without permission see "You don't have permission" message
+- Tab completions are filtered out for users without permission
 
 **Pattern:** One class per command, implements `Command` interface. Commands are disposable and cleaned up on plugin disable.
 
@@ -415,6 +424,73 @@ Components that customize Minecraft's default messages to match the plugin's vis
 - Formats chat as `PlayerName: message`
 - Uses Paper's `AsyncChatEvent` with custom renderer
 - Colors: name `GRAY`, colon `DARK_GRAY`, message `WHITE`
+- Integrates with `DisplayManager` to show permission-based chat prefixes/suffixes
+
+### 10. Utility Commands (`utility/`)
+
+A collection of utility commands for common server administration tasks.
+
+**Commands:**
+| Command | Class | Permission | Description |
+|---------|-------|------------|-------------|
+| `/clear`, `/ci` | `ClearCommand` | `smp.clear` | Clear inventory (confirmation in survival) |
+| `/item`, `/i` | `ItemCommand` | `smp.item` | Give yourself items |
+| `/give` | `GiveCommand` | `smp.give` | Give items to other players |
+| `/time` | `TimeCommand` | `smp.time` | Change world time |
+| `/weather` | `WeatherCommand` | `smp.weather` | Change weather |
+| `/list` | `ListCommand` | `smp.list` | List online players |
+| `/suicide` | `SuicideCommand` | `smp.suicide` | Kill self (confirmation in survival) |
+| `/remove` | `RemoveCommand` | `smp.remove` | Remove entities by type/radius |
+| `/warp` | `WarpCommand` | `smp.warp` | Teleport to warps |
+| `/spawn` | `SpawnCommand` | `smp.spawn` | Teleport to world spawn |
+| `/setspawn` | `SetSpawnCommand` | `smp.setspawn` | Set world spawn |
+
+**Key Classes:**
+- `ItemAliases` - Maps 100+ shortcuts to materials (e.g., `dpick` → `DIAMOND_PICKAXE`, `gapple` → `GOLDEN_APPLE`)
+- `WarpStorage` - Async PostgreSQL operations for warp locations
+- `SpawnStorage` - Async PostgreSQL operations for per-world spawn points
+
+**Confirmation Pattern:**
+Commands that destroy items (`/clear`, `/suicide`) require confirmation when the player is in SURVIVAL or ADVENTURE mode. Creative/Spectator mode executes immediately.
+
+### 11. Permission System (`permissions/`)
+
+A complete permissions system with groups, player overrides, world-scoped permissions, and display attributes (prefix/suffix).
+
+**Key Classes:**
+- `PermissionStorage` - All database operations for groups, grants, and player data
+- `PermissionResolver` - Resolves effective permissions for a player in a world
+- `PermissionCache` - Caches resolved permissions, invalidates on world change
+- `PermissionAttacher` - Applies resolved permissions via Bukkit `PermissionAttachment`
+- `DisplayManager` - Manages nameplate prefix/suffix via Scoreboard Teams
+- `ParsedPermission` - Tokenizes and validates permission strings, supports wildcards
+
+**Data Model:**
+- `Group` - Permission group with priority, default flag, and display attributes
+- `PermissionGrant` - Single permission grant with world scope and state (allow/deny)
+- `PermissibleAttributes` - Chat and nameplate prefix/suffix for display
+
+**Commands** (`permissions/cmd/`):
+- `/perm group <name> create [priority]` - Create group
+- `/perm group <name> set <perm> true/false` - Add permission grant
+- `/perm group <name> unset <perm>` - Remove permission grant
+- `/perm group <name> add <player>` - Add player to group
+- `/perm group <name> remove <player>` - Remove player from group
+- `/perm group <name> chat prefix|suffix <value>` - Set chat display
+- `/perm group <name> nameplate prefix|suffix <value>` - Set nameplate display
+- `/perm player <name> set <perm> true/false` - Player-specific override
+- `/perm reload` - Refresh all caches and displays
+
+**Resolution Algorithm:**
+1. Get player's explicit permissions (highest priority)
+2. Get player's groups (explicit + default), ordered by priority DESC
+3. Filter grants by world (global + world-specific)
+4. Resolve conflicts: more specific permission wins, then higher priority
+
+**Display Integration:**
+- `DisplayManager` uses Bukkit Scoreboard Teams for nameplate prefix/suffix
+- `ChatMessageProvider` calls `DisplayManager.getChatPrefix/Suffix()` during rendering
+- Supports both legacy (`&a`) and MiniMessage (`<green>`) color formats
 
 ---
 
@@ -458,6 +534,14 @@ Each system has a consistent prefix:
 - Day: `[☀]` (gold/yellow)
 - Join: `[★]` (gold/yellow)
 - World: `[World]` (gold)
+- Perm: `[Perm]` (gold)
+- Clear: `[Clear]` (yellow)
+- Item: `[Item]` (aqua)
+- Time: `[Time]` (gold)
+- Weather: `[Weather]` (aqua)
+- Warp: `[Warp]` (gold)
+- Spawn: `[Spawn]` (green)
+- Suicide: `[!]` (red)
 
 ---
 
@@ -544,6 +628,8 @@ SQL migrations live in `src/main/resources/migrations/` and follow the pattern:
 007_create_inventory_group_snapshots.sql
 008_create_player_world_positions.sql
 009_world_positions_use_uuid.sql
+010_create_permissions.sql
+011_create_warps_and_spawns.sql
 ```
 
 - Files are sorted by numeric prefix and run in order
