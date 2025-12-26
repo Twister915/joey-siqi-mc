@@ -8,8 +8,11 @@ import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import sh.joey.mc.storage.StorageService;
 
+import org.jetbrains.annotations.Nullable;
+
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -159,6 +162,25 @@ public final class PlayerSessionStorage {
     }
 
     /**
+     * Check if a username exists in the database (case-insensitive).
+     * Used by nickname validation to prevent nicknames matching existing usernames.
+     */
+    public Single<Boolean> usernameExists(String username) {
+        return storage.query(conn -> {
+            String sql = "SELECT EXISTS(SELECT 1 FROM player_names WHERE LOWER(username) = LOWER(?))";
+
+            try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+                stmt.setString(1, username);
+
+                try (ResultSet rs = stmt.executeQuery()) {
+                    rs.next();
+                    return rs.getBoolean(1);
+                }
+            }
+        });
+    }
+
+    /**
      * Resolves a player name to UUID, checking online players first then falling back to database.
      * Uses defer() to ensure Bukkit.getPlayer is called at subscription time (cold observable).
      *
@@ -260,7 +282,7 @@ public final class PlayerSessionStorage {
      * Get the start time of a player's current session.
      * Returns empty if the player has no active session for this server run.
      */
-    public Maybe<java.time.Instant> getCurrentSessionStart(UUID playerId, UUID serverSessionId) {
+    public Maybe<Instant> getCurrentSessionStart(UUID playerId, UUID serverSessionId) {
         return storage.queryMaybe(conn -> {
             String sql = """
                 SELECT connected_at
@@ -281,4 +303,122 @@ public final class PlayerSessionStorage {
             }
         });
     }
+
+    /**
+     * Get the IP address from a player's most recent session.
+     */
+    public Maybe<String> getLastIpAddress(UUID playerId) {
+        return storage.queryMaybe(conn -> {
+            String sql = """
+                SELECT remote_ip
+                FROM player_sessions
+                WHERE player_id = ?
+                ORDER BY connected_at DESC
+                LIMIT 1
+                """;
+
+            try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+                stmt.setObject(1, playerId);
+
+                try (ResultSet rs = stmt.executeQuery()) {
+                    if (rs.next()) {
+                        return rs.getString("remote_ip");
+                    }
+                    return null;
+                }
+            }
+        });
+    }
+
+    /**
+     * Get a player's username history with date ranges.
+     * Uses the player_name_history view. Ordered newest first.
+     */
+    public Flowable<UsernameHistoryEntry> getUsernameHistory(UUID playerId) {
+        return storage.queryFlowable(conn -> {
+            String sql = """
+                SELECT username, "from", "until"
+                FROM player_name_history
+                WHERE player_id = ?
+                ORDER BY "from" DESC
+                """;
+
+            List<UsernameHistoryEntry> entries = new ArrayList<>();
+            try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+                stmt.setObject(1, playerId);
+
+                try (ResultSet rs = stmt.executeQuery()) {
+                    while (rs.next()) {
+                        var from = rs.getTimestamp("from").toInstant();
+                        var untilTs = rs.getTimestamp("until");
+                        var until = untilTs != null ? untilTs.toInstant() : null;
+                        entries.add(new UsernameHistoryEntry(rs.getString("username"), from, until));
+                    }
+                }
+            }
+            return entries;
+        });
+    }
+
+    /**
+     * Get the date when a player first joined the server.
+     */
+    public Maybe<Instant> getFirstJoinDate(UUID playerId) {
+        return storage.queryMaybe(conn -> {
+            String sql = """
+                SELECT MIN(connected_at) AS first_join
+                FROM player_sessions
+                WHERE player_id = ?
+                """;
+
+            try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+                stmt.setObject(1, playerId);
+
+                try (ResultSet rs = stmt.executeQuery()) {
+                    if (rs.next()) {
+                        var ts = rs.getTimestamp("first_join");
+                        return ts != null ? ts.toInstant() : null;
+                    }
+                    return null;
+                }
+            }
+        });
+    }
+
+    /**
+     * Get the last time a player was seen on the server.
+     * Returns the most recent last_seen_at or disconnected_at timestamp.
+     */
+    public Maybe<Instant> getLastSeenDate(UUID playerId) {
+        return storage.queryMaybe(conn -> {
+            String sql = """
+                SELECT COALESCE(disconnected_at, last_seen_at) AS last_seen
+                FROM player_sessions
+                WHERE player_id = ?
+                ORDER BY connected_at DESC
+                LIMIT 1
+                """;
+
+            try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+                stmt.setObject(1, playerId);
+
+                try (ResultSet rs = stmt.executeQuery()) {
+                    if (rs.next()) {
+                        var ts = rs.getTimestamp("last_seen");
+                        return ts != null ? ts.toInstant() : null;
+                    }
+                    return null;
+                }
+            }
+        });
+    }
+
+    /**
+     * Entry in a player's username history.
+     *
+     * @param username the username used during this period
+     * @param from when this username started being used
+     * @param until when this username stopped being used, or null if current
+     */
+    public record UsernameHistoryEntry(String username, Instant from, @Nullable Instant until) {}
 }

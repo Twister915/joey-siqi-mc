@@ -14,19 +14,36 @@ import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.EntityDamageEvent.DamageCause;
 import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.projectiles.ProjectileSource;
+import org.jetbrains.annotations.Nullable;
 import sh.joey.mc.SiqiJoeyPlugin;
+import sh.joey.mc.nickname.NicknameManager;
 
 /**
  * Replaces vanilla death messages with styled custom variants.
  * Uses the plugin's color scheme with humorous message variants.
+ * <p>
+ * Uses display name (nickname if set, otherwise username) when NicknameManager is provided.
  */
 public final class DeathMessageProvider implements Disposable {
 
     private final CompositeDisposable disposables = new CompositeDisposable();
+    @Nullable
+    private final NicknameManager nicknameManager;
 
     public DeathMessageProvider(SiqiJoeyPlugin plugin) {
+        this(plugin, null);
+    }
+
+    public DeathMessageProvider(SiqiJoeyPlugin plugin, @Nullable NicknameManager nicknameManager) {
+        this.nicknameManager = nicknameManager;
         disposables.add(plugin.watchEvent(PlayerDeathEvent.class)
                 .subscribe(this::handleDeath));
+    }
+
+    private String getPlayerDisplayName(Player player) {
+        return nicknameManager != null
+                ? nicknameManager.getDisplayName(player)
+                : player.getName();
     }
 
     private void handleDeath(PlayerDeathEvent event) {
@@ -34,7 +51,7 @@ public final class DeathMessageProvider implements Disposable {
         EntityDamageEvent lastDamage = player.getLastDamageCause();
 
         if (lastDamage == null) {
-            event.deathMessage(formatSimple(DeathMessages.getMessage(DamageCause.CUSTOM), player.getName()));
+            event.deathMessage(formatSimple(DeathMessages.getMessage(DamageCause.CUSTOM), getPlayerDisplayName(player)));
             return;
         }
 
@@ -44,7 +61,7 @@ public final class DeathMessageProvider implements Disposable {
     }
 
     private Component buildDeathMessage(Player player, EntityDamageEvent lastDamage, DamageCause cause) {
-        String playerName = player.getName();
+        String playerName = getPlayerDisplayName(player);
 
         // Check for entity involvement (PvP, mob kills, projectiles, explosions)
         if (lastDamage instanceof EntityDamageByEntityEvent entityEvent) {
@@ -62,7 +79,7 @@ public final class DeathMessageProvider implements Disposable {
         if (damager instanceof Projectile projectile) {
             ProjectileSource shooter = projectile.getShooter();
             if (shooter instanceof Player killerPlayer) {
-                return formatPvP(DeathMessages.getPvPMessage(), playerName, killerPlayer.getName());
+                return formatPvP(DeathMessages.getPvPMessage(), playerName, getPlayerDisplayName(killerPlayer));
             } else if (shooter instanceof LivingEntity killerEntity) {
                 return formatKiller(DeathMessages.getProjectileMessage(), playerName, getEntityName(killerEntity));
             }
@@ -72,7 +89,7 @@ public final class DeathMessageProvider implements Disposable {
 
         // Handle direct entity damage
         if (damager instanceof Player killerPlayer) {
-            return formatPvP(DeathMessages.getPvPMessage(), playerName, killerPlayer.getName());
+            return formatPvP(DeathMessages.getPvPMessage(), playerName, getPlayerDisplayName(killerPlayer));
         }
 
         // Handle creepers specially

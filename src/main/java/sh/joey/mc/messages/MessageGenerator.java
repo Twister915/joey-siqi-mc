@@ -39,7 +39,7 @@ public final class MessageGenerator {
     ) {
         @FunctionalInterface
         public interface ContextMethod {
-            void addMessages(Player player, World world, List<String> candidates, MessageType type);
+            void addMessages(Player player, World world, List<String> candidates, MessageType type, String displayName);
         }
     }
 
@@ -51,95 +51,95 @@ public final class MessageGenerator {
     private static final List<ContextProvider> CONTEXT_PROVIDERS = List.of(
             // HIGH-VARIETY CONTEXTS (prioritized)
             new ContextProvider("High-Variety Contexts", 10, false, null,
-                    (p, w, c, t) -> addNearbyEntityMessages(p, w, c)),
+                    (p, w, c, t, d) -> addNearbyEntityMessages(p, w, c)),
             new ContextProvider("High-Variety Contexts", 10, false, null,
-                    (p, w, c, t) -> addInventoryStateMessages(p, c)),
+                    (p, w, c, t, d) -> addInventoryStateMessages(p, c)),
             new ContextProvider("High-Variety Contexts", 10, false, null,
-                    (p, w, c, t) -> addNearbyBlockMessages(p, w, c)),
+                    (p, w, c, t, d) -> addNearbyBlockMessages(p, w, c)),
 
             // POTION & BUFF STATE
             new ContextProvider("Potion & Buff State", 20, false, null,
-                    (p, w, c, t) -> addPotionEffectMessages(p, c)),
+                    (p, w, c, t, d) -> addPotionEffectMessages(p, c)),
 
             // EQUIPMENT STATE
             new ContextProvider("Equipment State", 30, false, null,
-                    (p, w, c, t) -> addDurabilityMessages(p, c)),
+                    (p, w, c, t, d) -> addDurabilityMessages(p, c)),
             new ContextProvider("Equipment State", 30, false, null,
-                    (p, w, c, t) -> addCombatReadyMessages(p, c)),
+                    (p, w, c, t, d) -> addCombatReadyMessages(p, c)),
 
             // PLAYER STATE
             new ContextProvider("Player State", 40, false, null,
-                    (p, w, c, t) -> addHealthMessages(p, c)),
+                    (p, w, c, t, d) -> addHealthMessages(p, c)),
             new ContextProvider("Player State", 40, false, null,
-                    (p, w, c, t) -> addHungerMessages(p, c)),
+                    (p, w, c, t, d) -> addHungerMessages(p, c)),
             new ContextProvider("Player State", 40, false, null,
-                    (p, w, c, t) -> addSaturationMessages(p, c)),
+                    (p, w, c, t, d) -> addSaturationMessages(p, c)),
             new ContextProvider("Player State", 40, false, null,
-                    (p, w, c, t) -> addExperienceMessages(p, c)),
+                    (p, w, c, t, d) -> addExperienceMessages(p, c)),
             new ContextProvider("Player State", 40, false, null,
-                    (p, w, c, t) -> addArmorMessages(p, c)),
+                    (p, w, c, t, d) -> addArmorMessages(p, c)),
             new ContextProvider("Player State", 40, false, null,
-                    (p, w, c, t) -> addHeldItemMessages(p, c, t)),
+                    (p, w, c, t, d) -> addHeldItemMessages(p, c, t)),
 
             // INVENTORY SPECIAL ITEMS
             new ContextProvider("Inventory Special Items", 50, false, null,
-                    (p, w, c, t) -> addBuildingMaterialMessages(p, c)),
+                    (p, w, c, t, d) -> addBuildingMaterialMessages(p, c)),
             new ContextProvider("Inventory Special Items", 50, false, null,
-                    (p, w, c, t) -> addRareDropMessages(p, c)),
+                    (p, w, c, t, d) -> addRareDropMessages(p, c)),
             new ContextProvider("Inventory Special Items", 50, false, null,
-                    (p, w, c, t) -> addBrewingIngredientMessages(p, c)),
+                    (p, w, c, t, d) -> addBrewingIngredientMessages(p, c)),
             new ContextProvider("Inventory Special Items", 50, false, null,
-                    (p, w, c, t) -> addMusicDiscMessages(p, c)),
+                    (p, w, c, t, d) -> addMusicDiscMessages(p, c)),
 
             // LOCATION STATE
             new ContextProvider("Location State", 60, false, null,
-                    (p, w, c, t) -> addYLevelMessages(p, c)),
+                    (p, w, c, t, d) -> addYLevelMessages(p, c)),
             new ContextProvider("Location State", 60, false, null,
-                    (p, w, c, t) -> addUndergroundMessages(p, w, c, t)),
+                    (p, w, c, t, d) -> addUndergroundMessages(p, w, c, t)),
             new ContextProvider("Location State", 60, false, null,
-                    (p, w, c, t) -> addWaterMessages(p, c, t)),
+                    (p, w, c, t, d) -> addWaterMessages(p, c, t)),
             new ContextProvider("Location State", 60, false, null,
-                    (p, w, c, t) -> addVehicleMessages(p, c, t)),
+                    (p, w, c, t, d) -> addVehicleMessages(p, c, t)),
             new ContextProvider("Location State", 60, false, null,
-                    (p, w, c, t) -> addBedStatusMessages(p, c)),
+                    (p, w, c, t, d) -> addBedStatusMessages(p, c)),
 
             // ENVIRONMENTAL HAZARDS/FEATURES
             new ContextProvider("Environmental", 70, false, null,
-                    (p, w, c, t) -> addNearLavaMessages(p, w, c)),
+                    (p, w, c, t, d) -> addNearLavaMessages(p, w, c)),
             new ContextProvider("Environmental", 70, false, null,
-                    (p, w, c, t) -> addNearSpawnerMessages(p, w, c)),
+                    (p, w, c, t, d) -> addNearSpawnerMessages(p, w, c)),
             new ContextProvider("Environmental", 70, false, null,
-                    (p, w, c, t) -> addNearPortalMessages(p, w, c)),
+                    (p, w, c, t, d) -> addNearPortalMessages(p, w, c)),
             new ContextProvider("Environmental", 70, false, null,
-                    (p, w, c, t) -> addLightLevelMessages(p, w, c)),
+                    (p, w, c, t, d) -> addLightLevelMessages(p, w, c)),
             new ContextProvider("Environmental", 70, false, null,
-                    (p, w, c, t) -> addFlowerFieldMessages(p, w, c)),
+                    (p, w, c, t, d) -> addFlowerFieldMessages(p, w, c)),
 
             // WORLD STATE (DAY only for milestones/difficulty/moon)
             new ContextProvider("World State", 80, false, MessageType.DAY,
-                    (p, w, c, t) -> addDayMilestoneMessages(w, c)),
+                    (p, w, c, t, d) -> addDayMilestoneMessages(w, c)),
             new ContextProvider("World State", 80, false, MessageType.DAY,
-                    (p, w, c, t) -> addDifficultyMessages(w, c)),
+                    (p, w, c, t, d) -> addDifficultyMessages(w, c)),
             new ContextProvider("World State", 80, false, MessageType.DAY,
-                    (p, w, c, t) -> addMoonPhaseMessages(w, c)),
+                    (p, w, c, t, d) -> addMoonPhaseMessages(w, c)),
             new ContextProvider("World State", 80, false, null,
-                    (p, w, c, t) -> addWeatherMessages(w, c, t)),
+                    (p, w, c, t, d) -> addWeatherMessages(w, c, t)),
 
             // DIMENSION
             new ContextProvider("Dimension", 85, false, null,
-                    (p, w, c, t) -> addDimensionMessages(p, w, c, t)),
+                    (p, w, c, t, d) -> addDimensionMessages(p, w, c, t)),
 
             // SPECIAL SITUATIONS
             new ContextProvider("Special Situations", 90, false, null,
-                    (p, w, c, t) -> addSpecialSituationMessages(p, c, t)),
+                    (p, w, c, t, d) -> addSpecialSituationMessages(p, c, t)),
 
             // JOIN-SPECIFIC (JOIN only)
             new ContextProvider("Join-Specific", 95, false, MessageType.JOIN,
-                    (p, w, c, t) -> addJoinSpecificMessages(p, w, c)),
+                    (p, w, c, t, d) -> addJoinSpecificMessages(p, w, c, d)),
 
             // BIOME (fallback only - used when no other contexts match)
             new ContextProvider("Biome", 900, true, null,
-                    (p, w, c, t) -> addBiomeMessages(p, w, c))
+                    (p, w, c, t, d) -> addBiomeMessages(p, w, c))
     );
 
     /**
@@ -156,13 +156,27 @@ public final class MessageGenerator {
     /**
      * Generates a message for the start of a Minecraft day.
      * Uses full context (player state, location, world state).
+     *
+     * @deprecated Use {@link #generateDayMessage(Player, String)} instead for display name support.
      */
+    @Deprecated
     public static String generateDayMessage(Player player) {
+        return generateDayMessage(player, player.getName());
+    }
+
+    /**
+     * Generates a message for the start of a Minecraft day.
+     * Uses full context (player state, location, world state).
+     *
+     * @param player the player to generate a message for
+     * @param displayName the player's display name (nickname or username)
+     */
+    public static String generateDayMessage(Player player, String displayName) {
         int roll = random.nextInt(100);
 
         // 35% context, 25% procedural, 40% static
         if (roll < 35) {
-            String contextMessage = getPlayerContextMessage(player, MessageType.DAY);
+            String contextMessage = getPlayerContextMessage(player, MessageType.DAY, displayName);
             if (contextMessage != null) {
                 return contextMessage;
             }
@@ -177,21 +191,35 @@ public final class MessageGenerator {
     /**
      * Generates a welcome message for a player joining the server.
      * Uses full context but with a welcoming tone.
+     *
+     * @deprecated Use {@link #generateJoinMessage(Player, String)} instead for display name support.
      */
+    @Deprecated
     public static String generateJoinMessage(Player player) {
+        return generateJoinMessage(player, player.getName());
+    }
+
+    /**
+     * Generates a welcome message for a player joining the server.
+     * Uses full context but with a welcoming tone.
+     *
+     * @param player the player to generate a message for
+     * @param displayName the player's display name (nickname or username)
+     */
+    public static String generateJoinMessage(Player player, String displayName) {
         int roll = random.nextInt(100);
 
         // 50% context, 20% procedural, 30% static
         if (roll < 50) {
-            String contextMessage = getPlayerContextMessage(player, MessageType.JOIN);
+            String contextMessage = getPlayerContextMessage(player, MessageType.JOIN, displayName);
             if (contextMessage != null) {
                 return contextMessage;
             }
-            return pickJoinMessage(player);
+            return pickJoinMessage(displayName);
         } else if (roll < 70) {
             return getProceduralMessage(MessageType.JOIN);
         } else {
-            return pickJoinMessage(player);
+            return pickJoinMessage(displayName);
         }
     }
 
@@ -227,10 +255,10 @@ public final class MessageGenerator {
         return pick(DAY_MESSAGES);
     }
 
-    private static String pickJoinMessage(Player player) {
+    private static String pickJoinMessage(String displayName) {
         // 30% chance of personalized message
         if (random.nextInt(100) < 30) {
-            return getPersonalizedGreeting(player);
+            return getPersonalizedGreeting(displayName);
         }
         return pick(JOIN_MESSAGES);
     }
@@ -239,17 +267,16 @@ public final class MessageGenerator {
         return pick(MOTD_MESSAGES);
     }
 
-    private static String getPersonalizedGreeting(Player player) {
-        String name = player.getName();
+    private static String getPersonalizedGreeting(String displayName) {
         List<String> personalized = List.of(
-                "Welcome, " + name + "! The server has been expecting you.",
-                name + " has arrived! Let the adventures begin.",
-                "All hail " + name + ", builder of worlds!",
-                name + "! Your presence graces us once more.",
-                "The legendary " + name + " returns!",
-                name + " joins the fray!",
-                "Look who's here! It's " + name + "!",
-                name + ", the blocks await your command."
+                "Welcome, " + displayName + "! The server has been expecting you.",
+                displayName + " has arrived! Let the adventures begin.",
+                "All hail " + displayName + ", builder of worlds!",
+                displayName + "! Your presence graces us once more.",
+                "The legendary " + displayName + " returns!",
+                displayName + " joins the fray!",
+                "Look who's here! It's " + displayName + "!",
+                displayName + ", the blocks await your command."
         );
         return pick(personalized);
     }
@@ -820,6 +847,16 @@ public final class MessageGenerator {
      * Used for DAY and JOIN messages.
      */
     private static String getPlayerContextMessage(Player player, MessageType type) {
+        return getPlayerContextMessage(player, type, player.getName());
+    }
+
+    /**
+     * Gets a context-aware message based on player and world state.
+     * Used for DAY and JOIN messages.
+     *
+     * @param displayName the player's display name (nickname or username)
+     */
+    private static String getPlayerContextMessage(Player player, MessageType type, String displayName) {
         World world = player.getWorld();
         List<String> candidates = new ArrayList<>();
         List<String> biomeCandidates = new ArrayList<>();
@@ -833,7 +870,7 @@ public final class MessageGenerator {
 
             // Route biome-only providers to separate list (fallback behavior)
             List<String> targetList = provider.biomeOnly() ? biomeCandidates : candidates;
-            provider.method().addMessages(player, world, targetList, type);
+            provider.method().addMessages(player, world, targetList, type, displayName);
         }
 
         // Only use biome messages if no other context found
@@ -1535,14 +1572,14 @@ public final class MessageGenerator {
         }
     }
 
-    public static void addJoinSpecificMessages(Player player, World world, List<String> candidates) {
+    public static void addJoinSpecificMessages(Player player, World world, List<String> candidates, String displayName) {
         // First join ever
         if (!player.hasPlayedBefore()) {
             candidates.clear(); // Override everything
-            candidates.add("Welcome to the server, " + player.getName() + "! Your adventure begins now!");
-            candidates.add("A new player joins! Welcome, " + player.getName() + "!");
-            candidates.add("First time here, " + player.getName() + "? Let the journey begin!");
-            candidates.add("Fresh face alert! " + player.getName() + " enters the world!");
+            candidates.add("Welcome to the server, " + displayName + "! Your adventure begins now!");
+            candidates.add("A new player joins! Welcome, " + displayName + "!");
+            candidates.add("First time here, " + displayName + "? Let the journey begin!");
+            candidates.add("Fresh face alert! " + displayName + " enters the world!");
             return;
         }
 

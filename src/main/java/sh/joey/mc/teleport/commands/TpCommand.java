@@ -11,28 +11,33 @@ import sh.joey.mc.SiqiJoeyPlugin;
 import sh.joey.mc.cmd.Command;
 import sh.joey.mc.confirm.ConfirmationManager;
 import sh.joey.mc.confirm.ConfirmationRequest;
+import sh.joey.mc.player.PlayerResolver;
 import sh.joey.mc.teleport.Messages;
 import sh.joey.mc.teleport.PluginConfig;
 import sh.joey.mc.teleport.SafeTeleporter;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
  * /tp <player> command - sends a teleport request to another player.
+ * Accepts both usernames and nicknames as player identifiers.
  */
 public final class TpCommand implements Command {
     private final SiqiJoeyPlugin plugin;
     private final PluginConfig config;
     private final SafeTeleporter safeTeleporter;
     private final ConfirmationManager confirmationManager;
+    private final PlayerResolver playerResolver;
 
     public TpCommand(SiqiJoeyPlugin plugin, PluginConfig config, SafeTeleporter safeTeleporter,
-                     ConfirmationManager confirmationManager) {
+                     ConfirmationManager confirmationManager, PlayerResolver playerResolver) {
         this.plugin = plugin;
         this.config = config;
         this.safeTeleporter = safeTeleporter;
         this.confirmationManager = confirmationManager;
+        this.playerResolver = playerResolver;
     }
 
     @Override
@@ -47,51 +52,54 @@ public final class TpCommand implements Command {
 
     @Override
     public Completable handle(SiqiJoeyPlugin plugin, CommandSender sender, String[] args) {
-        return Completable.fromAction(() -> {
+        return Completable.defer(() -> {
             if (!(sender instanceof Player player)) {
                 sender.sendMessage("This command can only be used by players.");
-                return;
+                return Completable.complete();
             }
 
             if (args.length != 1) {
                 Messages.error(player, "Usage: /tp <player>");
-                return;
+                return Completable.complete();
             }
 
             String targetName = args[0];
-            Player target = plugin.getServer().getPlayer(targetName);
 
-            if (target == null) {
+            // Resolve player by username or nickname
+            Optional<Player> targetOpt = playerResolver.resolveOnlinePlayer(targetName);
+
+            if (targetOpt.isEmpty()) {
                 Messages.error(player, "Player '" + targetName + "' is not online.");
-                return;
+                return Completable.complete();
             }
+
+            Player target = targetOpt.get();
 
             if (target.equals(player)) {
                 Messages.error(player, "You can't teleport to yourself!");
-                return;
+                return Completable.complete();
             }
 
             sendRequest(player, target);
+            return Completable.complete();
         });
     }
 
     @Override
     public Maybe<List<Completion>> tabComplete(SiqiJoeyPlugin plugin, CommandSender sender, String[] args) {
-        return Maybe.fromCallable(() -> {
-            if (args.length != 1) {
-                return null;
-            }
+        if (args.length != 1) {
+            return Maybe.empty();
+        }
 
-            String prefix = args[0].toLowerCase();
-            List<Completion> completions = plugin.getServer().getOnlinePlayers().stream()
-                    .map(Player::getName)
-                    .filter(name -> name.toLowerCase().startsWith(prefix))
-                    .filter(name -> !(sender instanceof Player p) || !name.equals(p.getName()))
-                    .map(Completion::completion)
-                    .toList();
+        String prefix = args[0];
+        String senderName = (sender instanceof Player p) ? p.getName() : null;
 
-            return completions.isEmpty() ? null : completions;
-        });
+        return playerResolver.getCompletions(prefix, 20)
+                .map(names -> names.stream()
+                        .filter(name -> senderName == null || !name.equalsIgnoreCase(senderName))
+                        .map(Completion::completion)
+                        .toList())
+                .filter(list -> !list.isEmpty());
     }
 
     private void sendRequest(Player requester, Player target) {

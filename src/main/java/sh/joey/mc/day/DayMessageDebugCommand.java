@@ -89,7 +89,7 @@ public final class DayMessageDebugCommand implements Command {
 
         for (ContextProvider provider : MessageGenerator.getContextProviders()) {
             List<String> messages = new ArrayList<>();
-            provider.method().addMessages(player, world, messages, MessageGenerator.MessageType.DAY);
+            provider.method().addMessages(player, world, messages, MessageGenerator.MessageType.DAY, player.getName());
 
             if (!messages.isEmpty()) {
                 String category = provider.biomeOnly() ? "Biome (Fallback)" : provider.category();

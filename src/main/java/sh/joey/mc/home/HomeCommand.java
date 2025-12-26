@@ -18,11 +18,11 @@ import sh.joey.mc.confirm.ConfirmationManager;
 import sh.joey.mc.confirm.ConfirmationRequest;
 import sh.joey.mc.pagination.ChatPaginator;
 import sh.joey.mc.pagination.PaginatedItem;
+import sh.joey.mc.player.PlayerResolver;
 import sh.joey.mc.session.PlayerSessionStorage;
 import sh.joey.mc.teleport.SafeTeleporter;
 
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -49,14 +49,16 @@ public final class HomeCommand implements Command {
     private final SiqiJoeyPlugin plugin;
     private final HomeStorage storage;
     private final PlayerSessionStorage sessionStorage;
+    private final PlayerResolver playerResolver;
     private final SafeTeleporter teleporter;
     private final ConfirmationManager confirmationManager;
 
     public HomeCommand(SiqiJoeyPlugin plugin, HomeStorage storage, PlayerSessionStorage sessionStorage,
-                       SafeTeleporter teleporter, ConfirmationManager confirmationManager) {
+                       PlayerResolver playerResolver, SafeTeleporter teleporter, ConfirmationManager confirmationManager) {
         this.plugin = plugin;
         this.storage = storage;
         this.sessionStorage = sessionStorage;
+        this.playerResolver = playerResolver;
         this.teleporter = teleporter;
         this.confirmationManager = confirmationManager;
     }
@@ -168,34 +170,13 @@ public final class HomeCommand implements Command {
             return Maybe.empty();
         }
 
-        return sessionStorage.findUsernamesByPrefix(partial, MAX_COMPLETIONS)
-                .toList()
-                .map(dbNames -> {
-                    Set<String> names = new HashSet<>();
-
-                    // Add online players
-                    for (Player online : Bukkit.getOnlinePlayers()) {
-                        String onlineName = online.getName();
-                        if (!online.equals(player) &&
-                                onlineName.toLowerCase().startsWith(partial.toLowerCase())) {
-                            names.add(onlineName);
-                        }
-                    }
-
-                    // Add database names (excludes self)
-                    for (String name : dbNames) {
-                        if (!name.equalsIgnoreCase(player.getName())) {
-                            names.add(name);
-                        }
-                    }
-
-                    return names.stream()
-                            .sorted(String.CASE_INSENSITIVE_ORDER)
-                            .limit(MAX_COMPLETIONS)
-                            .map(Completion::completion)
-                            .toList();
-                })
-                .toMaybe();
+        String senderName = player.getName();
+        return playerResolver.getCompletions(partial, MAX_COMPLETIONS)
+                .map(names -> names.stream()
+                        .filter(name -> !name.equalsIgnoreCase(senderName))
+                        .map(Completion::completion)
+                        .toList())
+                .filter(list -> !list.isEmpty());
     }
 
     private String formatHomeCompletion(Home home, UUID playerId) {
@@ -440,39 +421,40 @@ public final class HomeCommand implements Command {
     // --- Share Home ---
 
     private Completable handleShare(Player player, String[] args) {
-        return Completable.defer(() -> {
-            if (args.length < 3) {
-                error(player, "Usage: /home share <name> <player>");
-                return Completable.complete();
-            }
+        if (args.length < 3) {
+            error(player, "Usage: /home share <name> <player>");
+            return Completable.complete();
+        }
 
-            String name = HomeStorage.normalizeName(args[1]);
-            String targetName = args[2];
+        String name = HomeStorage.normalizeName(args[1]);
+        String targetName = args[2];
+        UUID playerId = player.getUniqueId();
 
-            Player target = Bukkit.getPlayer(targetName);
-            if (target == null) {
-                error(player, "Player '" + targetName + "' not found.");
-                return Completable.complete();
-            }
-
-            if (target.equals(player)) {
-                error(player, "You can't share a home with yourself.");
-                return Completable.complete();
-            }
-
-            return storage.shareHome(player.getUniqueId(), name, target.getUniqueId())
-                    .observeOn(plugin.mainScheduler())
-                    .doOnSuccess(shared -> onShareResult(player, target, name, shared))
-                    .doOnError(err -> logAndError(player, "Failed to share home", err))
-                    .onErrorComplete()
-                    .ignoreElement();
-        });
+        return playerResolver.resolvePlayerId(targetName)
+                .observeOn(plugin.mainScheduler())
+                .flatMapCompletable(targetId -> {
+                    if (targetId.equals(playerId)) {
+                        error(player, "You can't share a home with yourself.");
+                        return Completable.complete();
+                    }
+                    return storage.shareHome(playerId, name, targetId)
+                            .observeOn(plugin.mainScheduler())
+                            .doOnSuccess(shared -> onShareResult(player, targetId, targetName, name, shared))
+                            .ignoreElement();
+                })
+                .doOnComplete(() -> error(player, "Player '" + targetName + "' not found."))
+                .doOnError(err -> logAndError(player, "Failed to share home", err))
+                .onErrorComplete();
     }
 
-    private void onShareResult(Player player, Player target, String name, boolean shared) {
+    private void onShareResult(Player player, UUID targetId, String targetName, String name, boolean shared) {
         if (shared) {
-            success(player, "Shared home '" + name + "' with " + target.getName() + "!");
-            info(target, player.getName() + " shared their home '" + name + "' with you!");
+            success(player, "Shared home '" + name + "' with " + targetName + "!");
+            // Notify target if they're online
+            Player target = plugin.getServer().getPlayer(targetId);
+            if (target != null) {
+                info(target, player.getName() + " shared their home '" + name + "' with you!");
+            }
         } else {
             error(player, "Home '" + name + "' not found.");
         }
@@ -481,24 +463,22 @@ public final class HomeCommand implements Command {
     // --- Unshare Home ---
 
     private Completable handleUnshare(Player player, String[] args) {
-        return Completable.defer(() -> {
-            if (args.length < 3) {
-                error(player, "Usage: /home unshare <name> <player>");
-                return Completable.complete();
-            }
+        if (args.length < 3) {
+            error(player, "Usage: /home unshare <name> <player>");
+            return Completable.complete();
+        }
 
-            String name = HomeStorage.normalizeName(args[1]);
-            String targetName = args[2];
+        String name = HomeStorage.normalizeName(args[1]);
+        String targetName = args[2];
 
-            return sessionStorage.resolvePlayerId(targetName)
-                    .flatMapSingle(targetId -> storage.unshareHome(player.getUniqueId(), name, targetId))
-                    .observeOn(plugin.mainScheduler())
-                    .doOnSuccess(unshared -> onUnshareResult(player, targetName, name, unshared))
-                    .doOnComplete(() -> error(player, "Player '" + targetName + "' not found."))
-                    .doOnError(err -> logAndError(player, "Failed to unshare home", err))
-                    .onErrorComplete()
-                    .ignoreElement();
-        });
+        return playerResolver.resolvePlayerId(targetName)
+                .flatMapSingle(targetId -> storage.unshareHome(player.getUniqueId(), name, targetId))
+                .observeOn(plugin.mainScheduler())
+                .doOnSuccess(unshared -> onUnshareResult(player, targetName, name, unshared))
+                .doOnComplete(() -> error(player, "Player '" + targetName + "' not found."))
+                .doOnError(err -> logAndError(player, "Failed to unshare home", err))
+                .onErrorComplete()
+                .ignoreElement();
     }
 
     private void onUnshareResult(Player player, String targetName, String name, boolean unshared) {

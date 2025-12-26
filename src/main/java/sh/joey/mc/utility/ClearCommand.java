@@ -13,8 +13,10 @@ import sh.joey.mc.SiqiJoeyPlugin;
 import sh.joey.mc.cmd.Command;
 import sh.joey.mc.confirm.ConfirmationManager;
 import sh.joey.mc.confirm.ConfirmationRequest;
+import sh.joey.mc.player.PlayerResolver;
 
 import java.util.List;
+import java.util.Optional;
 
 /**
  * /clear [player] - clears inventory.
@@ -31,10 +33,12 @@ public final class ClearCommand implements Command {
 
     private final String name;
     private final ConfirmationManager confirmationManager;
+    private final PlayerResolver playerResolver;
 
-    public ClearCommand(String name, ConfirmationManager confirmationManager) {
+    public ClearCommand(String name, ConfirmationManager confirmationManager, PlayerResolver playerResolver) {
         this.name = name;
         this.confirmationManager = confirmationManager;
+        this.playerResolver = playerResolver;
     }
 
     @Override
@@ -60,12 +64,13 @@ public final class ClearCommand implements Command {
                             .color(NamedTextColor.RED));
                     return;
                 }
-                target = plugin.getServer().getPlayer(args[0]);
-                if (target == null) {
+                Optional<Player> targetOpt = playerResolver.resolveOnlinePlayer(args[0]);
+                if (targetOpt.isEmpty()) {
                     sender.sendMessage(Component.text("Player '" + args[0] + "' is not online.")
                             .color(NamedTextColor.RED));
                     return;
                 }
+                target = targetOpt.get();
                 clearingOther = !target.equals(sender);
             } else {
                 if (!(sender instanceof Player player)) {
@@ -144,19 +149,15 @@ public final class ClearCommand implements Command {
 
     @Override
     public Maybe<List<Completion>> tabComplete(SiqiJoeyPlugin plugin, CommandSender sender, String[] args) {
-        return Maybe.fromCallable(() -> {
-            if (args.length != 1 || !sender.hasPermission("smp.clear.others")) {
-                return null;
-            }
+        if (args.length != 1 || !sender.hasPermission("smp.clear.others")) {
+            return Maybe.empty();
+        }
 
-            String prefix = args[0].toLowerCase();
-            List<Completion> completions = plugin.getServer().getOnlinePlayers().stream()
-                    .map(Player::getName)
-                    .filter(name -> name.toLowerCase().startsWith(prefix))
-                    .map(Completion::completion)
-                    .toList();
-
-            return completions.isEmpty() ? null : completions;
-        });
+        String prefix = args[0];
+        return playerResolver.getCompletions(prefix, 20)
+                .map(names -> names.stream()
+                        .map(Completion::completion)
+                        .toList())
+                .filter(list -> !list.isEmpty());
     }
 }

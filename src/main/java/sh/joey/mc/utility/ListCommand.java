@@ -8,6 +8,7 @@ import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import sh.joey.mc.SiqiJoeyPlugin;
 import sh.joey.mc.cmd.Command;
+import sh.joey.mc.nickname.NicknameManager;
 
 import java.util.Collection;
 
@@ -15,6 +16,12 @@ import java.util.Collection;
  * /list - shows online players.
  */
 public final class ListCommand implements Command {
+
+    private final NicknameManager nicknameManager;
+
+    public ListCommand(NicknameManager nicknameManager) {
+        this.nicknameManager = nicknameManager;
+    }
 
     @Override
     public String getName() {
@@ -49,7 +56,8 @@ public final class ListCommand implements Command {
                     playerList = playerList.append(Component.text(", ").color(NamedTextColor.GRAY));
                 }
                 first = false;
-                playerList = playerList.append(Component.text(player.getName()).color(NamedTextColor.WHITE));
+                playerList = playerList.append(Component.text(nicknameManager.getDisplayName(player))
+                        .color(NamedTextColor.WHITE));
             }
 
             sender.sendMessage(Component.text("  ").append(playerList));

@@ -31,6 +31,7 @@ import sh.joey.mc.home.HomeStorage;
 import sh.joey.mc.session.OnTimeCommand;
 import sh.joey.mc.session.PlayerSessionStorage;
 import sh.joey.mc.session.PlayerSessionTracker;
+import sh.joey.mc.session.WhoisCommand;
 import sh.joey.mc.storage.DatabaseConfig;
 import sh.joey.mc.storage.DatabaseService;
 import sh.joey.mc.storage.MigrationRunner;
@@ -88,6 +89,11 @@ import sh.joey.mc.resourcepack.ResourcePackCommand;
 import sh.joey.mc.multiworld.WorldAliasCommand;
 import sh.joey.mc.tablist.TablistProvider;
 import sh.joey.mc.bluemap.BlueMapIntegration;
+import sh.joey.mc.nickname.NicknameManager;
+import sh.joey.mc.nickname.NicknameStorage;
+import sh.joey.mc.nickname.NicknameValidator;
+import sh.joey.mc.nickname.NickCommand;
+import sh.joey.mc.player.PlayerResolver;
 
 @SuppressWarnings("unused")
 public final class SiqiJoeyPlugin extends JavaPlugin {
@@ -119,6 +125,21 @@ public final class SiqiJoeyPlugin extends JavaPlugin {
         components.add(playerSessionTracker);
         components.add(CmdExecutor.register(this,
                 new OnTimeCommand(this, playerSessionStorage, playerSessionTracker)));
+
+        // Nickname system (after session storage, before display systems)
+        var nicknameStorage = new NicknameStorage(storageService);
+        var nicknameValidator = new NicknameValidator(playerSessionStorage, nicknameStorage);
+        var nicknameManager = new NicknameManager(this, nicknameStorage);
+        components.add(nicknameManager);
+        components.add(CmdExecutor.register(this,
+                new NickCommand(this, playerSessionStorage, nicknameValidator, nicknameManager)));
+
+        // Player resolver (central player lookup service)
+        var playerResolver = new PlayerResolver(this, playerSessionStorage, nicknameManager, nicknameStorage);
+
+        // Whois command (needs playerResolver, so after resolver init)
+        components.add(CmdExecutor.register(this,
+                new WhoisCommand(this, playerSessionStorage, nicknameManager, playerResolver)));
 
         // Permission system
         var permissionStorage = new PermissionStorage(storageService);
@@ -174,39 +195,40 @@ public final class SiqiJoeyPlugin extends JavaPlugin {
 
         // Register commands using CmdExecutor
         components.add(CmdExecutor.register(this, new BackCommand(this, locationTracker, safeTeleporter)));
-        components.add(CmdExecutor.register(this, new TpCommand(this, config, safeTeleporter, confirmationManager)));
-        components.add(CmdExecutor.register(this, new TpHereCommand(this, config, safeTeleporter, confirmationManager)));
+        components.add(CmdExecutor.register(this, new TpCommand(this, config, safeTeleporter, confirmationManager, playerResolver)));
+        components.add(CmdExecutor.register(this, new TpHereCommand(this, config, safeTeleporter, confirmationManager, playerResolver)));
         components.add(CmdExecutor.register(this, ConfirmCommands.accept(confirmationManager)));
         components.add(CmdExecutor.register(this, ConfirmCommands.decline(confirmationManager)));
 
         // Home system (uses PostgreSQL)
         var homeStorage = new HomeStorage(storageService);
         components.add(CmdExecutor.register(this,
-                new HomeCommand(this, homeStorage, playerSessionStorage, safeTeleporter, confirmationManager)));
+                new HomeCommand(this, homeStorage, playerSessionStorage, playerResolver,
+                        safeTeleporter, confirmationManager)));
 
         var bedHomeListener = new BedHomeListener(this, homeStorage);
         components.add(bedHomeListener);
 
         // Day message system
-        var dayMessageProvider = new DayMessageProvider(this);
+        var dayMessageProvider = new DayMessageProvider(this, nicknameManager);
         components.add(dayMessageProvider);
         components.add(CmdExecutor.register(this, new DayMessageDebugCommand()));
 
         // Welcome message systems
-        var connectionMessageProvider = new ConnectionMessageProvider(this);
+        var connectionMessageProvider = new ConnectionMessageProvider(this, nicknameManager);
         components.add(connectionMessageProvider);
 
-        var joinMessageProvider = new JoinMessageProvider(this);
+        var joinMessageProvider = new JoinMessageProvider(this, nicknameManager);
         components.add(joinMessageProvider);
 
         var serverPingProvider = new ServerPingProvider(this);
         components.add(serverPingProvider);
 
-        var chatMessageProvider = new ChatMessageProvider(this, displayManager);
+        var chatMessageProvider = new ChatMessageProvider(this, displayManager, nicknameManager);
         components.add(chatMessageProvider);
 
         // Death message system
-        var deathMessageProvider = new DeathMessageProvider(this);
+        var deathMessageProvider = new DeathMessageProvider(this, nicknameManager);
         components.add(deathMessageProvider);
 
         // Monitor to verify time pauses when server is empty
@@ -257,14 +279,14 @@ public final class SiqiJoeyPlugin extends JavaPlugin {
         components.add(tablistProvider);
 
         // Utility commands
-        components.add(CmdExecutor.register(this, new ClearCommand("clear", confirmationManager)));
-        components.add(CmdExecutor.register(this, new ClearCommand("ci", confirmationManager)));
+        components.add(CmdExecutor.register(this, new ClearCommand("clear", confirmationManager, playerResolver)));
+        components.add(CmdExecutor.register(this, new ClearCommand("ci", confirmationManager, playerResolver)));
         components.add(CmdExecutor.register(this, new ItemCommand("item")));
         components.add(CmdExecutor.register(this, new ItemCommand("i")));
-        components.add(CmdExecutor.register(this, new GiveCommand()));
+        components.add(CmdExecutor.register(this, new GiveCommand(playerResolver)));
         components.add(CmdExecutor.register(this, new TimeCommand()));
         components.add(CmdExecutor.register(this, new WeatherCommand()));
-        components.add(CmdExecutor.register(this, new ListCommand()));
+        components.add(CmdExecutor.register(this, new ListCommand(nicknameManager)));
         components.add(CmdExecutor.register(this, new MapCommand(mapConfig)));
         components.add(CmdExecutor.register(this, new SuicideCommand(confirmationManager)));
         components.add(CmdExecutor.register(this, new RemoveCommand()));

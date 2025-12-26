@@ -201,6 +201,17 @@ public final class TipsProvider implements Disposable {
                 .append(cmd("/map"))
                 .append(Component.text(" to get a link to our web map!", NamedTextColor.GRAY)));
 
+        // === NICKNAME TIPS ===
+        tipList.add(Component.text("Use ", NamedTextColor.GRAY)
+                .append(cmd("/nick <name>"))
+                .append(Component.text(" to set a custom display name!", NamedTextColor.GRAY)));
+
+        tipList.add(Component.text("Your nickname appears in chat, the tab list, and death messages.", NamedTextColor.GRAY));
+
+        tipList.add(Component.text("Use ", NamedTextColor.GRAY)
+                .append(cmd("/nick clear"))
+                .append(Component.text(" to remove your nickname.", NamedTextColor.GRAY)));
+
         // === GENERAL TIPS ===
         tipList.add(Component.text("The boss bar at the top shows the time of day and other useful info.", NamedTextColor.GRAY));
 

@@ -96,6 +96,12 @@ commands:
     description: Manage your resource pack preferences
     usage: /resourcepack [select|clear] [pack]
     aliases: [rp]
+  nick:
+    description: Set or clear your display name
+    usage: /nick [name|clear] or /nick <player> [name|clear]
+  whois:
+    description: Look up player information
+    usage: /whois <player>
 
 permissions:
   smp.*:
@@ -126,6 +132,10 @@ permissions:
       smp.perm.admin: true
       smp.debug: true
       smp.resourcepack: true
+      smp.nick: true
+      smp.nick.others: true
+      smp.whois: true
+      smp.whois.admin: true
 
   smp.tp:
     description: Send teleport requests to other players
@@ -209,3 +219,17 @@ permissions:
 
   smp.resourcepack:
     description: Manage resource pack preferences
+
+  smp.nick:
+    description: Set or clear your own nickname
+
+  smp.nick.others:
+    description: Set or clear other players' nicknames
+    default: op
+
+  smp.whois:
+    description: Look up basic player information
+
+  smp.whois.admin:
+    description: Look up detailed player information including IP and history
+    default: op

@@ -7,31 +7,42 @@ import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.jetbrains.annotations.Nullable;
 import sh.joey.mc.SiqiJoeyPlugin;
+import sh.joey.mc.nickname.NicknameManager;
 import sh.joey.mc.permissions.DisplayManager;
 
 /**
  * Customizes chat message format to match the plugin's style.
- * Format: [prefix]PlayerName[suffix]: message
+ * Format: [prefix]DisplayName[suffix]: message
  * <p>
  * When a DisplayManager is provided, prefixes and suffixes from the
  * permissions system are included in chat messages.
+ * <p>
+ * When a NicknameManager is provided, uses the player's display name
+ * (nickname if set, otherwise username).
  */
 public final class ChatMessageProvider implements Disposable {
 
     private final CompositeDisposable disposables = new CompositeDisposable();
     @Nullable
     private final DisplayManager displayManager;
+    @Nullable
+    private final NicknameManager nicknameManager;
 
     public ChatMessageProvider(SiqiJoeyPlugin plugin) {
-        this(plugin, null);
+        this(plugin, null, null);
     }
 
-    public ChatMessageProvider(SiqiJoeyPlugin plugin, @Nullable DisplayManager displayManager) {
+    public ChatMessageProvider(SiqiJoeyPlugin plugin, @Nullable DisplayManager displayManager,
+                               @Nullable NicknameManager nicknameManager) {
         this.displayManager = displayManager;
+        this.nicknameManager = nicknameManager;
 
         disposables.add(plugin.watchEvent(AsyncChatEvent.class)
                 .subscribe(event -> {
-                    String playerName = event.getPlayer().getName();
+                    // Use display name (nickname if set, otherwise username)
+                    String playerName = nicknameManager != null
+                            ? nicknameManager.getDisplayName(event.getPlayer())
+                            : event.getPlayer().getName();
                     Component message = event.message();
 
                     // Get prefix/suffix from DisplayManager if available
