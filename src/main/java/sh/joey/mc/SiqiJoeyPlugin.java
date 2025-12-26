@@ -79,6 +79,10 @@ import sh.joey.mc.utility.WarpStorage;
 import sh.joey.mc.utility.WeatherCommand;
 import sh.joey.mc.tips.TipsConfig;
 import sh.joey.mc.tips.TipsProvider;
+import sh.joey.mc.resourcepack.ResourcePackConfig;
+import sh.joey.mc.resourcepack.ResourcePackStorage;
+import sh.joey.mc.resourcepack.ResourcePackManager;
+import sh.joey.mc.resourcepack.ResourcePackCommand;
 import sh.joey.mc.multiworld.WorldAliasCommand;
 import sh.joey.mc.tablist.TablistProvider;
 
@@ -267,6 +271,14 @@ public final class SiqiJoeyPlugin extends JavaPlugin {
         var spawnStorage = new SpawnStorage(storageService);
         components.add(CmdExecutor.register(this, new SpawnCommand(this, spawnStorage, safeTeleporter)));
         components.add(CmdExecutor.register(this, new SetSpawnCommand(this, spawnStorage)));
+
+        // Resource pack system
+        var resourcePackConfig = ResourcePackConfig.load(this);
+        var resourcePackStorage = new ResourcePackStorage(storageService);
+        var resourcePackManager = new ResourcePackManager(this, resourcePackConfig, resourcePackStorage);
+        components.add(resourcePackManager);
+        components.add(CmdExecutor.register(this,
+                new ResourcePackCommand(this, resourcePackConfig, resourcePackStorage, resourcePackManager)));
 
         getLogger().info("Plugin enabled!");
     }

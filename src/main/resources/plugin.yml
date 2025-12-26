@@ -88,6 +88,10 @@ commands:
   superflat:
     description: Teleport to the superflat world
     usage: /superflat
+  resourcepack:
+    description: Manage your resource pack preferences
+    usage: /resourcepack [select|clear] [pack]
+    aliases: [rp]
 
 permissions:
   smp.*:
@@ -116,6 +120,7 @@ permissions:
       smp.seed: true
       smp.perm.admin: true
       smp.debug: true
+      smp.resourcepack: true
 
   smp.tp:
     description: Send teleport requests to other players
@@ -193,3 +198,6 @@ permissions:
   smp.debug:
     description: Use debug commands
     default: op
+
+  smp.resourcepack:
+    description: Manage resource pack preferences
