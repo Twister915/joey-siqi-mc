@@ -176,6 +176,11 @@ public final class TipsProvider implements Disposable {
                 .append(cmd("/ontime"))
                 .append(Component.text(" to see how long you've played on the server.", NamedTextColor.GRAY)));
 
+        // === RESOURCE PACK TIPS ===
+        tipList.add(Component.text("Use ", NamedTextColor.GRAY)
+                .append(cmd("/rp"))
+                .append(Component.text(" to browse and select a custom resource pack!", NamedTextColor.GRAY)));
+
         // === GENERAL TIPS ===
         tipList.add(Component.text("The boss bar at the top shows the time of day and other useful info.", NamedTextColor.GRAY));
 
