@@ -87,6 +87,7 @@ import sh.joey.mc.resourcepack.ResourcePackManager;
 import sh.joey.mc.resourcepack.ResourcePackCommand;
 import sh.joey.mc.multiworld.WorldAliasCommand;
 import sh.joey.mc.tablist.TablistProvider;
+import sh.joey.mc.bluemap.BlueMapIntegration;
 
 @SuppressWarnings("unused")
 public final class SiqiJoeyPlugin extends JavaPlugin {
@@ -277,6 +278,13 @@ public final class SiqiJoeyPlugin extends JavaPlugin {
         var spawnStorage = new SpawnStorage(storageService);
         components.add(CmdExecutor.register(this, new SpawnCommand(this, spawnStorage, safeTeleporter)));
         components.add(CmdExecutor.register(this, new SetSpawnCommand(this, spawnStorage)));
+
+        // BlueMap integration (optional - only loads if BlueMap plugin is present)
+        if (getServer().getPluginManager().getPlugin("BlueMap") != null) {
+            var blueMapIntegration = new BlueMapIntegration(this, warpStorage, spawnStorage);
+            components.add(blueMapIntegration);
+            getLogger().info("BlueMap detected, marker integration enabled");
+        }
 
         // Resource pack system
         var resourcePackConfig = ResourcePackConfig.load(this);

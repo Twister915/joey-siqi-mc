@@ -5,6 +5,7 @@ description: Joey's custom mods for playing with Siqi
 api-version: '1.21'
 load: POSTWORLD
 author: Joey
+softdepend: [BlueMap]
 
 commands:
   back:

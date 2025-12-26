@@ -1,13 +1,18 @@
 package sh.joey.mc.utility;
 
 import io.reactivex.rxjava3.core.Completable;
+import io.reactivex.rxjava3.core.Flowable;
 import io.reactivex.rxjava3.core.Maybe;
+import io.reactivex.rxjava3.core.Observable;
+import io.reactivex.rxjava3.subjects.PublishSubject;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.jetbrains.annotations.Nullable;
 import sh.joey.mc.storage.StorageService;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -16,9 +21,17 @@ import java.util.UUID;
 public final class SpawnStorage {
 
     private final StorageService storage;
+    private final PublishSubject<Void> changeSubject = PublishSubject.create();
 
     public SpawnStorage(StorageService storage) {
         this.storage = storage;
+    }
+
+    /**
+     * Observable that emits whenever spawn points are added or updated.
+     */
+    public Observable<Void> onChanged() {
+        return changeSubject.hide();
     }
 
     public record SpawnPoint(UUID worldId, double x, double y, double z, float yaw, float pitch) {
@@ -50,6 +63,27 @@ public final class SpawnStorage {
         });
     }
 
+    public Flowable<SpawnPoint> getAllSpawns() {
+        return storage.queryFlowable(conn -> {
+            List<SpawnPoint> spawns = new ArrayList<>();
+            try (var stmt = conn.prepareStatement(
+                    "SELECT world_id, x, y, z, yaw, pitch FROM world_spawns")) {
+                var rs = stmt.executeQuery();
+                while (rs.next()) {
+                    spawns.add(new SpawnPoint(
+                            UUID.fromString(rs.getString("world_id")),
+                            rs.getDouble("x"),
+                            rs.getDouble("y"),
+                            rs.getDouble("z"),
+                            rs.getFloat("yaw"),
+                            rs.getFloat("pitch")
+                    ));
+                }
+            }
+            return spawns;
+        });
+    }
+
     public Completable setSpawn(UUID worldId, Location location, @Nullable UUID setBy) {
         return storage.execute(conn -> {
             try (var stmt = conn.prepareStatement("""
@@ -73,6 +107,6 @@ public final class SpawnStorage {
                 stmt.setObject(7, setBy);
                 stmt.executeUpdate();
             }
-        });
+        }).doOnComplete(() -> changeSubject.onNext(null));
     }
 }

@@ -3,7 +3,9 @@ package sh.joey.mc.utility;
 import io.reactivex.rxjava3.core.Completable;
 import io.reactivex.rxjava3.core.Flowable;
 import io.reactivex.rxjava3.core.Maybe;
+import io.reactivex.rxjava3.core.Observable;
 import io.reactivex.rxjava3.core.Single;
+import io.reactivex.rxjava3.subjects.PublishSubject;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.World;
@@ -22,9 +24,17 @@ import java.util.UUID;
 public final class WarpStorage {
 
     private final StorageService storage;
+    private final PublishSubject<Void> changeSubject = PublishSubject.create();
 
     public WarpStorage(StorageService storage) {
         this.storage = storage;
+    }
+
+    /**
+     * Observable that emits whenever warps are added, updated, or deleted.
+     */
+    public Observable<Void> onChanged() {
+        return changeSubject.hide();
     }
 
     public record Warp(String name, UUID worldId, double x, double y, double z, float yaw, float pitch, @Nullable UUID createdBy) {
@@ -87,15 +97,17 @@ public final class WarpStorage {
                 stmt.setObject(8, createdBy);
                 stmt.executeUpdate();
             }
-        });
+        }).doOnComplete(() -> changeSubject.onNext(null));
     }
 
     public Single<Boolean> deleteWarp(String name) {
-        return storage.query(conn -> {
+        return storage.<Boolean>query(conn -> {
             try (var stmt = conn.prepareStatement("DELETE FROM warps WHERE name = ?")) {
                 stmt.setString(1, name.toLowerCase());
                 return stmt.executeUpdate() > 0;
             }
+        }).doOnSuccess(deleted -> {
+            if (deleted) changeSubject.onNext(null);
         });
     }
 

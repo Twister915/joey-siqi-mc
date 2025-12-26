@@ -12,11 +12,16 @@ repositories {
         name = 'papermc'
         url = 'https://repo.papermc.io/repository/maven-public/'
     }
+    maven {
+        name = 'bluecolored'
+        url = 'https://repo.bluecolored.de/releases'
+    }
 }
 
 dependencies {
     compileOnly 'io.papermc.paper:paper-api:1.21.11-R0.1-SNAPSHOT'
     compileOnly 'com.google.code.gson:gson:2.10.1' // Provided by Paper at runtime
+    compileOnly 'de.bluecolored:bluemap-api:2.7.4'
     implementation 'io.reactivex.rxjava3:rxjava:3.1.12'
     implementation 'com.zaxxer:HikariCP:5.1.0'
     implementation 'org.postgresql:postgresql:42.7.7'
