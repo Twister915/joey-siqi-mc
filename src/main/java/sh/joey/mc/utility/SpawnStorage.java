@@ -21,16 +21,16 @@ import java.util.UUID;
 public final class SpawnStorage {
 
     private final StorageService storage;
-    private final PublishSubject<Void> changeSubject = PublishSubject.create();
+    private final PublishSubject<UUID> changeSubject = PublishSubject.create();
 
     public SpawnStorage(StorageService storage) {
         this.storage = storage;
     }
 
     /**
-     * Observable that emits whenever spawn points are added or updated.
+     * Observable that emits the world UUID whenever a spawn point is added or updated.
      */
-    public Observable<Void> onChanged() {
+    public Observable<UUID> onChanged() {
         return changeSubject.hide();
     }
 
@@ -107,6 +107,6 @@ public final class SpawnStorage {
                 stmt.setObject(7, setBy);
                 stmt.executeUpdate();
             }
-        }).doOnComplete(() -> changeSubject.onNext(null));
+        }).doOnComplete(() -> changeSubject.onNext(worldId));
     }
 }

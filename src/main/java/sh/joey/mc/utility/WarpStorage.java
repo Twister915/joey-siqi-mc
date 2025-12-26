@@ -24,16 +24,16 @@ import java.util.UUID;
 public final class WarpStorage {
 
     private final StorageService storage;
-    private final PublishSubject<Void> changeSubject = PublishSubject.create();
+    private final PublishSubject<String> changeSubject = PublishSubject.create();
 
     public WarpStorage(StorageService storage) {
         this.storage = storage;
     }
 
     /**
-     * Observable that emits whenever warps are added, updated, or deleted.
+     * Observable that emits the warp name whenever a warp is added, updated, or deleted.
      */
-    public Observable<Void> onChanged() {
+    public Observable<String> onChanged() {
         return changeSubject.hide();
     }
 
@@ -97,17 +97,18 @@ public final class WarpStorage {
                 stmt.setObject(8, createdBy);
                 stmt.executeUpdate();
             }
-        }).doOnComplete(() -> changeSubject.onNext(null));
+        }).doOnComplete(() -> changeSubject.onNext(name.toLowerCase()));
     }
 
     public Single<Boolean> deleteWarp(String name) {
+        String normalizedName = name.toLowerCase();
         return storage.<Boolean>query(conn -> {
             try (var stmt = conn.prepareStatement("DELETE FROM warps WHERE name = ?")) {
-                stmt.setString(1, name.toLowerCase());
+                stmt.setString(1, normalizedName);
                 return stmt.executeUpdate() > 0;
             }
         }).doOnSuccess(deleted -> {
-            if (deleted) changeSubject.onNext(null);
+            if (deleted) changeSubject.onNext(normalizedName);
         });
     }
 
