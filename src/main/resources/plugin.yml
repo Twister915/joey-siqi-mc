@@ -110,6 +110,9 @@ commands:
     description: Reply to the last private message
     usage: /reply <message>
     aliases: [r]
+  adminmode:
+    description: Toggle admin creative mode (preserves inventory)
+    usage: /adminmode
 
 permissions:
   smp.*:
@@ -145,6 +148,7 @@ permissions:
       smp.nick.others: true
       smp.whois: true
       smp.whois.admin: true
+      smp.adminmode: true
 
   smp.tp:
     description: Send teleport requests to other players
@@ -245,3 +249,7 @@ permissions:
 
   smp.msg:
     description: Send and receive private messages
+
+  smp.adminmode:
+    description: Toggle admin creative mode in survival worlds
+    default: op

@@ -25,6 +25,7 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
+import java.util.function.Predicate;
 
 /**
  * Handles safe teleportation with warmup countdown and movement detection.
@@ -42,6 +43,7 @@ public final class SafeTeleporter implements Disposable {
     private final ConfirmationManager confirmationManager;
     private final PlayerWorldPositionStorage worldPositionStorage;
     private final WorldsConfig worldsConfig;
+    private final Predicate<UUID> adminModeChecker;
     private final Map<UUID, PendingTeleport> pendingTeleports = new HashMap<>();
     private final Map<UUID, Long> cancelledTeleports = new HashMap<>();
 
@@ -89,13 +91,15 @@ public final class SafeTeleporter implements Disposable {
     public SafeTeleporter(SiqiJoeyPlugin plugin, PluginConfig config, LocationTracker locationTracker,
                           ConfirmationManager confirmationManager,
                           PlayerWorldPositionStorage worldPositionStorage,
-                          WorldsConfig worldsConfig) {
+                          WorldsConfig worldsConfig,
+                          Predicate<UUID> adminModeChecker) {
         this.plugin = plugin;
         this.config = config;
         this.locationTracker = locationTracker;
         this.confirmationManager = confirmationManager;
         this.worldPositionStorage = worldPositionStorage;
         this.worldsConfig = worldsConfig;
+        this.adminModeChecker = adminModeChecker;
 
         // Movement detection
         disposables.add(plugin.watchEvent(EventPriority.MONITOR, PlayerMoveEvent.class)
@@ -147,6 +151,18 @@ public final class SafeTeleporter implements Disposable {
         // Reject if player is sleeping
         if (player.isSleeping()) {
             Messages.error(player, "You cannot teleport while sleeping!");
+            if (onComplete != null) {
+                onComplete.accept(false);
+            }
+            return;
+        }
+
+        // Reject if player is in admin mode and trying to teleport to a different world
+        if (adminModeChecker != null && destination.getWorld() != null
+                && !destination.getWorld().equals(player.getWorld())
+                && adminModeChecker.test(playerId)) {
+            Messages.error(player, "You cannot teleport to another world while in admin mode.");
+            Messages.info(player, "Use /adminmode to exit first.");
             if (onComplete != null) {
                 onComplete.accept(false);
             }

@@ -99,6 +99,9 @@ import sh.joey.mc.msg.MsgCommand;
 import sh.joey.mc.msg.PrivateMessageManager;
 import sh.joey.mc.msg.PrivateMessageStorage;
 import sh.joey.mc.msg.ReplyCommand;
+import sh.joey.mc.adminmode.AdminModeCommand;
+import sh.joey.mc.adminmode.AdminModeManager;
+import sh.joey.mc.adminmode.AdminModeStorage;
 
 @SuppressWarnings("unused")
 public final class SiqiJoeyPlugin extends JavaPlugin {
@@ -199,9 +202,23 @@ public final class SiqiJoeyPlugin extends JavaPlugin {
         // Load worlds config early (SafeTeleporter needs it for instant teleport check)
         var worldsConfig = WorldsConfig.load(this);
 
+        // Multi-world system (moved earlier - needed for admin mode)
+        var inventorySnapshotStorage = new InventorySnapshotStorage(storageService);
+
+        var worldManager = new WorldManager(this, worldsConfig);
+        worldManager.loadWorlds();
+
+        // Admin mode system
+        var adminModeStorage = new AdminModeStorage(storageService);
+        var adminModeManager = new AdminModeManager(this, adminModeStorage, inventorySnapshotStorage, worldManager);
+        components.add(adminModeManager);
+
         var safeTeleporter = new SafeTeleporter(this, config, locationTracker, confirmationManager,
-                playerWorldPositionStorage, worldsConfig);
+                playerWorldPositionStorage, worldsConfig, adminModeManager::isInAdminMode);
         components.add(safeTeleporter);
+
+        // Register admin mode command
+        components.add(CmdExecutor.register(this, new AdminModeCommand(adminModeManager)));
 
         // Register teleport countdown provider (needs SafeTeleporter)
         bossBarManager.registerProvider(new TeleportCountdownProvider(safeTeleporter));
@@ -248,12 +265,7 @@ public final class SiqiJoeyPlugin extends JavaPlugin {
         var timePassingMonitor = new TimePassingMonitor(this);
         components.add(timePassingMonitor);
 
-        // Multi-world system
-        var inventorySnapshotStorage = new InventorySnapshotStorage(storageService);
-
-        var worldManager = new WorldManager(this, worldsConfig);
-        worldManager.loadWorlds();
-
+        // Multi-world inventory and gamemode management
         var inventoryGroupStorage = new InventoryGroupStorage(storageService);
         var playerLastWorldStorage = new PlayerLastWorldStorage(storageService);
 
