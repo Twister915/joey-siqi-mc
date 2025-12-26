@@ -79,6 +79,9 @@ commands:
   seed:
     description: Show the seed for the current world
     usage: /seed
+  map:
+    description: Get a link to the server web map
+    usage: /map
   survival:
     description: Teleport to the survival world
     usage: /survival
@@ -118,6 +121,7 @@ permissions:
       smp.suicide: true
       smp.remove: true
       smp.seed: true
+      smp.map: true
       smp.perm.admin: true
       smp.debug: true
       smp.resourcepack: true
@@ -190,6 +194,9 @@ permissions:
   smp.seed:
     description: View world seed
     default: op
+
+  smp.map:
+    description: View the web map link
 
   smp.perm.admin:
     description: Manage permissions and groups

@@ -67,6 +67,8 @@ import sh.joey.mc.utility.ClearCommand;
 import sh.joey.mc.utility.GiveCommand;
 import sh.joey.mc.utility.ItemCommand;
 import sh.joey.mc.utility.ListCommand;
+import sh.joey.mc.utility.MapCommand;
+import sh.joey.mc.utility.MapConfig;
 import sh.joey.mc.utility.RemoveCommand;
 import sh.joey.mc.utility.SeedCommand;
 import sh.joey.mc.utility.SetSpawnCommand;
@@ -241,9 +243,12 @@ public final class SiqiJoeyPlugin extends JavaPlugin {
         components.add(CmdExecutor.register(this, new WorldAliasCommand("creative", "creative", worldCommand)));
         components.add(CmdExecutor.register(this, new WorldAliasCommand("superflat", "superflat", worldCommand)));
 
+        // Map config (used by tips and map command)
+        var mapConfig = MapConfig.load(this);
+
         // Tips system
         var tipsConfig = TipsConfig.load(this);
-        var tipsProvider = new TipsProvider(this, tipsConfig);
+        var tipsProvider = new TipsProvider(this, tipsConfig, mapConfig);
         components.add(tipsProvider);
 
         // Tablist header/footer
@@ -259,6 +264,7 @@ public final class SiqiJoeyPlugin extends JavaPlugin {
         components.add(CmdExecutor.register(this, new TimeCommand()));
         components.add(CmdExecutor.register(this, new WeatherCommand()));
         components.add(CmdExecutor.register(this, new ListCommand()));
+        components.add(CmdExecutor.register(this, new MapCommand(mapConfig)));
         components.add(CmdExecutor.register(this, new SuicideCommand(confirmationManager)));
         components.add(CmdExecutor.register(this, new RemoveCommand()));
         components.add(CmdExecutor.register(this, new SeedCommand()));

@@ -10,6 +10,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import sh.joey.mc.SiqiJoeyPlugin;
+import sh.joey.mc.utility.MapConfig;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -18,6 +19,7 @@ import java.util.Map;
 import java.util.Random;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Function;
 
 /**
  * Sends tips about plugin commands and features to individual players.
@@ -36,14 +38,18 @@ public final class TipsProvider implements Disposable {
     private final CompositeDisposable disposables = new CompositeDisposable();
     private final Map<UUID, Disposable> playerTimers = new HashMap<>();
     private final List<Component> tips;
+    private final List<Function<Player, Component>> dynamicTips;
     private final Random random = new Random();
     private final SiqiJoeyPlugin plugin;
+    private final MapConfig mapConfig;
     private final boolean enabled;
 
-    public TipsProvider(SiqiJoeyPlugin plugin, TipsConfig config) {
+    public TipsProvider(SiqiJoeyPlugin plugin, TipsConfig config, MapConfig mapConfig) {
         this.plugin = plugin;
+        this.mapConfig = mapConfig;
         this.enabled = config.enabled();
         this.tips = buildTips();
+        this.dynamicTips = buildDynamicTips();
 
         if (!enabled) {
             return;
@@ -84,7 +90,16 @@ public final class TipsProvider implements Disposable {
             return;
         }
 
-        Component tip = tips.get(random.nextInt(tips.size()));
+        int totalTips = tips.size() + dynamicTips.size();
+        int index = random.nextInt(totalTips);
+
+        Component tip;
+        if (index < tips.size()) {
+            tip = tips.get(index);
+        } else {
+            tip = dynamicTips.get(index - tips.size()).apply(player);
+        }
+
         player.sendMessage(PREFIX.append(tip));
     }
 
@@ -181,12 +196,34 @@ public final class TipsProvider implements Disposable {
                 .append(cmd("/rp"))
                 .append(Component.text(" to browse and select a custom resource pack!", NamedTextColor.GRAY)));
 
+        // === MAP TIPS ===
+        tipList.add(Component.text("Use ", NamedTextColor.GRAY)
+                .append(cmd("/map"))
+                .append(Component.text(" to get a link to our web map!", NamedTextColor.GRAY)));
+
         // === GENERAL TIPS ===
         tipList.add(Component.text("The boss bar at the top shows the time of day and other useful info.", NamedTextColor.GRAY));
 
         tipList.add(Component.text("Hold a lodestone compass to see the direction and distance to your target.", NamedTextColor.GRAY));
 
         tipList.add(Component.text("Entering a new biome? Watch for the biome name in the boss bar!", NamedTextColor.GRAY));
+
+        return tipList;
+    }
+
+    private List<Function<Player, Component>> buildDynamicTips() {
+        List<Function<Player, Component>> tipList = new ArrayList<>();
+
+        // Dynamic map tip - links directly to player's current position
+        tipList.add(player -> {
+            String url = mapConfig.buildUrl(player.getLocation());
+            return Component.text("View your location on the web map! ", NamedTextColor.GRAY)
+                    .append(Component.text("[Open Map]")
+                            .color(NamedTextColor.AQUA)
+                            .clickEvent(ClickEvent.openUrl(url))
+                            .hoverEvent(HoverEvent.showText(
+                                    Component.text("Click to open in browser").color(NamedTextColor.GRAY))));
+        });
 
         return tipList;
     }

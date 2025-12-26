@@ -144,6 +144,15 @@ public final class SafeTeleporter implements Disposable {
             return;
         }
 
+        // Reject if player is sleeping
+        if (player.isSleeping()) {
+            Messages.error(player, "You cannot teleport while sleeping!");
+            if (onComplete != null) {
+                onComplete.accept(false);
+            }
+            return;
+        }
+
         // Check if destination is safe
         Optional<Location> safeLocation = findSafeLocation(destination);
 
