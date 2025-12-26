@@ -34,7 +34,7 @@ import java.util.UUID;
 public final class PlayerSubcommand {
 
     private static final Set<String> ACTIONS = Set.of(
-            "set", "unset", "chat", "nameplate", "inspect"
+            "set", "unset", "chat", "nameplate", "color", "inspect"
     );
 
     private final SiqiJoeyPlugin plugin;
@@ -82,6 +82,7 @@ public final class PlayerSubcommand {
             case "set" -> handleSet(sender, playerId, playerName, args);
             case "unset" -> handleUnset(sender, playerId, playerName, args);
             case "chat", "nameplate" -> handleAttribute(sender, playerId, playerName, action, args);
+            case "color" -> handleColor(sender, playerId, playerName, args);
             case "inspect" -> handleInspect(sender, playerId, playerName, args);
             default -> {
                 error(sender, "Unknown action: " + action);
@@ -115,6 +116,7 @@ public final class PlayerSubcommand {
             return switch (action) {
                 case "set" -> completePermissionOrBool(remaining);
                 case "chat", "nameplate" -> completePrefixSuffix(remaining);
+                case "color" -> completeColor(remaining);
                 default -> Maybe.empty();
             };
         });
@@ -228,6 +230,35 @@ public final class PlayerSubcommand {
                 .onErrorComplete();
     }
 
+    private Completable handleColor(CommandSender sender, UUID playerId, String playerName, String[] args) {
+        if (args.length < 1) {
+            error(sender, "Usage: /perm player " + playerName + " color <color|clear>");
+            return Completable.complete();
+        }
+
+        String colorArg = args[0].toLowerCase();
+        String value = colorArg.equals("clear") ? null : args[0];
+
+        // Validate color if not clearing
+        if (value != null && PermissibleAttributes.parseColor(value) == null) {
+            error(sender, "Invalid color: " + value + ". Use named colors (green, red, aqua) or hex (#FF5555).");
+            return Completable.complete();
+        }
+
+        return storage.setPlayerAttribute(playerId, "name", "color", value)
+                .andThen(effects.onPlayerChanged(playerId))
+                .observeOn(plugin.mainScheduler())
+                .doOnComplete(() -> {
+                    if (value == null) {
+                        success(sender, "Cleared name color for " + playerName + ".");
+                    } else {
+                        success(sender, "Set name color to '" + value + "' for " + playerName + ".");
+                    }
+                })
+                .doOnError(err -> logAndError(sender, "Failed to set color", err))
+                .onErrorComplete();
+    }
+
     private Completable handleInspect(CommandSender sender, UUID playerId, String playerName, String[] args) {
         int page = 1;
         if (args.length >= 1) {
@@ -288,6 +319,7 @@ public final class PlayerSubcommand {
         paginator.add(PaginatedItem.simple(formatAttr("Chat Suffix", data.attributes.chatSuffix())));
         paginator.add(PaginatedItem.simple(formatAttr("Nameplate Prefix", data.attributes.nameplatePrefix())));
         paginator.add(PaginatedItem.simple(formatAttr("Nameplate Suffix", data.attributes.nameplateSuffix())));
+        paginator.add(PaginatedItem.simple(formatAttr("Name Color", data.attributes.nameColor())));
 
         // Groups section
         paginator.add(PaginatedItem.empty());
@@ -399,6 +431,21 @@ public final class PlayerSubcommand {
         for (String val : List.of("prefix", "suffix")) {
             if (val.startsWith(partial)) {
                 completions.add(Completion.completion(val));
+            }
+        }
+        return Maybe.just(completions);
+    }
+
+    private static Maybe<List<Completion>> completeColor(String[] args) {
+        if (args.length != 1) return Maybe.empty();
+        String partial = args[0].toLowerCase();
+        List<Completion> completions = new ArrayList<>();
+        // Named colors + clear
+        for (String color : List.of("clear", "black", "dark_blue", "dark_green", "dark_aqua",
+                "dark_red", "dark_purple", "gold", "gray", "dark_gray", "blue", "green",
+                "aqua", "red", "light_purple", "yellow", "white")) {
+            if (color.startsWith(partial)) {
+                completions.add(Completion.completion(color));
             }
         }
         return Maybe.just(completions);

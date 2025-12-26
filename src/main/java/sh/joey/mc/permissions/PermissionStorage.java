@@ -39,7 +39,7 @@ public final class PermissionStorage {
             // First get group record
             String groupSql = """
                     SELECT canonical_name, display_name, priority, is_default,
-                           chat_prefix, chat_suffix, nameplate_prefix, nameplate_suffix,
+                           chat_prefix, chat_suffix, nameplate_prefix, nameplate_suffix, name_color,
                            created_at, updated_at
                     FROM perm_groups WHERE canonical_name = ?
                     """;
@@ -72,7 +72,7 @@ public final class PermissionStorage {
         return storage.queryFlowable(conn -> {
             String sql = """
                     SELECT canonical_name, display_name, priority, is_default,
-                           chat_prefix, chat_suffix, nameplate_prefix, nameplate_suffix,
+                           chat_prefix, chat_suffix, nameplate_prefix, nameplate_suffix, name_color,
                            created_at, updated_at
                     FROM perm_groups
                     ORDER BY priority DESC, canonical_name
@@ -99,7 +99,7 @@ public final class PermissionStorage {
         return storage.queryFlowable(conn -> {
             String sql = """
                     SELECT canonical_name, display_name, priority, is_default,
-                           chat_prefix, chat_suffix, nameplate_prefix, nameplate_suffix,
+                           chat_prefix, chat_suffix, nameplate_prefix, nameplate_suffix, name_color,
                            created_at, updated_at
                     FROM perm_groups
                     WHERE is_default = TRUE
@@ -286,7 +286,7 @@ public final class PermissionStorage {
     public Maybe<PermissibleAttributes> getPlayerAttributes(UUID playerId) {
         return storage.queryMaybe(conn -> {
             String sql = """
-                    SELECT chat_prefix, chat_suffix, nameplate_prefix, nameplate_suffix
+                    SELECT chat_prefix, chat_suffix, nameplate_prefix, nameplate_suffix, name_color
                     FROM perm_players
                     WHERE player_id = ?
                     """;
@@ -414,7 +414,7 @@ public final class PermissionStorage {
             // Get explicit memberships plus default groups
             String sql = """
                     SELECT g.canonical_name, g.display_name, g.priority, g.is_default,
-                           g.chat_prefix, g.chat_suffix, g.nameplate_prefix, g.nameplate_suffix,
+                           g.chat_prefix, g.chat_suffix, g.nameplate_prefix, g.nameplate_suffix, g.name_color,
                            g.created_at, g.updated_at
                     FROM perm_groups g
                     WHERE g.is_default = TRUE
@@ -550,7 +550,8 @@ public final class PermissionStorage {
                 rs.getString("chat_prefix"),
                 rs.getString("chat_suffix"),
                 rs.getString("nameplate_prefix"),
-                rs.getString("nameplate_suffix")
+                rs.getString("nameplate_suffix"),
+                rs.getString("name_color")
         );
     }
 
@@ -573,7 +574,7 @@ public final class PermissionStorage {
 
     private boolean isValidAttributeColumn(String column) {
         return switch (column) {
-            case "chat_prefix", "chat_suffix", "nameplate_prefix", "nameplate_suffix" -> true;
+            case "chat_prefix", "chat_suffix", "nameplate_prefix", "nameplate_suffix", "name_color" -> true;
             default -> false;
         };
     }

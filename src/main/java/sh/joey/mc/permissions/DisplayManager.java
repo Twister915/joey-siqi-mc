@@ -3,6 +3,8 @@ package sh.joey.mc.permissions;
 import io.reactivex.rxjava3.disposables.CompositeDisposable;
 import io.reactivex.rxjava3.disposables.Disposable;
 import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.NamedTextColor;
+import net.kyori.adventure.text.format.TextColor;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.event.player.PlayerJoinEvent;
@@ -28,6 +30,9 @@ public final class DisplayManager implements Disposable {
 
     private static final String TEAM_PREFIX = "perm_";
     private static final int MAX_TEAM_NAME_LENGTH = 16;
+
+    /** Default name color when no color is set. */
+    public static final TextColor DEFAULT_NAME_COLOR = NamedTextColor.GRAY;
 
     private final CompositeDisposable disposables = new CompositeDisposable();
     private final SiqiJoeyPlugin plugin;
@@ -69,23 +74,25 @@ public final class DisplayManager implements Disposable {
         // Clean up old team
         cleanupPlayer(player);
 
-        // Create unique team for this player
+        // Create unique team for this player (always fresh to reset all properties)
         String teamName = getTeamName(player.getUniqueId());
         Team team = scoreboard.getTeam(teamName);
-        if (team == null) {
-            team = scoreboard.registerNewTeam(teamName);
+        if (team != null) {
+            team.unregister();
         }
+        team = scoreboard.registerNewTeam(teamName);
 
         // Apply prefix/suffix (using nameplate values for both tablist and nameplate)
         Component prefixComponent = attrs.nameplatePrefixComponent();
         Component suffixComponent = attrs.nameplateSuffixComponent();
 
-        if (!prefixComponent.equals(Component.empty())) {
-            team.prefix(prefixComponent);
-        }
+        team.prefix(prefixComponent);
+        team.suffix(suffixComponent);
 
-        if (!suffixComponent.equals(Component.empty())) {
-            team.suffix(suffixComponent);
+        // Apply name color if set (must be NamedTextColor for Bukkit Team API)
+        TextColor nameColor = PermissibleAttributes.parseColor(attrs.nameColor());
+        if (nameColor instanceof NamedTextColor namedColor) {
+            team.color(namedColor);
         }
 
         // Add player to team
@@ -132,6 +139,18 @@ public final class DisplayManager implements Disposable {
     public Component getChatSuffix(Player player) {
         PermissibleAttributes attrs = cache.getCachedAttributes(player.getUniqueId());
         return attrs.chatSuffixComponent();
+    }
+
+    /**
+     * Get the name color for a player.
+     * Used by ChatMessageProvider.
+     *
+     * @return the player's name color, or GRAY as default
+     */
+    public TextColor getNameColor(Player player) {
+        PermissibleAttributes attrs = cache.getCachedAttributes(player.getUniqueId());
+        TextColor color = PermissibleAttributes.parseColor(attrs.nameColor());
+        return color != null ? color : DEFAULT_NAME_COLOR;
     }
 
     /**

@@ -5,6 +5,7 @@ import io.reactivex.rxjava3.disposables.CompositeDisposable;
 import io.reactivex.rxjava3.disposables.Disposable;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
+import net.kyori.adventure.text.format.TextColor;
 import org.jetbrains.annotations.Nullable;
 import sh.joey.mc.SiqiJoeyPlugin;
 import sh.joey.mc.nickname.NicknameManager;
@@ -45,16 +46,19 @@ public final class ChatMessageProvider implements Disposable {
                             : event.getPlayer().getName();
                     Component message = event.message();
 
-                    // Get prefix/suffix from DisplayManager if available
+                    // Get prefix/suffix/color from DisplayManager if available
                     Component prefix = displayManager != null
                             ? displayManager.getChatPrefix(event.getPlayer())
                             : Component.empty();
                     Component suffix = displayManager != null
                             ? displayManager.getChatSuffix(event.getPlayer())
                             : Component.empty();
+                    TextColor nameColor = displayManager != null
+                            ? displayManager.getNameColor(event.getPlayer())
+                            : DisplayManager.DEFAULT_NAME_COLOR;
 
                     Component formatted = prefix
-                            .append(Component.text(playerName).color(NamedTextColor.GRAY))
+                            .append(Component.text(playerName).color(nameColor))
                             .append(suffix)
                             .append(Component.text(": ").color(NamedTextColor.DARK_GRAY))
                             .append(message.color(NamedTextColor.WHITE));

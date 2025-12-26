@@ -15,6 +15,7 @@ import sh.joey.mc.pagination.ChatPaginator;
 import sh.joey.mc.pagination.PaginatedItem;
 import sh.joey.mc.permissions.Group;
 import sh.joey.mc.permissions.ParsedPermission;
+import sh.joey.mc.permissions.PermissibleAttributes;
 import sh.joey.mc.permissions.PermissionGrant;
 import sh.joey.mc.permissions.PermissionStorage;
 import sh.joey.mc.permissions.cmd.PermCommand;
@@ -33,7 +34,7 @@ public final class GroupSubcommand {
 
     private static final Set<String> ACTIONS = Set.of(
             "create", "delete", "default", "priority", "set", "unset",
-            "grants", "add", "remove", "chat", "nameplate", "inspect"
+            "grants", "add", "remove", "chat", "nameplate", "color", "inspect"
     );
 
     private final SiqiJoeyPlugin plugin;
@@ -85,6 +86,7 @@ public final class GroupSubcommand {
                 case "add" -> handleAdd(sender, groupName, remaining);
                 case "remove" -> handleRemove(sender, groupName, remaining);
                 case "chat", "nameplate" -> handleAttribute(sender, groupName, action, remaining);
+                case "color" -> handleColor(sender, groupName, remaining);
                 case "inspect" -> handleInspect(sender, groupName, remaining);
                 default -> {
                     error(sender, "Unknown action: " + action);
@@ -143,6 +145,7 @@ public final class GroupSubcommand {
                 case "set" -> completePermissionOrBool(remaining);
                 case "default" -> completeBool(remaining);
                 case "chat", "nameplate" -> completePrefixSuffix(remaining);
+                case "color" -> completeColor(remaining);
                 default -> Maybe.empty();
             };
         });
@@ -500,6 +503,35 @@ public final class GroupSubcommand {
                 .onErrorComplete();
     }
 
+    private Completable handleColor(CommandSender sender, String groupName, String[] args) {
+        if (args.length < 1) {
+            error(sender, "Usage: /perm group " + groupName + " color <color|clear>");
+            return Completable.complete();
+        }
+
+        String colorArg = args[0].toLowerCase();
+        String value = colorArg.equals("clear") ? null : args[0];
+
+        // Validate color if not clearing
+        if (value != null && PermissibleAttributes.parseColor(value) == null) {
+            error(sender, "Invalid color: " + value + ". Use named colors (green, red, aqua) or hex (#FF5555).");
+            return Completable.complete();
+        }
+
+        return storage.setGroupAttribute(groupName, "name", "color", value)
+                .andThen(effects.onGroupChanged(Group.normalize(groupName)))
+                .observeOn(plugin.mainScheduler())
+                .doOnComplete(() -> {
+                    if (value == null) {
+                        success(sender, "Cleared name color for group '" + groupName + "'.");
+                    } else {
+                        success(sender, "Set name color to '" + value + "' for group '" + groupName + "'.");
+                    }
+                })
+                .doOnError(err -> logAndError(sender, "Failed to set color", err))
+                .onErrorComplete();
+    }
+
     private Completable handleInspect(CommandSender sender, String groupName, String[] args) {
         int page = 1;
         if (args.length >= 1) {
@@ -537,6 +569,7 @@ public final class GroupSubcommand {
         paginator.add(PaginatedItem.simple(formatAttr("Chat Suffix", group.attributes().chatSuffix())));
         paginator.add(PaginatedItem.simple(formatAttr("Nameplate Prefix", group.attributes().nameplatePrefix())));
         paginator.add(PaginatedItem.simple(formatAttr("Nameplate Suffix", group.attributes().nameplateSuffix())));
+        paginator.add(PaginatedItem.simple(formatAttr("Name Color", group.attributes().nameColor())));
 
         // Grants summary
         paginator.add(PaginatedItem.empty());
@@ -614,6 +647,21 @@ public final class GroupSubcommand {
         for (String val : List.of("prefix", "suffix")) {
             if (val.startsWith(partial)) {
                 completions.add(Completion.completion(val));
+            }
+        }
+        return Maybe.just(completions);
+    }
+
+    private static Maybe<List<Completion>> completeColor(String[] args) {
+        if (args.length != 1) return Maybe.empty();
+        String partial = args[0].toLowerCase();
+        List<Completion> completions = new ArrayList<>();
+        // Named colors + clear
+        for (String color : List.of("clear", "black", "dark_blue", "dark_green", "dark_aqua",
+                "dark_red", "dark_purple", "gold", "gray", "dark_gray", "blue", "green",
+                "aqua", "red", "light_purple", "yellow", "white")) {
+            if (color.startsWith(partial)) {
+                completions.add(Completion.completion(color));
             }
         }
         return Maybe.just(completions);

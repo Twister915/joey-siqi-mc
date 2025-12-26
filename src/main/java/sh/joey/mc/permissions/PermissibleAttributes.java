@@ -1,6 +1,8 @@
 package sh.joey.mc.permissions;
 
 import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.NamedTextColor;
+import net.kyori.adventure.text.format.TextColor;
 import net.kyori.adventure.text.minimessage.MiniMessage;
 import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import org.jetbrains.annotations.Nullable;
@@ -13,14 +15,15 @@ public record PermissibleAttributes(
         @Nullable String chatPrefix,
         @Nullable String chatSuffix,
         @Nullable String nameplatePrefix,
-        @Nullable String nameplateSuffix
+        @Nullable String nameplateSuffix,
+        @Nullable String nameColor
 ) {
 
     private static final MiniMessage MINI_MESSAGE = MiniMessage.miniMessage();
     private static final LegacyComponentSerializer LEGACY_SERIALIZER =
             LegacyComponentSerializer.legacyAmpersand();
 
-    public static final PermissibleAttributes EMPTY = new PermissibleAttributes(null, null, null, null);
+    public static final PermissibleAttributes EMPTY = new PermissibleAttributes(null, null, null, null, null);
 
     /**
      * Merges this attributes with another, preferring non-null values from this.
@@ -31,7 +34,8 @@ public record PermissibleAttributes(
                 chatPrefix != null ? chatPrefix : fallback.chatPrefix,
                 chatSuffix != null ? chatSuffix : fallback.chatSuffix,
                 nameplatePrefix != null ? nameplatePrefix : fallback.nameplatePrefix,
-                nameplateSuffix != null ? nameplateSuffix : fallback.nameplateSuffix
+                nameplateSuffix != null ? nameplateSuffix : fallback.nameplateSuffix,
+                nameColor != null ? nameColor : fallback.nameColor
         );
     }
 
@@ -40,7 +44,8 @@ public record PermissibleAttributes(
      */
     public boolean isEmpty() {
         return chatPrefix == null && chatSuffix == null
-                && nameplatePrefix == null && nameplateSuffix == null;
+                && nameplatePrefix == null && nameplateSuffix == null
+                && nameColor == null;
     }
 
     /**
@@ -97,5 +102,26 @@ public record PermissibleAttributes(
      */
     public static String toLegacy(Component component) {
         return LEGACY_SERIALIZER.serialize(component);
+    }
+
+    /**
+     * Parses a color string to a TextColor.
+     * Supports named colors (green, red, aqua, etc.) and hex codes (#RRGGBB).
+     *
+     * @param input the color string to parse
+     * @return the parsed TextColor, or null if input is null/empty or invalid
+     */
+    public static @Nullable TextColor parseColor(@Nullable String input) {
+        if (input == null || input.isEmpty()) {
+            return null;
+        }
+
+        // Try hex format (#RRGGBB)
+        if (input.startsWith("#")) {
+            return TextColor.fromHexString(input);
+        }
+
+        // Try named color (green, red, aqua, etc.)
+        return NamedTextColor.NAMES.value(input.toLowerCase());
     }
 }
