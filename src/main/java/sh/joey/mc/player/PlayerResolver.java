@@ -167,4 +167,35 @@ public final class PlayerResolver {
             return sessionStorage.findUsernameById(playerId);
         });
     }
+
+    /**
+     * Get display name for a player (nickname if set, otherwise username).
+     * Checks online players first, then falls back to database.
+     *
+     * @param player the online player
+     * @return the display name
+     */
+    public String getDisplayName(Player player) {
+        return nicknameManager.getDisplayName(player);
+    }
+
+    /**
+     * Get display name for a player ID (nickname if set, otherwise username).
+     * Checks nickname cache, online players, then database.
+     *
+     * @param playerId the player's UUID
+     * @return Maybe containing the display name, or empty if not found
+     */
+    public Maybe<String> getDisplayName(UUID playerId) {
+        return Maybe.defer(() -> {
+            // Check nickname cache first
+            String nickname = nicknameManager.getNickname(playerId);
+            if (nickname != null) {
+                return Maybe.just(nickname);
+            }
+
+            // Fall back to username
+            return getUsername(playerId);
+        });
+    }
 }

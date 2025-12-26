@@ -201,6 +201,17 @@ public final class TipsProvider implements Disposable {
                 .append(cmd("/map"))
                 .append(Component.text(" to get a link to our web map!", NamedTextColor.GRAY)));
 
+        // === PRIVATE MESSAGING TIPS ===
+        tipList.add(Component.text("Use ", NamedTextColor.GRAY)
+                .append(cmd("/msg <player> <message>"))
+                .append(Component.text(" to send a private message!", NamedTextColor.GRAY)));
+
+        tipList.add(Component.text("Use ", NamedTextColor.GRAY)
+                .append(cmd("/r <message>"))
+                .append(Component.text(" to quickly reply to the last message you received.", NamedTextColor.GRAY)));
+
+        tipList.add(Component.text("Offline players can receive your messages when they join!", NamedTextColor.GRAY));
+
         // === NICKNAME TIPS ===
         tipList.add(Component.text("Use ", NamedTextColor.GRAY)
                 .append(cmd("/nick <name>"))

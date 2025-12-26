@@ -102,12 +102,21 @@ commands:
   whois:
     description: Look up player information
     usage: /whois <player>
+  msg:
+    description: Send a private message to another player
+    usage: /msg <player> <message>
+    aliases: [m, t, tell, whisper, pm, w]
+  reply:
+    description: Reply to the last private message
+    usage: /reply <message>
+    aliases: [r]
 
 permissions:
   smp.*:
     description: All SMP permissions
     default: op
     children:
+      smp.msg: true
       smp.tp: true
       smp.tphere: true
       smp.back: true
@@ -233,3 +242,6 @@ permissions:
   smp.whois.admin:
     description: Look up detailed player information including IP and history
     default: op
+
+  smp.msg:
+    description: Send and receive private messages

@@ -94,6 +94,11 @@ import sh.joey.mc.nickname.NicknameStorage;
 import sh.joey.mc.nickname.NicknameValidator;
 import sh.joey.mc.nickname.NickCommand;
 import sh.joey.mc.player.PlayerResolver;
+import sh.joey.mc.msg.MessageConfig;
+import sh.joey.mc.msg.MsgCommand;
+import sh.joey.mc.msg.PrivateMessageManager;
+import sh.joey.mc.msg.PrivateMessageStorage;
+import sh.joey.mc.msg.ReplyCommand;
 
 @SuppressWarnings("unused")
 public final class SiqiJoeyPlugin extends JavaPlugin {
@@ -140,6 +145,14 @@ public final class SiqiJoeyPlugin extends JavaPlugin {
         // Whois command (needs playerResolver, so after resolver init)
         components.add(CmdExecutor.register(this,
                 new WhoisCommand(this, playerSessionStorage, nicknameManager, playerResolver)));
+
+        // Private messaging system
+        var messageConfig = MessageConfig.load(this);
+        var privateMessageStorage = new PrivateMessageStorage(storageService);
+        var privateMessageManager = new PrivateMessageManager(this, privateMessageStorage, messageConfig, playerResolver);
+        components.add(privateMessageManager);
+        components.add(CmdExecutor.register(this, new MsgCommand(this, playerResolver, privateMessageManager)));
+        components.add(CmdExecutor.register(this, new ReplyCommand(this, privateMessageManager)));
 
         // Permission system
         var permissionStorage = new PermissionStorage(storageService);
