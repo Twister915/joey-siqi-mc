@@ -61,11 +61,41 @@ Create and manage custom worlds with separate configurations. See [doc/multiworl
 - **Per-world gamemodes** - Survival in main world, creative in build world
 - **Position memory** - Returns you to where you were in each world
 
+### Private Messages
+- `/msg <player> <message>` - Send a private message (aliases: `/m`, `/t`, `/tell`, `/whisper`, `/pm`, `/w`)
+- `/reply <message>` - Reply to the last person who messaged you (alias: `/r`)
+- Messages persist across sessions - you can reply even after relogging
+
+### Nickname System
+- `/nick <name>` - Set your display name
+- `/nick clear` - Remove your nickname
+- `/nick <player> <name>` - Set another player's nickname (requires `smp.nick.others`)
+- Supports color codes and formatting
+- Nicknames appear in chat, tab list, and above player heads
+
+### Wool Statue Generator
+- `/genstatue <player>` - Generate a massive wool statue of any player
+- Downloads the player's skin from Mojang
+- 4x scale (128 blocks tall)
+- Supports both modern (64x64) and legacy (64x32) skins from 2012+
+- Integrates with FastAsyncWorldEdit/WorldEdit for `//undo` support
+- Confirmation prompt before building
+
+### Admin Mode
+- `/adminmode` - Toggle creative mode while preserving your survival inventory
+- Useful for building or fixing issues without losing your items
+- Automatically restores your survival inventory, XP, and health when you exit
+
 ### Custom Messages
 All server messages styled to match the plugin's visual theme:
 - **Join/Leave**: `[+] PlayerName` (green plus) / `[-] PlayerName` (red minus)
 - **Death**: 150+ humorous variants for all death types
 - **Chat**: `PlayerName: message` format with gray name
+
+### Majority Sleep
+- When a majority of players in a world are sleeping, the night is skipped
+- Shows a boss bar with sleep progress
+- Excludes AFK players from the count
 
 ### Warp System
 - `/warp` - List all warps (click to teleport)
@@ -76,6 +106,17 @@ All server messages styled to match the plugin's visual theme:
 ### Spawn System
 - `/spawn` - Teleport to the world's spawn point
 - `/setspawn` - Set the spawn point for the current world (requires permission)
+
+### Resource Pack System
+- `/resourcepack` - List available resource packs
+- `/resourcepack select <pack>` - Apply a resource pack (alias: `/rp`)
+- `/resourcepack clear` - Remove your current resource pack
+- Server remembers your preference across sessions
+
+### BlueMap Integration
+If [BlueMap](https://bluemap.bluecolored.de/) is installed:
+- `/map` - Get a clickable link to the web map centered on your location
+- Player markers show on the map in real-time
 
 ### Utility Commands
 - `/tphere <player>` - Request to teleport a player to you
@@ -89,8 +130,16 @@ All server messages styled to match the plugin's visual theme:
 - `/list` - Show online players
 - `/suicide` - Kill yourself to respawn (with confirmation in survival mode)
 - `/remove <type|all> [radius]` - Remove entities around you
+- `/seed` - Show the world seed
+- `/whois <player>` - Look up player information (UUID, first/last seen, online time)
 
 Item commands support 100+ aliases for common items (e.g., `dpick` for diamond pickaxe, `gapple` for golden apple).
+
+### World Shortcuts
+Quick teleport commands for configured worlds:
+- `/survival` - Teleport to the survival world
+- `/creative` - Teleport to the creative world
+- `/superflat` - Teleport to the superflat world
 
 ### Player Stats
 - `/ontime` - View your current session time and total playtime
@@ -116,6 +165,11 @@ All commands use the `smp.` permission prefix. Key permissions:
 | `smp.back` | Return to death/teleport location | everyone |
 | `smp.home` | Use home commands | everyone |
 | `smp.world` | Navigate between worlds | everyone |
+| `smp.msg` | Send and receive private messages | everyone |
+| `smp.nick` | Set your own nickname | everyone |
+| `smp.nick.others` | Set other players' nicknames | op |
+| `smp.whois` | Look up basic player information | everyone |
+| `smp.whois.admin` | Look up detailed player info (IP, history) | op |
 | `smp.clear` | Clear your own inventory | everyone |
 | `smp.clear.others` | Clear other players' inventories | op |
 | `smp.item` | Give yourself items | op |
@@ -128,6 +182,11 @@ All commands use the `smp.` permission prefix. Key permissions:
 | `smp.setspawn` | Set spawn point | op |
 | `smp.suicide` | Kill yourself to respawn | everyone |
 | `smp.remove` | Remove entities | op |
+| `smp.seed` | View world seed | op |
+| `smp.map` | View the web map link | everyone |
+| `smp.resourcepack` | Manage resource pack preferences | everyone |
+| `smp.adminmode` | Toggle admin creative mode | op |
+| `smp.statue` | Generate wool statues | op |
 | `smp.perm.admin` | Manage permissions | op |
 
 ## Requirements
@@ -135,6 +194,10 @@ All commands use the `smp.` permission prefix. Key permissions:
 - Paper/Spigot 1.21+
 - Java 21+
 - PostgreSQL 14+
+
+### Optional Dependencies
+- **[BlueMap](https://bluemap.bluecolored.de/)** - Enables `/map` command and player markers
+- **[FastAsyncWorldEdit](https://www.spigotmc.org/resources/fast-async-worldedit.13932/) or WorldEdit** - Enables `//undo` for statues
 
 ## Building
 
@@ -181,6 +244,7 @@ All persistent data is stored in PostgreSQL:
 - **inventory_snapshots** - Player inventory, health, XP saves per inventory group
 - **inventory_group_snapshots** - Tracks which inventory group each player is in
 - **player_world_positions** - Last position in each world for position memory
+- **player_last_worlds** - Tracks last world each player was in
 - **perm_groups** - Permission groups with priority, default flag, and display attributes
 - **group_permissions** - Permission grants per group (global or world-scoped)
 - **player_permissions** - Player-specific permission overrides
@@ -188,6 +252,10 @@ All persistent data is stored in PostgreSQL:
 - **player_groups** - Player-to-group membership
 - **warps** - Named warp locations
 - **world_spawns** - Per-world spawn points
+- **player_resource_packs** - Player resource pack preferences
+- **nicknames** - Player display name customizations
+- **private_messages** - Private message history for `/reply`
+- **admin_mode_state** - Preserved inventory state for admin mode
 - **migration_state** - Tracks applied database migrations
 
 Database migrations run automatically on startup.
