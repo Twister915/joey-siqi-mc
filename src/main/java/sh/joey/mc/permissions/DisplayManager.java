@@ -86,14 +86,16 @@ public final class DisplayManager implements Disposable {
         Component prefixComponent = attrs.nameplatePrefixComponent();
         Component suffixComponent = attrs.nameplateSuffixComponent();
 
-        team.prefix(prefixComponent);
-        team.suffix(suffixComponent);
-
-        // Apply name color if set (must be NamedTextColor for Bukkit Team API)
+        // Apply name color by appending to prefix (trailing color bleeds into player name)
+        // Note: We don't use team.color() as it affects XP radar dots but not tab list names
         TextColor nameColor = PermissibleAttributes.parseColor(attrs.nameColor());
-        if (nameColor instanceof NamedTextColor namedColor) {
-            team.color(namedColor);
+        if (nameColor == null) {
+            nameColor = DEFAULT_NAME_COLOR;
         }
+        Component coloredPrefix = prefixComponent.append(Component.empty().color(nameColor));
+
+        team.prefix(coloredPrefix);
+        team.suffix(suffixComponent);
 
         // Add player to team
         team.addEntry(player.getName());

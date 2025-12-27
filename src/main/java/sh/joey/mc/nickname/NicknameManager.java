@@ -6,6 +6,7 @@ import io.reactivex.rxjava3.disposables.Disposable;
 import net.kyori.adventure.text.Component;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
+import org.bukkit.event.EventPriority;
 import org.bukkit.event.player.AsyncPlayerPreLoginEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
@@ -49,8 +50,8 @@ public final class NicknameManager implements Disposable {
         disposables.add(plugin.watchEvent(PlayerJoinEvent.class)
                 .subscribe(event -> applyNickname(event.getPlayer())));
 
-        // Clean up on quit
-        disposables.add(plugin.watchEvent(PlayerQuitEvent.class)
+        // Clean up on quit (MONITOR priority to run after other handlers that need the nickname)
+        disposables.add(plugin.watchEvent(EventPriority.MONITOR, PlayerQuitEvent.class)
                 .subscribe(event -> nicknameCache.remove(event.getPlayer().getUniqueId())));
     }
 

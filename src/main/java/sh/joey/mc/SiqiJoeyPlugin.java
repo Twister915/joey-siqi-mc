@@ -80,6 +80,7 @@ import sh.joey.mc.utility.TimeCommand;
 import sh.joey.mc.utility.WarpCommand;
 import sh.joey.mc.utility.WarpStorage;
 import sh.joey.mc.utility.WeatherCommand;
+import sh.joey.mc.statue.StatueCommand;
 import sh.joey.mc.tips.TipsConfig;
 import sh.joey.mc.tips.TipsProvider;
 import sh.joey.mc.resourcepack.ResourcePackConfig;
@@ -102,6 +103,9 @@ import sh.joey.mc.msg.ReplyCommand;
 import sh.joey.mc.adminmode.AdminModeCommand;
 import sh.joey.mc.adminmode.AdminModeManager;
 import sh.joey.mc.adminmode.AdminModeStorage;
+import sh.joey.mc.sleep.MajoritySleepManager;
+import sh.joey.mc.bossbar.SleepCountdownProvider;
+import sh.joey.mc.antitroll.AntiTrollManager;
 
 @SuppressWarnings("unused")
 public final class SiqiJoeyPlugin extends JavaPlugin {
@@ -131,8 +135,6 @@ public final class SiqiJoeyPlugin extends JavaPlugin {
         var playerSessionStorage = new PlayerSessionStorage(storageService);
         var playerSessionTracker = new PlayerSessionTracker(this, playerSessionStorage);
         components.add(playerSessionTracker);
-        components.add(CmdExecutor.register(this,
-                new OnTimeCommand(this, playerSessionStorage, playerSessionTracker)));
 
         // Nickname system (after session storage, before display systems)
         var nicknameStorage = new NicknameStorage(storageService);
@@ -144,6 +146,10 @@ public final class SiqiJoeyPlugin extends JavaPlugin {
 
         // Player resolver (central player lookup service)
         var playerResolver = new PlayerResolver(this, playerSessionStorage, nicknameManager, nicknameStorage);
+
+        // OnTimeCommand (needs playerResolver for display names)
+        components.add(CmdExecutor.register(this,
+                new OnTimeCommand(this, playerSessionStorage, playerSessionTracker, playerResolver)));
 
         // Whois command (needs playerResolver, so after resolver init)
         components.add(CmdExecutor.register(this,
@@ -265,6 +271,11 @@ public final class SiqiJoeyPlugin extends JavaPlugin {
         var timePassingMonitor = new TimePassingMonitor(this);
         components.add(timePassingMonitor);
 
+        // Majority sleep (skip night when 50%+ of players are sleeping)
+        var majoritySleepManager = new MajoritySleepManager(this);
+        components.add(majoritySleepManager);
+        bossBarManager.registerProvider(new SleepCountdownProvider(majoritySleepManager));
+
         // Multi-world inventory and gamemode management
         var inventoryGroupStorage = new InventoryGroupStorage(storageService);
         var playerLastWorldStorage = new PlayerLastWorldStorage(storageService);
@@ -326,6 +337,9 @@ public final class SiqiJoeyPlugin extends JavaPlugin {
         components.add(CmdExecutor.register(this, new SpawnCommand(this, spawnStorage, safeTeleporter)));
         components.add(CmdExecutor.register(this, new SetSpawnCommand(this, spawnStorage)));
 
+        // Statue generator
+        components.add(CmdExecutor.register(this, new StatueCommand(this, confirmationManager)));
+
         // BlueMap integration (optional - only loads if BlueMap plugin is present)
         if (getServer().getPluginManager().getPlugin("BlueMap") != null) {
             var blueMapIntegration = new BlueMapIntegration(this, warpStorage, spawnStorage);
@@ -340,6 +354,9 @@ public final class SiqiJoeyPlugin extends JavaPlugin {
         components.add(resourcePackManager);
         components.add(CmdExecutor.register(this,
                 new ResourcePackCommand(this, resourcePackConfig, resourcePackStorage, resourcePackManager)));
+
+        // Anti-troll restrictions
+        components.add(new AntiTrollManager(this));
 
         getLogger().info("Plugin enabled!");
     }

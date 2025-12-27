@@ -45,9 +45,16 @@ public final class SetSpawnCommand implements Command {
                 return Completable.complete();
             }
 
-            return storage.setSpawn(player.getWorld().getUID(), player.getLocation(), player.getUniqueId())
+            var location = player.getLocation();
+            var world = player.getWorld();
+
+            // Set the actual Minecraft world spawn (used for new players, compass, etc.)
+            world.setSpawnLocation(location.getBlockX(), location.getBlockY(), location.getBlockZ());
+
+            // Also save to database (used by /spawn command with exact yaw/pitch)
+            return storage.setSpawn(world.getUID(), location, player.getUniqueId())
                     .observeOn(plugin.mainScheduler())
-                    .doOnComplete(() -> success(sender, "Spawn point set for " + player.getWorld().getName() + "!"))
+                    .doOnComplete(() -> success(sender, "Spawn point set for " + world.getName() + "!"))
                     .doOnError(err -> {
                         plugin.getLogger().warning("Failed to set spawn: " + err.getMessage());
                         error(sender, "Failed to set spawn point.");

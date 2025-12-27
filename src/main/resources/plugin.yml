@@ -5,7 +5,7 @@ description: Joey's custom mods for playing with Siqi
 api-version: '1.21'
 load: POSTWORLD
 author: Joey
-softdepend: [BlueMap]
+softdepend: [BlueMap, FastAsyncWorldEdit, WorldEdit]
 
 commands:
   back:
@@ -113,6 +113,9 @@ commands:
   adminmode:
     description: Toggle admin creative mode (preserves inventory)
     usage: /adminmode
+  genstatue:
+    description: Generate a wool statue of a player
+    usage: /genstatue <player>
 
 permissions:
   smp.*:
@@ -149,6 +152,7 @@ permissions:
       smp.whois: true
       smp.whois.admin: true
       smp.adminmode: true
+      smp.statue: true
 
   smp.tp:
     description: Send teleport requests to other players
@@ -252,4 +256,8 @@ permissions:
 
   smp.adminmode:
     description: Toggle admin creative mode in survival worlds
+    default: op
+
+  smp.statue:
+    description: Generate wool statues of players
     default: op

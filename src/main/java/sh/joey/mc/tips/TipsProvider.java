@@ -223,6 +223,9 @@ public final class TipsProvider implements Disposable {
                 .append(cmd("/nick clear"))
                 .append(Component.text(" to remove your nickname.", NamedTextColor.GRAY)));
 
+        // === SLEEP TIPS ===
+        tipList.add(Component.text("When half the server sleeps, night is skipped for everyone!", NamedTextColor.GRAY));
+
         // === GENERAL TIPS ===
         tipList.add(Component.text("The boss bar at the top shows the time of day and other useful info.", NamedTextColor.GRAY));
 

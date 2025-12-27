@@ -16,12 +16,21 @@ repositories {
         name = 'bluecolored'
         url = 'https://repo.bluecolored.de/releases'
     }
+    maven {
+        name = 'enginehub'
+        url = 'https://maven.enginehub.org/repo/'
+    }
 }
 
 dependencies {
     compileOnly 'io.papermc.paper:paper-api:1.21.11-R0.1-SNAPSHOT'
     compileOnly 'com.google.code.gson:gson:2.10.1' // Provided by Paper at runtime
     compileOnly 'de.bluecolored:bluemap-api:2.7.4'
+    compileOnly('com.sk89q.worldedit:worldedit-bukkit:7.3.6') {
+        exclude group: 'com.google.guava'
+        exclude group: 'com.google.code.gson'
+        exclude group: 'it.unimi.dsi'
+    }
     implementation 'io.reactivex.rxjava3:rxjava:3.1.12'
     implementation 'com.zaxxer:HikariCP:5.1.0'
     implementation 'org.postgresql:postgresql:42.7.7'

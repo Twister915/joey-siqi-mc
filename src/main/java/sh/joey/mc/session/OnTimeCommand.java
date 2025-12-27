@@ -7,11 +7,11 @@ import io.reactivex.rxjava3.core.Single;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextDecoration;
-import org.bukkit.Bukkit;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import sh.joey.mc.SiqiJoeyPlugin;
 import sh.joey.mc.cmd.Command;
+import sh.joey.mc.player.PlayerResolver;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -31,11 +31,14 @@ public final class OnTimeCommand implements Command {
     private final SiqiJoeyPlugin plugin;
     private final PlayerSessionStorage storage;
     private final PlayerSessionTracker tracker;
+    private final PlayerResolver playerResolver;
 
-    public OnTimeCommand(SiqiJoeyPlugin plugin, PlayerSessionStorage storage, PlayerSessionTracker tracker) {
+    public OnTimeCommand(SiqiJoeyPlugin plugin, PlayerSessionStorage storage,
+                         PlayerSessionTracker tracker, PlayerResolver playerResolver) {
         this.plugin = plugin;
         this.storage = storage;
         this.tracker = tracker;
+        this.playerResolver = playerResolver;
     }
 
     @Override
@@ -75,16 +78,17 @@ public final class OnTimeCommand implements Command {
                 return Maybe.empty();
             }
 
-            return storage.findUsernamesByPrefix(prefix, 10)
-                    .map(Completion::completion)
-                    .toList()
-                    .flatMapMaybe(list -> list.isEmpty() ? Maybe.empty() : Maybe.just(list));
+            return playerResolver.getCompletions(prefix, 10)
+                    .flatMapMaybe(list -> list.isEmpty()
+                            ? Maybe.empty()
+                            : Maybe.just(list.stream().map(Completion::completion).toList()));
         });
     }
 
     private Completable showOwnTime(Player player) {
         UUID playerId = player.getUniqueId();
         UUID serverSessionId = tracker.getServerSessionId();
+        String displayName = playerResolver.getDisplayName(player);
 
         Single<Long> sessionSeconds = storage.getCurrentSessionStart(playerId, serverSessionId)
                 .map(start -> Duration.between(start, Instant.now()).toSeconds())
@@ -94,7 +98,7 @@ public final class OnTimeCommand implements Command {
                 .defaultIfEmpty(0L);
 
         return Single.zip(sessionSeconds, lifetimeSeconds, (session, lifetime) ->
-                    new OnTimeResult(player.getName(), session, lifetime, true))
+                    new OnTimeResult(displayName, session, lifetime, true))
                 .observeOn(plugin.mainScheduler())
                 .doOnSuccess(result -> displayResult(player, result))
                 .doOnError(err -> {
@@ -106,18 +110,16 @@ public final class OnTimeCommand implements Command {
     }
 
     private Completable showOtherTime(CommandSender viewer, String targetName) {
-        Player onlineTarget = Bukkit.getPlayer(targetName);
-
-        if (onlineTarget != null) {
-            return showOnlinePlayerTime(viewer, onlineTarget);
-        } else {
-            return showOfflinePlayerTime(viewer, targetName);
-        }
+        // Use playerResolver to find by username or nickname
+        return playerResolver.resolveOnlinePlayer(targetName)
+                .map(target -> showOnlinePlayerTime(viewer, target))
+                .orElseGet(() -> showOfflinePlayerTime(viewer, targetName));
     }
 
     private Completable showOnlinePlayerTime(CommandSender viewer, Player target) {
         UUID playerId = target.getUniqueId();
         UUID serverSessionId = tracker.getServerSessionId();
+        String displayName = playerResolver.getDisplayName(target);
 
         Single<Long> sessionSeconds = storage.getCurrentSessionStart(playerId, serverSessionId)
                 .map(start -> Duration.between(start, Instant.now()).toSeconds())
@@ -127,7 +129,7 @@ public final class OnTimeCommand implements Command {
                 .defaultIfEmpty(0L);
 
         return Single.zip(sessionSeconds, lifetimeSeconds, (session, lifetime) ->
-                    new OnTimeResult(target.getName(), session, lifetime, true))
+                    new OnTimeResult(displayName, session, lifetime, true))
                 .observeOn(plugin.mainScheduler())
                 .doOnSuccess(result -> displayResult(viewer, result))
                 .doOnError(err -> {
@@ -139,9 +141,15 @@ public final class OnTimeCommand implements Command {
     }
 
     private Completable showOfflinePlayerTime(CommandSender viewer, String targetName) {
-        return storage.resolvePlayerId(targetName)
-                .flatMap(playerId -> storage.getLifetimeOnlineTime(playerId)
-                        .map(lifetime -> new OnTimeResult(targetName, 0, lifetime, false)))
+        return playerResolver.resolvePlayerId(targetName)
+                .flatMapSingle(playerId -> {
+                    Single<String> displayNameSingle = playerResolver.getDisplayName(playerId)
+                            .defaultIfEmpty(targetName);
+                    Single<Long> lifetimeSingle = storage.getLifetimeOnlineTime(playerId)
+                            .defaultIfEmpty(0L);
+                    return Single.zip(displayNameSingle, lifetimeSingle,
+                            (displayName, lifetime) -> new OnTimeResult(displayName, 0, lifetime, false));
+                })
                 .observeOn(plugin.mainScheduler())
                 .doOnSuccess(result -> displayResult(viewer, result))
                 .doOnComplete(() -> error(viewer, "Player '" + targetName + "' not found."))

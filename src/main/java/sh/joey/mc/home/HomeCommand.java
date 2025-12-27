@@ -432,6 +432,10 @@ public final class HomeCommand implements Command {
 
         return playerResolver.resolvePlayerId(targetName)
                 .observeOn(plugin.mainScheduler())
+                .switchIfEmpty(Maybe.defer(() -> {
+                    error(player, "Player '" + targetName + "' not found.");
+                    return Maybe.empty();
+                }))
                 .flatMapCompletable(targetId -> {
                     if (targetId.equals(playerId)) {
                         error(player, "You can't share a home with yourself.");
@@ -442,7 +446,6 @@ public final class HomeCommand implements Command {
                             .doOnSuccess(shared -> onShareResult(player, targetId, targetName, name, shared))
                             .ignoreElement();
                 })
-                .doOnComplete(() -> error(player, "Player '" + targetName + "' not found."))
                 .doOnError(err -> logAndError(player, "Failed to share home", err))
                 .onErrorComplete();
     }
