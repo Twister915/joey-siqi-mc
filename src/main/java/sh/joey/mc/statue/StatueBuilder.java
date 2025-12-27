@@ -56,15 +56,20 @@ public final class StatueBuilder {
                           StatueGeometry.Face face, int scale) {
         StatueGeometry.UvMapping uv = part.getFace(face);
 
-        // Handle legacy skins - left arm/leg UVs are in the bottom half which doesn't exist
-        if (skin.isLegacy() && uv.v() >= 32) {
-            // Legacy skins: left limbs use right limb textures mirrored
-            // For simplicity, we'll skip these faces (they'll be hollow)
-            return 0;
-        }
-
         // Extract face pixels from skin
-        int[][] facePixels = skin.extractFace(uv);
+        int[][] facePixels;
+
+        if (skin.isLegacy() && uv.v() >= 32) {
+            // Legacy skins: left limbs use mirrored right limb textures
+            StatueGeometry.BodyPart mirrorPart = StatueGeometry.getLegacyMirrorPart(part);
+            if (mirrorPart == null) {
+                return 0; // Shouldn't happen for parts with v >= 32
+            }
+            StatueGeometry.UvMapping mirrorUv = mirrorPart.getFace(face);
+            facePixels = skin.extractFaceMirrored(mirrorUv);
+        } else {
+            facePixels = skin.extractFace(uv);
+        }
 
         // Map pixels to nearest wool colors
         Material[][] materials = colorMapper.mapFace(facePixels, uv.width(), uv.height());
@@ -209,12 +214,19 @@ public final class StatueBuilder {
             for (StatueGeometry.Face face : StatueGeometry.Face.values()) {
                 StatueGeometry.UvMapping uv = part.getFace(face);
 
-                // Skip legacy skin missing faces
+                int[][] facePixels;
                 if (skin.isLegacy() && uv.v() >= 32) {
-                    continue;
+                    // Legacy skins: use mirrored right limb textures
+                    StatueGeometry.BodyPart mirrorPart = StatueGeometry.getLegacyMirrorPart(part);
+                    if (mirrorPart == null) {
+                        continue;
+                    }
+                    StatueGeometry.UvMapping mirrorUv = mirrorPart.getFace(face);
+                    facePixels = skin.extractFaceMirrored(mirrorUv);
+                } else {
+                    facePixels = skin.extractFace(uv);
                 }
 
-                int[][] facePixels = skin.extractFace(uv);
                 for (int y = 0; y < uv.height(); y++) {
                     for (int x = 0; x < uv.width(); x++) {
                         int alpha = (facePixels[y][x] >> 24) & 0xFF;

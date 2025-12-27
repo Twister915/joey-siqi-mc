@@ -147,5 +147,18 @@ public final class StatueGeometry {
             RIGHT_LEG, LEFT_LEG, TORSO, RIGHT_ARM, LEFT_ARM, HEAD
     );
 
+    /**
+     * For legacy 64x32 skins, returns the right-side body part to mirror for the given left-side part.
+     * Legacy skins don't have separate left arm/leg textures - they mirror the right side.
+     *
+     * @param part the body part to check
+     * @return the corresponding right-side part to mirror, or null if no mirroring needed
+     */
+    public static BodyPart getLegacyMirrorPart(BodyPart part) {
+        if (part == LEFT_ARM) return RIGHT_ARM;
+        if (part == LEFT_LEG) return RIGHT_LEG;
+        return null;
+    }
+
     private StatueGeometry() {}
 }

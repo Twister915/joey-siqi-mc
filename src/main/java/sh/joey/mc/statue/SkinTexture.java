@@ -111,6 +111,24 @@ public final class SkinTexture {
     }
 
     /**
+     * Extracts a rectangular region of pixels for a face, mirrored horizontally.
+     * Used for legacy skins where left limbs mirror right limbs.
+     *
+     * @param uv the UV mapping defining the region
+     * @return 2D array of ARGB pixels [y][x], flipped horizontally
+     */
+    public int[][] extractFaceMirrored(StatueGeometry.UvMapping uv) {
+        int[][] face = new int[uv.height()][uv.width()];
+        for (int y = 0; y < uv.height(); y++) {
+            for (int x = 0; x < uv.width(); x++) {
+                // Read from right-to-left to mirror horizontally
+                face[y][x] = getPixel(uv.u() + (uv.width() - 1 - x), uv.v() + y);
+            }
+        }
+        return face;
+    }
+
+    /**
      * Returns whether this is a legacy 64x32 skin.
      */
     public boolean isLegacy() {
