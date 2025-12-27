@@ -17,6 +17,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Manages player nicknames, including caching and display application.
@@ -50,9 +51,16 @@ public final class NicknameManager implements Disposable {
         disposables.add(plugin.watchEvent(PlayerJoinEvent.class)
                 .subscribe(event -> applyNickname(event.getPlayer())));
 
-        // Clean up on quit (MONITOR priority to run after other handlers that need the nickname)
+        // Clean up on quit - delay removal to handle reconnect-from-another-location
+        // where new session's preload may race with old session's quit
         disposables.add(plugin.watchEvent(EventPriority.MONITOR, PlayerQuitEvent.class)
-                .subscribe(event -> nicknameCache.remove(event.getPlayer().getUniqueId())));
+                .delay(1, TimeUnit.SECONDS, plugin.mainScheduler())
+                .subscribe(event -> {
+                    UUID playerId = event.getPlayer().getUniqueId();
+                    if (Bukkit.getPlayer(playerId) == null) {
+                        nicknameCache.remove(playerId);
+                    }
+                }));
     }
 
     /**

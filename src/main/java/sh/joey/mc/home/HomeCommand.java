@@ -450,16 +450,18 @@ public final class HomeCommand implements Command {
                 .onErrorComplete();
     }
 
-    private void onShareResult(Player player, UUID targetId, String targetName, String name, boolean shared) {
-        if (shared) {
-            success(player, "Shared home '" + name + "' with " + targetName + "!");
-            // Notify target if they're online
-            Player target = plugin.getServer().getPlayer(targetId);
-            if (target != null) {
-                info(target, player.getName() + " shared their home '" + name + "' with you!");
+    private void onShareResult(Player player, UUID targetId, String targetName, String name, HomeStorage.ShareResult result) {
+        switch (result) {
+            case SUCCESS -> {
+                success(player, "Shared home '" + name + "' with " + targetName + "!");
+                // Notify target if they're online
+                Player target = plugin.getServer().getPlayer(targetId);
+                if (target != null) {
+                    info(target, player.getName() + " shared their home '" + name + "' with you!");
+                }
             }
-        } else {
-            error(player, "Home '" + name + "' not found.");
+            case ALREADY_SHARED -> warn(player, "Home '" + name + "' is already shared with " + targetName + ".");
+            case HOME_NOT_FOUND -> error(player, "Home '" + name + "' not found.");
         }
     }
 
@@ -578,6 +580,10 @@ public final class HomeCommand implements Command {
 
     private void success(Player player, String message) {
         player.sendMessage(PREFIX.append(Component.text(message).color(NamedTextColor.GREEN)));
+    }
+
+    private void warn(Player player, String message) {
+        player.sendMessage(PREFIX.append(Component.text(message).color(NamedTextColor.YELLOW)));
     }
 
     private void error(Player player, String message) {

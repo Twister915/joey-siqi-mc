@@ -20,6 +20,12 @@ import java.util.UUID;
  */
 public final class HomeStorage {
 
+    public enum ShareResult {
+        SUCCESS,
+        HOME_NOT_FOUND,
+        ALREADY_SHARED
+    }
+
     private final StorageService storage;
 
     public HomeStorage(StorageService storage) {
@@ -197,9 +203,9 @@ public final class HomeStorage {
     /**
      * Share a home with another player.
      *
-     * @return true if the share was added (false if home doesn't exist or already shared)
+     * @return ShareResult indicating success, home not found, or already shared
      */
-    public Single<Boolean> shareHome(UUID ownerId, String homeName, UUID targetId) {
+    public Single<ShareResult> shareHome(UUID ownerId, String homeName, UUID targetId) {
         String normalizedName = normalizeName(homeName);
         return storage.query(conn -> {
             // First get the home's id
@@ -210,7 +216,7 @@ public final class HomeStorage {
                 stmt.setString(2, normalizedName);
                 try (ResultSet rs = stmt.executeQuery()) {
                     if (!rs.next()) {
-                        return false; // Home doesn't exist
+                        return ShareResult.HOME_NOT_FOUND;
                     }
                     homeId = rs.getObject("id", UUID.class);
                 }
@@ -225,7 +231,7 @@ public final class HomeStorage {
             try (PreparedStatement stmt = conn.prepareStatement(sql)) {
                 stmt.setObject(1, homeId);
                 stmt.setObject(2, targetId);
-                return stmt.executeUpdate() > 0;
+                return stmt.executeUpdate() > 0 ? ShareResult.SUCCESS : ShareResult.ALREADY_SHARED;
             }
         });
     }
