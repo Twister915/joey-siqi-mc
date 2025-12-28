@@ -9,6 +9,8 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerPortalEvent;
 import org.bukkit.permissions.PermissionAttachment;
+import org.bukkit.potion.PotionEffect;
+import org.bukkit.potion.PotionEffectType;
 import sh.joey.mc.SiqiJoeyPlugin;
 import sh.joey.mc.inventory.InventorySnapshot;
 import sh.joey.mc.inventory.InventorySnapshotStorage;
@@ -154,6 +156,7 @@ public final class AdminModeManager implements Disposable {
                             detachPermissions(player);
                             playersInAdminMode.remove(playerId);
                             player.setGameMode(GameMode.SURVIVAL);
+                            grantSlowFalling(player);
                             info(player, "Admin mode state not found. Resetting to survival.");
                             callback.accept(true);
                         }
@@ -169,6 +172,9 @@ public final class AdminModeManager implements Disposable {
         // Apply snapshot (no effect decay - we want exact restore)
         snapshot.applyTo(player, false);
         player.setGameMode(GameMode.SURVIVAL);
+
+        // Grant slow falling to prevent fall damage after exiting admin mode
+        grantSlowFalling(player);
 
         // Clean up database state
         disposables.add(storage.exitAdminMode(playerId)
@@ -233,6 +239,17 @@ public final class AdminModeManager implements Disposable {
         if (attachment != null) {
             player.removeAttachment(attachment);
         }
+    }
+
+    private void grantSlowFalling(Player player) {
+        player.addPotionEffect(new PotionEffect(
+                PotionEffectType.SLOW_FALLING,
+                20 * 10,  // 10 seconds
+                0,        // Level 1
+                false,    // No ambient particles
+                true,     // Show particles
+                true      // Show icon
+        ));
     }
 
     @Override

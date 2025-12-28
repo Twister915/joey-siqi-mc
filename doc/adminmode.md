@@ -20,6 +20,7 @@ When you exit admin mode:
 1. Temporary permissions are removed
 2. Your saved inventory and state are restored
 3. You're switched back to survival mode
+4. You receive 10 seconds of Slow Falling to land safely if you were flying
 
 ## Restrictions
 
