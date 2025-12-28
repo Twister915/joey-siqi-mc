@@ -96,6 +96,9 @@ commands:
     description: Manage your resource pack preferences
     usage: /resourcepack [select|clear] [pack]
     aliases: [rp]
+  trails:
+    description: Manage particle trail effects
+    usage: /trails [elytra] [effect] [intensity]
   nick:
     description: Set or clear your display name
     usage: /nick [name|clear] or /nick <player> [name|clear]
@@ -186,6 +189,7 @@ permissions:
       smp.perm.admin: true
       smp.debug: true
       smp.resourcepack: true
+      smp.trails.elytra: true
       smp.nick: true
       smp.nick.others: true
       smp.whois: true
@@ -278,6 +282,10 @@ permissions:
 
   smp.resourcepack:
     description: Manage resource pack preferences
+
+  smp.trails.elytra:
+    description: Use elytra particle trail effects
+    default: op
 
   smp.nick:
     description: Set or clear your own nickname

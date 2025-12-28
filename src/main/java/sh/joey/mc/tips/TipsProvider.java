@@ -267,6 +267,16 @@ public final class TipsProvider implements Disposable {
                     .append(Component.text(" to invite friends to the server!", NamedTextColor.GRAY));
         });
 
+        // Elytra trails tip - only shows to players with trails permission
+        tipList.add(player -> {
+            if (!player.hasPermission("smp.trails.elytra")) {
+                return null;
+            }
+            return Component.text("Use ", NamedTextColor.GRAY)
+                    .append(cmd("/trails elytra"))
+                    .append(Component.text(" to add particle effects while flying with your elytra!", NamedTextColor.GRAY));
+        });
+
         return tipList;
     }
 

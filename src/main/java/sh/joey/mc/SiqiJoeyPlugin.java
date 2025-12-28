@@ -87,6 +87,9 @@ import sh.joey.mc.resourcepack.ResourcePackConfig;
 import sh.joey.mc.resourcepack.ResourcePackStorage;
 import sh.joey.mc.resourcepack.ResourcePackManager;
 import sh.joey.mc.resourcepack.ResourcePackCommand;
+import sh.joey.mc.trails.TrailStorage;
+import sh.joey.mc.trails.TrailManager;
+import sh.joey.mc.trails.TrailsCommand;
 import sh.joey.mc.multiworld.WorldAliasCommand;
 import sh.joey.mc.tablist.TablistProvider;
 import sh.joey.mc.bluemap.BlueMapIntegration;
@@ -374,6 +377,12 @@ public final class SiqiJoeyPlugin extends JavaPlugin {
         components.add(resourcePackManager);
         components.add(CmdExecutor.register(this,
                 new ResourcePackCommand(this, resourcePackConfig, resourcePackStorage, resourcePackManager)));
+
+        // Trails system (elytra particle effects)
+        var trailStorage = new TrailStorage(storageService);
+        var trailManager = new TrailManager(this, trailStorage);
+        components.add(trailManager);
+        components.add(CmdExecutor.register(this, new TrailsCommand(this, trailManager)));
 
         // Anti-troll restrictions
         components.add(new AntiTrollManager(this));

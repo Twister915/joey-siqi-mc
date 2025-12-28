@@ -115,6 +115,18 @@ All server messages styled to match the plugin's visual theme:
 - `/resourcepack clear` - Remove your current resource pack
 - Server remembers your preference across sessions
 
+### Elytra Trail Effects
+Particle effects that spawn behind you while flying with elytra:
+- `/trails` - Open the trails menu
+- `/trails elytra` - Show elytra trail options
+- `/trails elytra <effect>` - Select a trail effect
+- `/trails elytra <effect> <intensity>` - Select with intensity (low/medium/high)
+- `/trails elytra off` - Disable elytra trails
+- **12 built-in effects**: flame, soul fire, end sparkles, enchantment, hearts, notes, totem, cherry petals, dragon breath, firework sparks, snowflakes, witch magic
+- **Rainbow mode**: Cycles through rainbow colors
+- **Custom RGB**: Use any hex color with `rgb:RRGGBB` (e.g., `rgb:ff5500`)
+- **Intensity levels**: Low (subtle), medium (default), high (dense)
+
 ### BlueMap Integration
 If [BlueMap](https://bluemap.bluecolored.de/) is installed:
 - `/map` - Get a clickable link to the web map centered on your location
@@ -217,6 +229,7 @@ All commands use the `smp.` permission prefix. Key permissions:
 | `smp.seed` | View world seed | op |
 | `smp.map` | View the web map link | everyone |
 | `smp.resourcepack` | Manage resource pack preferences | everyone |
+| `smp.trails.elytra` | Use elytra trail particle effects | op |
 | `smp.adminmode` | Toggle admin creative mode | op |
 | `smp.statue` | Generate wool statues | op |
 | `smp.perm.admin` | Manage permissions | op |
