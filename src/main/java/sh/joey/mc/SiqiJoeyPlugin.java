@@ -101,6 +101,7 @@ import sh.joey.mc.msg.PrivateMessageManager;
 import sh.joey.mc.msg.PrivateMessageStorage;
 import sh.joey.mc.msg.ReplyCommand;
 import sh.joey.mc.adminmode.AdminModeCommand;
+import sh.joey.mc.adminmode.AdminModeConfig;
 import sh.joey.mc.adminmode.AdminModeManager;
 import sh.joey.mc.adminmode.AdminModeStorage;
 import sh.joey.mc.sleep.MajoritySleepManager;
@@ -234,7 +235,8 @@ public final class SiqiJoeyPlugin extends JavaPlugin {
 
         // Admin mode system
         var adminModeStorage = new AdminModeStorage(storageService);
-        var adminModeManager = new AdminModeManager(this, adminModeStorage, inventorySnapshotStorage, worldManager);
+        var adminModeConfig = AdminModeConfig.load(this);
+        var adminModeManager = new AdminModeManager(this, adminModeStorage, inventorySnapshotStorage, worldManager, adminModeConfig);
         components.add(adminModeManager);
 
         var safeTeleporter = new SafeTeleporter(this, config, locationTracker, confirmationManager,

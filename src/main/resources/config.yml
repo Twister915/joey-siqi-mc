@@ -28,6 +28,13 @@ tips:
 whitelist:
   enabled: true
 
+# Admin mode configuration
+# /adminmode lets admins temporarily enter creative mode while preserving inventory
+adminmode:
+  # Additional permissions granted while in admin mode
+  # Example: worldedit.*, worldguard.*, etc.
+  permissions: []
+
 # Multi-world configuration
 # Worlds listed here will be created/loaded on startup
 # Default Minecraft worlds (world, world_nether, world_the_end) use "default" inventory group

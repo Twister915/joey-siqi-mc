@@ -82,9 +82,11 @@ Create and manage custom worlds with separate configurations. See [doc/multiworl
 - Confirmation prompt before building
 
 ### Admin Mode
-- `/adminmode` - Toggle creative mode while preserving your survival inventory
-- Useful for building or fixing issues without losing your items
-- Automatically restores your survival inventory, XP, and health when you exit
+Toggle creative mode while preserving your survival inventory. See [doc/adminmode.md](doc/adminmode.md) for details.
+- `/adminmode` - Toggle admin mode on/off
+- Saves and restores inventory, XP, health, hunger, and effects
+- **Configurable permissions** - Grant WorldEdit, WorldGuard, etc. only while in admin mode
+- Blocked from portals and cross-world teleports while active
 
 ### Custom Messages
 All server messages styled to match the plugin's visual theme:
@@ -273,6 +275,11 @@ requests:
 
 whitelist:
   enabled: true  # Set to false to allow all players
+
+adminmode:
+  permissions:  # Permissions granted while in admin mode
+    - worldedit.*
+    - worldguard.*
 ```
 
 ## Data Storage

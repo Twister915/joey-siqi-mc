@@ -8,11 +8,13 @@ import org.bukkit.GameMode;
 import org.bukkit.entity.Player;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerPortalEvent;
+import org.bukkit.permissions.PermissionAttachment;
 import sh.joey.mc.SiqiJoeyPlugin;
 import sh.joey.mc.inventory.InventorySnapshot;
 import sh.joey.mc.inventory.InventorySnapshotStorage;
 import sh.joey.mc.multiworld.WorldManager;
 
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -33,17 +35,23 @@ public final class AdminModeManager implements Disposable {
     private final AdminModeStorage storage;
     private final InventorySnapshotStorage snapshotStorage;
     private final WorldManager worldManager;
+    private final AdminModeConfig config;
     private final Logger logger;
 
     // In-memory cache for fast isInAdminMode checks
     private final Set<UUID> playersInAdminMode = ConcurrentHashMap.newKeySet();
 
+    // Track permission attachments for cleanup
+    private final Map<UUID, PermissionAttachment> attachments = new HashMap<>();
+
     public AdminModeManager(SiqiJoeyPlugin plugin, AdminModeStorage storage,
-                            InventorySnapshotStorage snapshotStorage, WorldManager worldManager) {
+                            InventorySnapshotStorage snapshotStorage, WorldManager worldManager,
+                            AdminModeConfig config) {
         this.plugin = plugin;
         this.storage = storage;
         this.snapshotStorage = snapshotStorage;
         this.worldManager = worldManager;
+        this.config = config;
         this.logger = plugin.getLogger();
 
         // Load existing admin mode states on startup
@@ -115,6 +123,7 @@ public final class AdminModeManager implements Disposable {
                             playersInAdminMode.add(playerId);
                             InventorySnapshot.clearPlayer(player);
                             player.setGameMode(GameMode.CREATIVE);
+                            attachPermissions(player);
                             success(player, "Entered admin mode. Your inventory has been saved.");
                             info(player, "Use /adminmode again to exit and restore your inventory.");
                             callback.accept(true);
@@ -142,6 +151,7 @@ public final class AdminModeManager implements Disposable {
                         },
                         () -> {
                             // State exists in cache but not in DB - just clean up
+                            detachPermissions(player);
                             playersInAdminMode.remove(playerId);
                             player.setGameMode(GameMode.SURVIVAL);
                             info(player, "Admin mode state not found. Resetting to survival.");
@@ -152,6 +162,9 @@ public final class AdminModeManager implements Disposable {
 
     private void applySnapshotAndCleanup(Player player, InventorySnapshot snapshot, Consumer<Boolean> callback) {
         UUID playerId = player.getUniqueId();
+
+        // Remove admin mode permissions
+        detachPermissions(player);
 
         // Apply snapshot (no effect decay - we want exact restore)
         snapshot.applyTo(player, false);
@@ -203,9 +216,38 @@ public final class AdminModeManager implements Disposable {
         player.sendMessage(PREFIX.append(Component.text(message, NamedTextColor.GRAY)));
     }
 
+    private void attachPermissions(Player player) {
+        if (config.permissions().isEmpty()) {
+            return;
+        }
+
+        PermissionAttachment attachment = player.addAttachment(plugin);
+        for (String perm : config.permissions()) {
+            attachment.setPermission(perm, true);
+        }
+        attachments.put(player.getUniqueId(), attachment);
+    }
+
+    private void detachPermissions(Player player) {
+        PermissionAttachment attachment = attachments.remove(player.getUniqueId());
+        if (attachment != null) {
+            player.removeAttachment(attachment);
+        }
+    }
+
     @Override
     public void dispose() {
         disposables.dispose();
+
+        // Clean up any remaining permission attachments
+        for (PermissionAttachment attachment : attachments.values()) {
+            try {
+                attachment.remove();
+            } catch (Exception ignored) {
+                // Player may have disconnected
+            }
+        }
+        attachments.clear();
     }
 
     @Override
