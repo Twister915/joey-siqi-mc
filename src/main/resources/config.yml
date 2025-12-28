@@ -22,6 +22,12 @@ requests:
 tips:
   enabled: true
 
+# Custom whitelist system - replaces vanilla whitelist
+# When enabled, only whitelisted players can join
+# Use /invite or /whitelist add to whitelist players
+whitelist:
+  enabled: true
+
 # Multi-world configuration
 # Worlds listed here will be created/loaded on startup
 # Default Minecraft worlds (world, world_nether, world_the_end) use "default" inventory group

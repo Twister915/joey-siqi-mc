@@ -153,6 +153,36 @@ Quick teleport commands for configured worlds:
 
 Permission-based prefix/suffix display in chat and above player names. Groups support priority ordering for inheritance.
 
+### Punishments System
+Full punishment management with duration support and history tracking:
+- `/ban <player> [reason]` - Permanently ban a player
+- `/tempban <player> <duration> [reason]` - Temporarily ban a player (e.g., `1d`, `2w`, `3h`)
+- `/unban <player>` - Remove a player's ban
+- `/ipban <player> [reason]` - Ban a player by IP address (also bans their account)
+- `/unipban <player>` - Remove an IP ban
+- `/kick <player> [reason]` - Kick a player from the server
+- `/mute <player> [reason]` - Permanently mute a player
+- `/tempmute <player> <duration> [reason]` - Temporarily mute a player
+- `/unmute <player>` - Remove a player's mute
+- `/warn <player> [reason]` - Issue a warning to a player
+- `/punishments [player]` - View punishment history (paginated)
+
+Duration format: `1d` (days), `2w` (weeks), `3h` (hours), `30m` (minutes), `1mo` (months), `1y` (years)
+
+Banned players see a detailed kick message showing reason, duration, and who banned them.
+
+### Whitelist System
+Custom whitelist that replaces vanilla whitelist with invite tracking:
+- `/invite <player>` - Add a player to the whitelist
+- `/whitelist add <player>` - Admin: add a player
+- `/whitelist remove <player>` - Admin: remove a player
+- `/whitelist list [page]` - Admin: list all whitelisted players
+- `/whitelist audit [player] [page]` - Admin: view who invited whom
+
+**Invite Broadcasts**: When a non-whitelisted player tries to join, all players with `smp.invite` permission see a clickable message with `[Invite]` and `[Ignore]` buttons. Rate limited to 5 broadcasts per player per 5 minutes.
+
+**Configuration**: Set `whitelist.enabled: false` in `config.yml` to disable whitelist enforcement (allow all players).
+
 ## Permissions
 
 All commands use the `smp.` permission prefix. Key permissions:
@@ -188,6 +218,14 @@ All commands use the `smp.` permission prefix. Key permissions:
 | `smp.adminmode` | Toggle admin creative mode | op |
 | `smp.statue` | Generate wool statues | op |
 | `smp.perm.admin` | Manage permissions | op |
+| `smp.ban` | Ban/unban players | op |
+| `smp.ipban` | IP ban/unban players | op |
+| `smp.kick` | Kick players | op |
+| `smp.mute` | Mute/unmute players | op |
+| `smp.warn` | Warn players | op |
+| `smp.punishments` | View punishment history | op |
+| `smp.invite` | Invite players to the whitelist | everyone |
+| `smp.whitelist` | Manage whitelist (add/remove/list/audit) | op |
 
 ## Requirements
 
@@ -232,6 +270,9 @@ teleport:
 
 requests:
   timeout-seconds: 60
+
+whitelist:
+  enabled: true  # Set to false to allow all players
 ```
 
 ## Data Storage
@@ -256,6 +297,8 @@ All persistent data is stored in PostgreSQL:
 - **nicknames** - Player display name customizations
 - **private_messages** - Private message history for `/reply`
 - **admin_mode_state** - Preserved inventory state for admin mode
+- **punishments** - Unified table for bans, IP bans, mutes, kicks, and warns with duration tracking
+- **whitelist** - Custom whitelist with invite tracking
 - **migration_state** - Tracks applied database migrations
 
 Database migrations run automatically on startup.

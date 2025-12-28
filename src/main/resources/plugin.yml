@@ -149,6 +149,12 @@ commands:
   punishments:
     description: View punishment history
     usage: /punishments <player> [page]
+  invite:
+    description: Invite a player to the server whitelist
+    usage: /invite <player>
+  whitelist:
+    description: Manage the server whitelist
+    usage: /whitelist <add|remove|list|audit>
 
 permissions:
   smp.*:
@@ -187,6 +193,8 @@ permissions:
       smp.adminmode: true
       smp.statue: true
       smp.punish.*: true
+      smp.invite: true
+      smp.whitelist: true
 
   smp.tp:
     description: Send teleport requests to other players
@@ -354,4 +362,11 @@ permissions:
 
   smp.punish.view:
     description: View punishment history
+    default: op
+
+  smp.invite:
+    description: Invite players to the server whitelist
+
+  smp.whitelist:
+    description: Manage the server whitelist (add, remove, list, audit)
     default: op

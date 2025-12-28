@@ -119,6 +119,11 @@ import sh.joey.mc.punish.cmd.UnbanCommand;
 import sh.joey.mc.punish.cmd.UnIpBanCommand;
 import sh.joey.mc.punish.cmd.UnmuteCommand;
 import sh.joey.mc.punish.cmd.WarnCommand;
+import sh.joey.mc.whitelist.WhitelistConfig;
+import sh.joey.mc.whitelist.WhitelistEnforcer;
+import sh.joey.mc.whitelist.WhitelistStorage;
+import sh.joey.mc.whitelist.cmd.InviteCommand;
+import sh.joey.mc.whitelist.cmd.WhitelistCommand;
 
 @SuppressWarnings("unused")
 public final class SiqiJoeyPlugin extends JavaPlugin {
@@ -388,6 +393,14 @@ public final class SiqiJoeyPlugin extends JavaPlugin {
         components.add(CmdExecutor.register(this, new TempMuteCommand(this, punishmentStorage, playerResolver)));
         components.add(CmdExecutor.register(this, new WarnCommand(this, punishmentStorage, playerResolver)));
         components.add(CmdExecutor.register(this, new PunishmentsCommand(this, punishmentStorage, playerResolver, playerSessionStorage)));
+
+        // Whitelist system (replaces vanilla whitelist)
+        var whitelistConfig = WhitelistConfig.load(this);
+        var whitelistStorage = new WhitelistStorage(storageService);
+        var whitelistEnforcer = new WhitelistEnforcer(this, whitelistStorage, whitelistConfig);
+        components.add(whitelistEnforcer);
+        components.add(CmdExecutor.register(this, new InviteCommand(this, whitelistStorage, playerResolver)));
+        components.add(CmdExecutor.register(this, new WhitelistCommand(this, whitelistStorage, playerResolver)));
 
         getLogger().info("Plugin enabled!");
     }

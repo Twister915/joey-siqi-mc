@@ -91,16 +91,23 @@ public final class TipsProvider implements Disposable {
         }
 
         int totalTips = tips.size() + dynamicTips.size();
-        int index = random.nextInt(totalTips);
 
-        Component tip;
-        if (index < tips.size()) {
-            tip = tips.get(index);
-        } else {
-            tip = dynamicTips.get(index - tips.size()).apply(player);
+        // Try up to 3 times to find a non-null tip (for permission-gated dynamic tips)
+        for (int attempt = 0; attempt < 3; attempt++) {
+            int index = random.nextInt(totalTips);
+
+            Component tip;
+            if (index < tips.size()) {
+                tip = tips.get(index);
+            } else {
+                tip = dynamicTips.get(index - tips.size()).apply(player);
+            }
+
+            if (tip != null) {
+                player.sendMessage(PREFIX.append(tip));
+                return;
+            }
         }
-
-        player.sendMessage(PREFIX.append(tip));
     }
 
     private List<Component> buildTips() {
@@ -248,6 +255,16 @@ public final class TipsProvider implements Disposable {
                             .clickEvent(ClickEvent.openUrl(url))
                             .hoverEvent(HoverEvent.showText(
                                     Component.text("Click to open in browser").color(NamedTextColor.GRAY))));
+        });
+
+        // Invite tip - only shows to players with invite permission
+        tipList.add(player -> {
+            if (!player.hasPermission("smp.invite")) {
+                return null; // Skip this tip for non-inviters
+            }
+            return Component.text("Use ", NamedTextColor.GRAY)
+                    .append(cmd("/invite <player>"))
+                    .append(Component.text(" to invite friends to the server!", NamedTextColor.GRAY));
         });
 
         return tipList;
