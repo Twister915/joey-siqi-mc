@@ -116,6 +116,39 @@ commands:
   genstatue:
     description: Generate a wool statue of a player
     usage: /genstatue <player>
+  ban:
+    description: Permanently ban a player
+    usage: /ban <player> [reason]
+  unban:
+    description: Revoke a player's ban
+    usage: /unban <player>
+  ipban:
+    description: Ban an IP address
+    usage: /ipban <player|ip> [reason]
+  unipban:
+    description: Revoke an IP ban
+    usage: /unipban <player|ip>
+  tempban:
+    description: Temporarily ban a player
+    usage: /tempban <player> <duration> [reason]
+  kick:
+    description: Kick a player from the server
+    usage: /kick <player> [reason]
+  mute:
+    description: Permanently mute a player
+    usage: /mute <player> [reason]
+  unmute:
+    description: Revoke a player's mute
+    usage: /unmute <player>
+  tempmute:
+    description: Temporarily mute a player
+    usage: /tempmute <player> <duration> [reason]
+  warn:
+    description: Issue a warning to a player
+    usage: /warn <player> <reason>
+  punishments:
+    description: View punishment history
+    usage: /punishments <player> [page]
 
 permissions:
   smp.*:
@@ -153,6 +186,7 @@ permissions:
       smp.whois.admin: true
       smp.adminmode: true
       smp.statue: true
+      smp.punish.*: true
 
   smp.tp:
     description: Send teleport requests to other players
@@ -260,4 +294,64 @@ permissions:
 
   smp.statue:
     description: Generate wool statues of players
+    default: op
+
+  smp.punish.*:
+    description: All punishment permissions
+    default: op
+    children:
+      smp.punish.ban: true
+      smp.punish.unban: true
+      smp.punish.ipban: true
+      smp.punish.unipban: true
+      smp.punish.tempban: true
+      smp.punish.kick: true
+      smp.punish.mute: true
+      smp.punish.unmute: true
+      smp.punish.tempmute: true
+      smp.punish.warn: true
+      smp.punish.view: true
+
+  smp.punish.ban:
+    description: Permanently ban players
+    default: op
+
+  smp.punish.unban:
+    description: Revoke player bans
+    default: op
+
+  smp.punish.ipban:
+    description: Ban IP addresses
+    default: op
+
+  smp.punish.unipban:
+    description: Revoke IP bans
+    default: op
+
+  smp.punish.tempban:
+    description: Temporarily ban players
+    default: op
+
+  smp.punish.kick:
+    description: Kick players from the server
+    default: op
+
+  smp.punish.mute:
+    description: Permanently mute players
+    default: op
+
+  smp.punish.unmute:
+    description: Revoke player mutes
+    default: op
+
+  smp.punish.tempmute:
+    description: Temporarily mute players
+    default: op
+
+  smp.punish.warn:
+    description: Issue warnings to players
+    default: op
+
+  smp.punish.view:
+    description: View punishment history
     default: op

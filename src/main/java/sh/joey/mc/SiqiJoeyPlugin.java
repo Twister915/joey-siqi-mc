@@ -106,6 +106,19 @@ import sh.joey.mc.adminmode.AdminModeStorage;
 import sh.joey.mc.sleep.MajoritySleepManager;
 import sh.joey.mc.bossbar.SleepCountdownProvider;
 import sh.joey.mc.antitroll.AntiTrollManager;
+import sh.joey.mc.punish.PunishmentEnforcer;
+import sh.joey.mc.punish.PunishmentStorage;
+import sh.joey.mc.punish.cmd.BanCommand;
+import sh.joey.mc.punish.cmd.IpBanCommand;
+import sh.joey.mc.punish.cmd.KickCommand;
+import sh.joey.mc.punish.cmd.MuteCommand;
+import sh.joey.mc.punish.cmd.PunishmentsCommand;
+import sh.joey.mc.punish.cmd.TempBanCommand;
+import sh.joey.mc.punish.cmd.TempMuteCommand;
+import sh.joey.mc.punish.cmd.UnbanCommand;
+import sh.joey.mc.punish.cmd.UnIpBanCommand;
+import sh.joey.mc.punish.cmd.UnmuteCommand;
+import sh.joey.mc.punish.cmd.WarnCommand;
 
 @SuppressWarnings("unused")
 public final class SiqiJoeyPlugin extends JavaPlugin {
@@ -357,6 +370,24 @@ public final class SiqiJoeyPlugin extends JavaPlugin {
 
         // Anti-troll restrictions
         components.add(new AntiTrollManager(this));
+
+        // Punishment system
+        var punishmentStorage = new PunishmentStorage(storageService);
+        var punishmentEnforcer = new PunishmentEnforcer(this, punishmentStorage);
+        components.add(punishmentEnforcer);
+
+        // Punishment commands
+        components.add(CmdExecutor.register(this, new BanCommand(this, punishmentStorage, playerResolver)));
+        components.add(CmdExecutor.register(this, new UnbanCommand(this, punishmentStorage, playerResolver)));
+        components.add(CmdExecutor.register(this, new TempBanCommand(this, punishmentStorage, playerResolver)));
+        components.add(CmdExecutor.register(this, new IpBanCommand(this, punishmentStorage, playerResolver, playerSessionStorage)));
+        components.add(CmdExecutor.register(this, new UnIpBanCommand(this, punishmentStorage, playerResolver, playerSessionStorage)));
+        components.add(CmdExecutor.register(this, new KickCommand(this, punishmentStorage, playerResolver)));
+        components.add(CmdExecutor.register(this, new MuteCommand(this, punishmentStorage, playerResolver)));
+        components.add(CmdExecutor.register(this, new UnmuteCommand(this, punishmentStorage, playerResolver)));
+        components.add(CmdExecutor.register(this, new TempMuteCommand(this, punishmentStorage, playerResolver)));
+        components.add(CmdExecutor.register(this, new WarnCommand(this, punishmentStorage, playerResolver)));
+        components.add(CmdExecutor.register(this, new PunishmentsCommand(this, punishmentStorage, playerResolver, playerSessionStorage)));
 
         getLogger().info("Plugin enabled!");
     }
