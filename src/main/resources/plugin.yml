@@ -190,6 +190,8 @@ permissions:
       smp.debug: true
       smp.resourcepack: true
       smp.trails.elytra: true
+      smp.trails.ghast: true
+      smp.trails.walk: true
       smp.nick: true
       smp.nick.others: true
       smp.whois: true
@@ -285,6 +287,14 @@ permissions:
 
   smp.trails.elytra:
     description: Use elytra particle trail effects
+    default: op
+
+  smp.trails.ghast:
+    description: Use happy ghast particle trail effects
+    default: op
+
+  smp.trails.walk:
+    description: Use walking particle trail effects
     default: op
 
   smp.nick:

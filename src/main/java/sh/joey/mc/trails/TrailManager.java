@@ -3,6 +3,8 @@ package sh.joey.mc.trails;
 import io.reactivex.rxjava3.disposables.CompositeDisposable;
 import io.reactivex.rxjava3.disposables.Disposable;
 import org.bukkit.Location;
+import org.bukkit.entity.Entity;
+import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Player;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
@@ -42,6 +44,24 @@ public final class TrailManager implements Disposable {
                 .filter(e -> e.getPlayer().isGliding())
                 .filter(e -> e.getPlayer().hasPermission(TrailType.ELYTRA.permission()))
                 .subscribe(this::handleElytraGlide));
+
+        // Watch PlayerMoveEvent for ghast riding
+        disposables.add(plugin.watchEvent(PlayerMoveEvent.class)
+                .filter(e -> {
+                    Entity vehicle = e.getPlayer().getVehicle();
+                    return vehicle != null && vehicle.getType() == EntityType.GHAST;
+                })
+                .filter(e -> e.getPlayer().hasPermission(TrailType.GHAST.permission()))
+                .subscribe(this::handleGhastRide));
+
+        // Watch PlayerMoveEvent for walking
+        disposables.add(plugin.watchEvent(PlayerMoveEvent.class)
+                .filter(e -> !e.getPlayer().isFlying())
+                .filter(e -> !e.getPlayer().isGliding())
+                .filter(e -> e.getPlayer().getVehicle() == null)
+                .filter(e -> hasActuallyMoved(e))
+                .filter(e -> e.getPlayer().hasPermission(TrailType.WALK.permission()))
+                .subscribe(this::handleWalk));
 
         // Load on join
         disposables.add(plugin.watchEvent(PlayerJoinEvent.class)
@@ -95,6 +115,61 @@ public final class TrailManager implements Disposable {
 
         // Spawn at previous location for trail effect
         Location from = event.getFrom().clone().add(0, 0.5, 0);
+        setting.effect().spawn(from, currentTick, setting.intensity());
+    }
+
+    private void handleGhastRide(PlayerMoveEvent event) {
+        Player player = event.getPlayer();
+        UUID playerId = player.getUniqueId();
+
+        TrailSetting setting = getSetting(playerId, TrailType.GHAST);
+        if (setting == null) return;
+
+        // Rate limit based on intensity
+        long currentTick = player.getWorld().getFullTime();
+        if (!shouldSpawn(playerId, TrailType.GHAST, currentTick, setting.intensity().tickInterval())) {
+            return;
+        }
+
+        // Spawn at the back of the ghast
+        Entity ghast = player.getVehicle();
+        if (ghast == null) return;
+
+        Location trailLocation = calculateGhastBackPosition(ghast.getLocation());
+        setting.effect().spawn(trailLocation, currentTick, setting.intensity());
+    }
+
+    private Location calculateGhastBackPosition(Location ghastLoc) {
+        // Calculate position behind the ghast based on its facing direction
+        float yawRad = (float) Math.toRadians(ghastLoc.getYaw());
+        double backX = -Math.sin(yawRad);
+        double backZ = Math.cos(yawRad);
+        // 2 blocks behind, slightly above center
+        return ghastLoc.clone().add(backX * 2.0, 0.5, backZ * 2.0);
+    }
+
+    private boolean hasActuallyMoved(PlayerMoveEvent event) {
+        Location from = event.getFrom();
+        Location to = event.getTo();
+        // Check if position changed (not just head rotation)
+        return from.getX() != to.getX() || from.getY() != to.getY() || from.getZ() != to.getZ();
+    }
+
+    private void handleWalk(PlayerMoveEvent event) {
+        Player player = event.getPlayer();
+        UUID playerId = player.getUniqueId();
+
+        TrailSetting setting = getSetting(playerId, TrailType.WALK);
+        if (setting == null) return;
+
+        // Rate limit based on intensity
+        long currentTick = player.getWorld().getFullTime();
+        if (!shouldSpawn(playerId, TrailType.WALK, currentTick, setting.intensity().tickInterval())) {
+            return;
+        }
+
+        // Spawn at previous location (at feet level)
+        Location from = event.getFrom().clone().add(0, 0.1, 0);
         setting.effect().spawn(from, currentTick, setting.intensity());
     }
 

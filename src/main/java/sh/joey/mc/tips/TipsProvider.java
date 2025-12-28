@@ -277,6 +277,26 @@ public final class TipsProvider implements Disposable {
                     .append(Component.text(" to add particle effects while flying with your elytra!", NamedTextColor.GRAY));
         });
 
+        // Ghast trails tip - only shows to players with ghast trails permission
+        tipList.add(player -> {
+            if (!player.hasPermission("smp.trails.ghast")) {
+                return null;
+            }
+            return Component.text("Use ", NamedTextColor.GRAY)
+                    .append(cmd("/trails ghast"))
+                    .append(Component.text(" to add particle trails while riding a happy ghast!", NamedTextColor.GRAY));
+        });
+
+        // Walk trails tip - only shows to players with walk trails permission
+        tipList.add(player -> {
+            if (!player.hasPermission("smp.trails.walk")) {
+                return null;
+            }
+            return Component.text("Use ", NamedTextColor.GRAY)
+                    .append(cmd("/trails walk"))
+                    .append(Component.text(" to leave particle trails behind you as you walk!", NamedTextColor.GRAY));
+        });
+
         return tipList;
     }
 

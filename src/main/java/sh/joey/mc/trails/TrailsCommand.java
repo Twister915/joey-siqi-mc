@@ -81,6 +81,24 @@ public final class TrailsCommand implements Command {
                 return handleElytra(player, args);
             }
 
+            // /trails ghast ...
+            if (first.equals("ghast")) {
+                if (!player.hasPermission(TrailType.GHAST.permission())) {
+                    error(player, "You don't have permission to use ghast trails.");
+                    return Completable.complete();
+                }
+                return handleGhast(player, args);
+            }
+
+            // /trails walk ...
+            if (first.equals("walk")) {
+                if (!player.hasPermission(TrailType.WALK.permission())) {
+                    error(player, "You don't have permission to use walk trails.");
+                    return Completable.complete();
+                }
+                return handleWalk(player, args);
+            }
+
             error(player, "Unknown trail category. Use /trails for help.");
             return Completable.complete();
         });
@@ -109,7 +127,43 @@ public final class TrailsCommand implements Command {
             player.sendMessage(elytraButton);
         }
 
-        // Future trail types would go here
+        // Ghast trails
+        if (player.hasPermission(TrailType.GHAST.permission())) {
+            TrailSetting ghastCurrent = manager.getSetting(player.getUniqueId(), TrailType.GHAST);
+            Component ghastButton = Component.text("  ")
+                    .append(Component.text("[Ghast Trails]", NamedTextColor.AQUA)
+                            .decorate(TextDecoration.BOLD)
+                            .clickEvent(ClickEvent.runCommand("/trails ghast"))
+                            .hoverEvent(HoverEvent.showText(
+                                    Component.text("Particle trails while riding a happy ghast", NamedTextColor.GRAY))));
+
+            if (ghastCurrent != null) {
+                ghastButton = ghastButton.append(Component.text(" - ", NamedTextColor.DARK_GRAY))
+                        .append(Component.text(ghastCurrent.effect().displayName(), NamedTextColor.GREEN))
+                        .append(Component.text(" (" + ghastCurrent.intensity().id() + ")", NamedTextColor.GRAY));
+            }
+
+            player.sendMessage(ghastButton);
+        }
+
+        // Walk trails
+        if (player.hasPermission(TrailType.WALK.permission())) {
+            TrailSetting walkCurrent = manager.getSetting(player.getUniqueId(), TrailType.WALK);
+            Component walkButton = Component.text("  ")
+                    .append(Component.text("[Walk Trails]", NamedTextColor.AQUA)
+                            .decorate(TextDecoration.BOLD)
+                            .clickEvent(ClickEvent.runCommand("/trails walk"))
+                            .hoverEvent(HoverEvent.showText(
+                                    Component.text("Particle trails while walking", NamedTextColor.GRAY))));
+
+            if (walkCurrent != null) {
+                walkButton = walkButton.append(Component.text(" - ", NamedTextColor.DARK_GRAY))
+                        .append(Component.text(walkCurrent.effect().displayName(), NamedTextColor.GREEN))
+                        .append(Component.text(" (" + walkCurrent.intensity().id() + ")", NamedTextColor.GRAY));
+            }
+
+            player.sendMessage(walkButton);
+        }
 
         player.sendMessage(Component.empty());
         player.sendMessage(Component.text("  ")
@@ -272,6 +326,334 @@ public final class TrailsCommand implements Command {
         return Completable.complete();
     }
 
+    private Completable handleGhast(Player player, String[] args) {
+        // /trails ghast - show menu
+        if (args.length == 1) {
+            return showGhastMenu(player);
+        }
+
+        String second = args[1].toLowerCase();
+
+        // /trails ghast off
+        if (second.equals("off")) {
+            manager.clearTrail(player, TrailType.GHAST);
+            success(player, "Ghast trail disabled.");
+            return Completable.complete();
+        }
+
+        // /trails ghast intensity <level>
+        if (second.equals("intensity")) {
+            if (args.length < 3) {
+                error(player, "Usage: /trails ghast intensity <low|medium|high>");
+                return Completable.complete();
+            }
+            return handleGhastIntensity(player, args[2]);
+        }
+
+        // /trails ghast <effect> [intensity]
+        return handleGhastSelect(player, second, args.length > 2 ? args[2] : null);
+    }
+
+    private Completable showGhastMenu(Player player) {
+        TrailSetting current = manager.getSetting(player.getUniqueId(), TrailType.GHAST);
+
+        player.sendMessage(PREFIX.append(Component.text("Ghast Trail Effects:", NamedTextColor.WHITE)));
+
+        if (current != null) {
+            player.sendMessage(Component.text("  Current: ", NamedTextColor.GRAY)
+                    .append(Component.text(current.effect().displayName(), NamedTextColor.GREEN))
+                    .append(Component.text(" (" + current.intensity().id() + ")", NamedTextColor.GRAY)));
+        }
+
+        player.sendMessage(Component.empty());
+
+        // Built-in effects
+        for (ElytraTrailEffect effect : ElytraTrailEffect.values()) {
+            boolean isSelected = current != null && current.effect().id().equals(effect.id());
+            Component button = Component.text("  ")
+                    .append(Component.text("[" + effect.displayName() + "]",
+                            isSelected ? NamedTextColor.GREEN : NamedTextColor.GOLD)
+                            .clickEvent(ClickEvent.runCommand("/trails ghast " + effect.id()))
+                            .hoverEvent(HoverEvent.showText(
+                                    Component.text("Click to select", NamedTextColor.GRAY))));
+            player.sendMessage(button);
+        }
+
+        // Rainbow
+        boolean rainbowSelected = current != null && current.effect().id().equals("rainbow");
+        player.sendMessage(Component.text("  ")
+                .append(Component.text("[Rainbow]",
+                        rainbowSelected ? NamedTextColor.GREEN : NamedTextColor.GOLD)
+                        .clickEvent(ClickEvent.runCommand("/trails ghast rainbow"))
+                        .hoverEvent(HoverEvent.showText(
+                                Component.text("Cycles through rainbow colors", NamedTextColor.GRAY)))));
+
+        // Custom RGB hint
+        player.sendMessage(Component.empty());
+        player.sendMessage(Component.text("  Custom color: ", NamedTextColor.GRAY)
+                .append(Component.text("/trails ghast rgb:RRGGBB", NamedTextColor.WHITE)));
+        player.sendMessage(Component.text("    Example: ", NamedTextColor.DARK_GRAY)
+                .append(Component.text("/trails ghast rgb:ff5500", NamedTextColor.GOLD)
+                        .clickEvent(ClickEvent.suggestCommand("/trails ghast rgb:"))
+                        .hoverEvent(HoverEvent.showText(
+                                Component.text("Click to start typing custom color", NamedTextColor.GRAY)))));
+
+        // Intensity options
+        player.sendMessage(Component.empty());
+        player.sendMessage(Component.text("  Intensity: ", NamedTextColor.GRAY));
+        Component intensityLine = Component.text("    ");
+        for (TrailIntensity intensity : TrailIntensity.values()) {
+            boolean isSelected = current != null && current.intensity() == intensity;
+            intensityLine = intensityLine.append(
+                    Component.text("[" + capitalize(intensity.id()) + "]",
+                            isSelected ? NamedTextColor.GREEN : NamedTextColor.YELLOW)
+                            .clickEvent(ClickEvent.runCommand("/trails ghast intensity " + intensity.id()))
+                            .hoverEvent(HoverEvent.showText(
+                                    Component.text("Particles: " + intensity.particleCount() +
+                                            ", Rate: every " + intensity.tickInterval() + " ticks", NamedTextColor.GRAY))))
+                    .append(Component.text(" "));
+        }
+        player.sendMessage(intensityLine);
+
+        // Off button
+        player.sendMessage(Component.empty());
+        player.sendMessage(Component.text("  ")
+                .append(Component.text("[Disable Ghast Trail]", NamedTextColor.RED)
+                        .clickEvent(ClickEvent.runCommand("/trails ghast off"))
+                        .hoverEvent(HoverEvent.showText(
+                                Component.text("Turn off ghast trails", NamedTextColor.GRAY)))));
+
+        return Completable.complete();
+    }
+
+    private Completable handleGhastSelect(Player player, String effectId, String intensityArg) {
+        TrailEffect effect = parseGhastEffect(effectId);
+        if (effect == null) {
+            error(player, "Unknown effect '" + effectId + "'. Use /trails ghast for options.");
+            return Completable.complete();
+        }
+
+        TrailIntensity intensity = null;
+        if (intensityArg != null) {
+            intensity = TrailIntensity.fromId(intensityArg);
+            if (intensity == null) {
+                error(player, "Unknown intensity '" + intensityArg + "'. Use low, medium, or high.");
+                return Completable.complete();
+            }
+        }
+
+        if (intensity != null) {
+            manager.setSetting(player, TrailType.GHAST, effect, intensity);
+            success(player, "Ghast trail set to " + effect.displayName() + " (" + intensity.id() + ").");
+        } else {
+            manager.setEffect(player, TrailType.GHAST, effect);
+            success(player, "Ghast trail set to " + effect.displayName() + ".");
+        }
+
+        return Completable.complete();
+    }
+
+    private Completable handleGhastIntensity(Player player, String intensityArg) {
+        TrailSetting current = manager.getSetting(player.getUniqueId(), TrailType.GHAST);
+        if (current == null) {
+            error(player, "You don't have a ghast trail set. Select one first!");
+            return Completable.complete();
+        }
+
+        TrailIntensity intensity = TrailIntensity.fromId(intensityArg);
+        if (intensity == null) {
+            error(player, "Unknown intensity '" + intensityArg + "'. Use low, medium, or high.");
+            return Completable.complete();
+        }
+
+        manager.setIntensity(player, TrailType.GHAST, intensity);
+        success(player, "Ghast trail intensity set to " + intensity.id() + ".");
+        return Completable.complete();
+    }
+
+    private TrailEffect parseGhastEffect(String effectId) {
+        // Check for rainbow
+        if (effectId.equalsIgnoreCase("rainbow")) {
+            return RainbowEffect.INSTANCE;
+        }
+
+        // Check for custom color
+        if (CustomColorEffect.isCustomColor(effectId)) {
+            CustomColorEffect custom = CustomColorEffect.fromId(effectId);
+            if (custom != null) {
+                return custom;
+            }
+            return null;
+        }
+
+        // Check for built-in effects (reuse elytra effects)
+        return ElytraTrailEffect.fromId(effectId);
+    }
+
+    private Completable handleWalk(Player player, String[] args) {
+        // /trails walk - show menu
+        if (args.length == 1) {
+            return showWalkMenu(player);
+        }
+
+        String second = args[1].toLowerCase();
+
+        // /trails walk off
+        if (second.equals("off")) {
+            manager.clearTrail(player, TrailType.WALK);
+            success(player, "Walk trail disabled.");
+            return Completable.complete();
+        }
+
+        // /trails walk intensity <level>
+        if (second.equals("intensity")) {
+            if (args.length < 3) {
+                error(player, "Usage: /trails walk intensity <low|medium|high>");
+                return Completable.complete();
+            }
+            return handleWalkIntensity(player, args[2]);
+        }
+
+        // /trails walk <effect> [intensity]
+        return handleWalkSelect(player, second, args.length > 2 ? args[2] : null);
+    }
+
+    private Completable showWalkMenu(Player player) {
+        TrailSetting current = manager.getSetting(player.getUniqueId(), TrailType.WALK);
+
+        player.sendMessage(PREFIX.append(Component.text("Walk Trail Effects:", NamedTextColor.WHITE)));
+
+        if (current != null) {
+            player.sendMessage(Component.text("  Current: ", NamedTextColor.GRAY)
+                    .append(Component.text(current.effect().displayName(), NamedTextColor.GREEN))
+                    .append(Component.text(" (" + current.intensity().id() + ")", NamedTextColor.GRAY)));
+        }
+
+        player.sendMessage(Component.empty());
+
+        // Built-in effects
+        for (ElytraTrailEffect effect : ElytraTrailEffect.values()) {
+            boolean isSelected = current != null && current.effect().id().equals(effect.id());
+            Component button = Component.text("  ")
+                    .append(Component.text("[" + effect.displayName() + "]",
+                            isSelected ? NamedTextColor.GREEN : NamedTextColor.GOLD)
+                            .clickEvent(ClickEvent.runCommand("/trails walk " + effect.id()))
+                            .hoverEvent(HoverEvent.showText(
+                                    Component.text("Click to select", NamedTextColor.GRAY))));
+            player.sendMessage(button);
+        }
+
+        // Rainbow
+        boolean rainbowSelected = current != null && current.effect().id().equals("rainbow");
+        player.sendMessage(Component.text("  ")
+                .append(Component.text("[Rainbow]",
+                        rainbowSelected ? NamedTextColor.GREEN : NamedTextColor.GOLD)
+                        .clickEvent(ClickEvent.runCommand("/trails walk rainbow"))
+                        .hoverEvent(HoverEvent.showText(
+                                Component.text("Cycles through rainbow colors", NamedTextColor.GRAY)))));
+
+        // Custom RGB hint
+        player.sendMessage(Component.empty());
+        player.sendMessage(Component.text("  Custom color: ", NamedTextColor.GRAY)
+                .append(Component.text("/trails walk rgb:RRGGBB", NamedTextColor.WHITE)));
+        player.sendMessage(Component.text("    Example: ", NamedTextColor.DARK_GRAY)
+                .append(Component.text("/trails walk rgb:ff5500", NamedTextColor.GOLD)
+                        .clickEvent(ClickEvent.suggestCommand("/trails walk rgb:"))
+                        .hoverEvent(HoverEvent.showText(
+                                Component.text("Click to start typing custom color", NamedTextColor.GRAY)))));
+
+        // Intensity options
+        player.sendMessage(Component.empty());
+        player.sendMessage(Component.text("  Intensity: ", NamedTextColor.GRAY));
+        Component intensityLine = Component.text("    ");
+        for (TrailIntensity intensity : TrailIntensity.values()) {
+            boolean isSelected = current != null && current.intensity() == intensity;
+            intensityLine = intensityLine.append(
+                    Component.text("[" + capitalize(intensity.id()) + "]",
+                            isSelected ? NamedTextColor.GREEN : NamedTextColor.YELLOW)
+                            .clickEvent(ClickEvent.runCommand("/trails walk intensity " + intensity.id()))
+                            .hoverEvent(HoverEvent.showText(
+                                    Component.text("Particles: " + intensity.particleCount() +
+                                            ", Rate: every " + intensity.tickInterval() + " ticks", NamedTextColor.GRAY))))
+                    .append(Component.text(" "));
+        }
+        player.sendMessage(intensityLine);
+
+        // Off button
+        player.sendMessage(Component.empty());
+        player.sendMessage(Component.text("  ")
+                .append(Component.text("[Disable Walk Trail]", NamedTextColor.RED)
+                        .clickEvent(ClickEvent.runCommand("/trails walk off"))
+                        .hoverEvent(HoverEvent.showText(
+                                Component.text("Turn off walk trails", NamedTextColor.GRAY)))));
+
+        return Completable.complete();
+    }
+
+    private Completable handleWalkSelect(Player player, String effectId, String intensityArg) {
+        TrailEffect effect = parseWalkEffect(effectId);
+        if (effect == null) {
+            error(player, "Unknown effect '" + effectId + "'. Use /trails walk for options.");
+            return Completable.complete();
+        }
+
+        TrailIntensity intensity = null;
+        if (intensityArg != null) {
+            intensity = TrailIntensity.fromId(intensityArg);
+            if (intensity == null) {
+                error(player, "Unknown intensity '" + intensityArg + "'. Use low, medium, or high.");
+                return Completable.complete();
+            }
+        }
+
+        if (intensity != null) {
+            manager.setSetting(player, TrailType.WALK, effect, intensity);
+            success(player, "Walk trail set to " + effect.displayName() + " (" + intensity.id() + ").");
+        } else {
+            manager.setEffect(player, TrailType.WALK, effect);
+            success(player, "Walk trail set to " + effect.displayName() + ".");
+        }
+
+        return Completable.complete();
+    }
+
+    private Completable handleWalkIntensity(Player player, String intensityArg) {
+        TrailSetting current = manager.getSetting(player.getUniqueId(), TrailType.WALK);
+        if (current == null) {
+            error(player, "You don't have a walk trail set. Select one first!");
+            return Completable.complete();
+        }
+
+        TrailIntensity intensity = TrailIntensity.fromId(intensityArg);
+        if (intensity == null) {
+            error(player, "Unknown intensity '" + intensityArg + "'. Use low, medium, or high.");
+            return Completable.complete();
+        }
+
+        manager.setIntensity(player, TrailType.WALK, intensity);
+        success(player, "Walk trail intensity set to " + intensity.id() + ".");
+        return Completable.complete();
+    }
+
+    private TrailEffect parseWalkEffect(String effectId) {
+        // Check for rainbow
+        if (effectId.equalsIgnoreCase("rainbow")) {
+            return RainbowEffect.INSTANCE;
+        }
+
+        // Check for custom color
+        if (CustomColorEffect.isCustomColor(effectId)) {
+            CustomColorEffect custom = CustomColorEffect.fromId(effectId);
+            if (custom != null) {
+                return custom;
+            }
+            return null;
+        }
+
+        // Check for built-in effects (reuse elytra effects)
+        return ElytraTrailEffect.fromId(effectId);
+    }
+
     private TrailEffect parseElytraEffect(String effectId) {
         // Check for rainbow
         if (effectId.equalsIgnoreCase("rainbow")) {
@@ -306,6 +688,12 @@ public final class TrailsCommand implements Command {
                 if (player.hasPermission(TrailType.ELYTRA.permission())) {
                     options.add("elytra");
                 }
+                if (player.hasPermission(TrailType.GHAST.permission())) {
+                    options.add("ghast");
+                }
+                if (player.hasPermission(TrailType.WALK.permission())) {
+                    options.add("walk");
+                }
 
                 return Maybe.just(options.stream()
                         .filter(opt -> opt.startsWith(prefix))
@@ -315,6 +703,142 @@ public final class TrailsCommand implements Command {
 
             if (args.length >= 2 && args[0].equalsIgnoreCase("elytra")) {
                 if (!player.hasPermission(TrailType.ELYTRA.permission())) {
+                    return Maybe.empty();
+                }
+
+                if (args.length == 2) {
+                    String prefix = args[1].toLowerCase();
+                    List<Completion> completions = new ArrayList<>();
+
+                    // Built-in effects
+                    for (ElytraTrailEffect effect : ElytraTrailEffect.values()) {
+                        if (effect.id().startsWith(prefix)) {
+                            completions.add(Completion.completion(
+                                    effect.id(),
+                                    Component.text(effect.displayName(), NamedTextColor.GREEN)));
+                        }
+                    }
+
+                    // Rainbow
+                    if ("rainbow".startsWith(prefix)) {
+                        completions.add(Completion.completion(
+                                "rainbow",
+                                Component.text("Rainbow", NamedTextColor.LIGHT_PURPLE)));
+                    }
+
+                    // Special options
+                    if ("off".startsWith(prefix)) {
+                        completions.add(Completion.completion("off"));
+                    }
+                    if ("intensity".startsWith(prefix)) {
+                        completions.add(Completion.completion("intensity"));
+                    }
+
+                    // Custom color hint
+                    if ("rgb:".startsWith(prefix) || prefix.startsWith("rgb:")) {
+                        completions.add(Completion.completion(
+                                "rgb:",
+                                Component.text("Custom RGB color (e.g., rgb:ff5500)", NamedTextColor.GRAY)));
+                    }
+
+                    return Maybe.just(completions);
+                }
+
+                if (args.length == 3) {
+                    String prefix = args[2].toLowerCase();
+
+                    // If second arg is "intensity", complete with intensity levels
+                    if (args[1].equalsIgnoreCase("intensity")) {
+                        List<Completion> completions = new ArrayList<>();
+                        for (TrailIntensity intensity : TrailIntensity.values()) {
+                            if (intensity.id().startsWith(prefix)) {
+                                completions.add(Completion.completion(intensity.id()));
+                            }
+                        }
+                        return Maybe.just(completions);
+                    }
+
+                    // Otherwise, complete with intensity for effect selection
+                    List<Completion> completions = new ArrayList<>();
+                    for (TrailIntensity intensity : TrailIntensity.values()) {
+                        if (intensity.id().startsWith(prefix)) {
+                            completions.add(Completion.completion(intensity.id()));
+                        }
+                    }
+                    return Maybe.just(completions);
+                }
+            }
+
+            if (args.length >= 2 && args[0].equalsIgnoreCase("ghast")) {
+                if (!player.hasPermission(TrailType.GHAST.permission())) {
+                    return Maybe.empty();
+                }
+
+                if (args.length == 2) {
+                    String prefix = args[1].toLowerCase();
+                    List<Completion> completions = new ArrayList<>();
+
+                    // Built-in effects
+                    for (ElytraTrailEffect effect : ElytraTrailEffect.values()) {
+                        if (effect.id().startsWith(prefix)) {
+                            completions.add(Completion.completion(
+                                    effect.id(),
+                                    Component.text(effect.displayName(), NamedTextColor.GREEN)));
+                        }
+                    }
+
+                    // Rainbow
+                    if ("rainbow".startsWith(prefix)) {
+                        completions.add(Completion.completion(
+                                "rainbow",
+                                Component.text("Rainbow", NamedTextColor.LIGHT_PURPLE)));
+                    }
+
+                    // Special options
+                    if ("off".startsWith(prefix)) {
+                        completions.add(Completion.completion("off"));
+                    }
+                    if ("intensity".startsWith(prefix)) {
+                        completions.add(Completion.completion("intensity"));
+                    }
+
+                    // Custom color hint
+                    if ("rgb:".startsWith(prefix) || prefix.startsWith("rgb:")) {
+                        completions.add(Completion.completion(
+                                "rgb:",
+                                Component.text("Custom RGB color (e.g., rgb:ff5500)", NamedTextColor.GRAY)));
+                    }
+
+                    return Maybe.just(completions);
+                }
+
+                if (args.length == 3) {
+                    String prefix = args[2].toLowerCase();
+
+                    // If second arg is "intensity", complete with intensity levels
+                    if (args[1].equalsIgnoreCase("intensity")) {
+                        List<Completion> completions = new ArrayList<>();
+                        for (TrailIntensity intensity : TrailIntensity.values()) {
+                            if (intensity.id().startsWith(prefix)) {
+                                completions.add(Completion.completion(intensity.id()));
+                            }
+                        }
+                        return Maybe.just(completions);
+                    }
+
+                    // Otherwise, complete with intensity for effect selection
+                    List<Completion> completions = new ArrayList<>();
+                    for (TrailIntensity intensity : TrailIntensity.values()) {
+                        if (intensity.id().startsWith(prefix)) {
+                            completions.add(Completion.completion(intensity.id()));
+                        }
+                    }
+                    return Maybe.just(completions);
+                }
+            }
+
+            if (args.length >= 2 && args[0].equalsIgnoreCase("walk")) {
+                if (!player.hasPermission(TrailType.WALK.permission())) {
                     return Maybe.empty();
                 }
 
