@@ -1,5 +1,6 @@
 package sh.joey.mc.trails;
 
+import io.papermc.paper.event.entity.EntityMoveEvent;
 import io.reactivex.rxjava3.disposables.CompositeDisposable;
 import io.reactivex.rxjava3.disposables.Disposable;
 import org.bukkit.Location;
@@ -45,14 +46,12 @@ public final class TrailManager implements Disposable {
                 .filter(e -> e.getPlayer().hasPermission(TrailType.ELYTRA.permission()))
                 .subscribe(this::handleElytraGlide));
 
-        // Watch PlayerMoveEvent for ghast riding
-        disposables.add(plugin.watchEvent(PlayerMoveEvent.class)
-                .filter(e -> {
-                    Entity vehicle = e.getPlayer().getVehicle();
-                    return vehicle != null && vehicle.getType() == EntityType.GHAST;
-                })
-                .filter(e -> e.getPlayer().hasPermission(TrailType.GHAST.permission()))
-                .subscribe(this::handleGhastRide));
+        // Watch EntityMoveEvent for happy ghast with player passenger
+        disposables.add(plugin.watchEvent(EntityMoveEvent.class)
+                .filter(e -> e.getEntity().getType() == EntityType.HAPPY_GHAST)
+                .filter(e -> !e.getEntity().getPassengers().isEmpty())
+                .filter(e -> e.getEntity().getPassengers().get(0) instanceof Player)
+                .subscribe(this::handleGhastMove));
 
         // Watch PlayerMoveEvent for walking
         disposables.add(plugin.watchEvent(PlayerMoveEvent.class)
@@ -118,24 +117,27 @@ public final class TrailManager implements Disposable {
         setting.effect().spawn(from, currentTick, setting.intensity());
     }
 
-    private void handleGhastRide(PlayerMoveEvent event) {
-        Player player = event.getPlayer();
+    private void handleGhastMove(EntityMoveEvent event) {
+        Entity ghast = event.getEntity();
+        Player player = (Player) ghast.getPassengers().get(0);
         UUID playerId = player.getUniqueId();
+
+        // Check permission
+        if (!player.hasPermission(TrailType.GHAST.permission())) {
+            return;
+        }
 
         TrailSetting setting = getSetting(playerId, TrailType.GHAST);
         if (setting == null) return;
 
         // Rate limit based on intensity
-        long currentTick = player.getWorld().getFullTime();
+        long currentTick = ghast.getWorld().getFullTime();
         if (!shouldSpawn(playerId, TrailType.GHAST, currentTick, setting.intensity().tickInterval())) {
             return;
         }
 
         // Spawn at the back of the ghast
-        Entity ghast = player.getVehicle();
-        if (ghast == null) return;
-
-        Location trailLocation = calculateGhastBackPosition(ghast.getLocation());
+        Location trailLocation = calculateGhastBackPosition(event.getFrom());
         setting.effect().spawn(trailLocation, currentTick, setting.intensity());
     }
 
