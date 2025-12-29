@@ -426,7 +426,7 @@ permissions:
 
   smp.settings.displaytime:
     description: Configure time display in boss bar
-    default: true
+    default: op
 
   smp.settings.easymode:
     description: Enable easy mode (reduced damage, insta-kills)

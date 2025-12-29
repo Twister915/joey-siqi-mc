@@ -11,6 +11,7 @@ import sh.joey.mc.SiqiJoeyPlugin;
 import sh.joey.mc.cmd.Command;
 import sh.joey.mc.confirm.ConfirmationManager;
 import sh.joey.mc.confirm.ConfirmationRequest;
+import sh.joey.mc.settings.SettingsManager;
 
 /**
  * /suicide - kills the player (for respawning).
@@ -25,9 +26,11 @@ public final class SuicideCommand implements Command {
     private static final int CONFIRM_TIMEOUT_SECONDS = 10;
 
     private final ConfirmationManager confirmationManager;
+    private final SettingsManager settingsManager;
 
-    public SuicideCommand(ConfirmationManager confirmationManager) {
+    public SuicideCommand(ConfirmationManager confirmationManager, SettingsManager settingsManager) {
         this.confirmationManager = confirmationManager;
+        this.settingsManager = settingsManager;
     }
 
     @Override
@@ -63,6 +66,8 @@ public final class SuicideCommand implements Command {
     }
 
     private void requestConfirmation(Player player) {
+        boolean keepInventory = settingsManager.getSettings(player.getUniqueId()).keepInventory();
+
         confirmationManager.request(player, new ConfirmationRequest() {
             @Override
             public Component prefix() {
@@ -71,7 +76,7 @@ public final class SuicideCommand implements Command {
 
             @Override
             public String promptText() {
-                return "Kill yourself? You will drop your items!";
+                return keepInventory ? "Kill yourself?" : "Kill yourself? You will lose your items!";
             }
 
             @Override

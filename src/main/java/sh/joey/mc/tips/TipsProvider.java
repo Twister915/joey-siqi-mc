@@ -338,6 +338,41 @@ public final class TipsProvider implements Disposable {
                     .append(Component.text(" to leave particle trails behind you as you walk!", NamedTextColor.GRAY));
         });
 
+        // Settings tip - general
+        tipList.add(player -> Component.text("Use ", NamedTextColor.GRAY)
+                .append(cmd("/settings"))
+                .append(Component.text(" to customize your gameplay experience!", NamedTextColor.GRAY)));
+
+        // Keep inventory setting tip
+        tipList.add(player -> {
+            if (!player.hasPermission("smp.settings.keepinventory")) {
+                return null;
+            }
+            return Component.text("Worried about losing items? Enable Keep Inventory in ", NamedTextColor.GRAY)
+                    .append(cmd("/settings"))
+                    .append(Component.text("!", NamedTextColor.GRAY));
+        });
+
+        // Display time setting tip
+        tipList.add(player -> {
+            if (!player.hasPermission("smp.settings.displaytime")) {
+                return null;
+            }
+            return Component.text("You can hide the time display or make it show only when holding a clock in ", NamedTextColor.GRAY)
+                    .append(cmd("/settings"))
+                    .append(Component.text(".", NamedTextColor.GRAY));
+        });
+
+        // Easy mode setting tip
+        tipList.add(player -> {
+            if (!player.hasPermission("smp.settings.easymode")) {
+                return null;
+            }
+            return Component.text("Combat too hard? Try Easy Mode in ", NamedTextColor.GRAY)
+                    .append(cmd("/settings"))
+                    .append(Component.text(" - mobs deal less damage and you might insta-kill them!", NamedTextColor.GRAY));
+        });
+
         return tipList;
     }
 

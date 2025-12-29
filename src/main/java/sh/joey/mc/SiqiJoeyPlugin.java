@@ -364,7 +364,7 @@ public final class SiqiJoeyPlugin extends JavaPlugin {
         components.add(CmdExecutor.register(this, new WeatherCommand()));
         components.add(CmdExecutor.register(this, new ListCommand(nicknameManager)));
         components.add(CmdExecutor.register(this, new MapCommand(mapConfig)));
-        components.add(CmdExecutor.register(this, new SuicideCommand(confirmationManager)));
+        components.add(CmdExecutor.register(this, new SuicideCommand(confirmationManager, settingsManager)));
         components.add(CmdExecutor.register(this, new RemoveCommand()));
         components.add(CmdExecutor.register(this, new SeedCommand()));
 
