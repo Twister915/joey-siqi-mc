@@ -112,6 +112,7 @@ public final class RtpCommand implements Command {
         player.sendMessage(Component.empty());
 
         for (RtpCandidate candidate : candidates) {
+            // Main entry line with biome, distance, direction
             Component entry = Component.text("[" + candidate.index() + "] ")
                     .color(NamedTextColor.YELLOW)
                     .decorate(TextDecoration.BOLD)
@@ -121,10 +122,17 @@ public final class RtpCommand implements Command {
                     .append(Component.text(" " + candidate.direction()).color(NamedTextColor.AQUA))
                     .clickEvent(ClickEvent.runCommand("/rtp select " + candidate.index()))
                     .hoverEvent(HoverEvent.showText(
-                            Component.text("Click to teleport\n").color(NamedTextColor.WHITE)
-                                    .append(Component.text(candidate.hint()).color(NamedTextColor.GRAY).decorate(TextDecoration.ITALIC))));
+                            Component.text("Click to teleport").color(NamedTextColor.WHITE)));
+
+            // Hint line below the entry
+            Component hintLine = Component.text("    ")
+                    .append(Component.text(candidate.hint()).color(NamedTextColor.GRAY).decorate(TextDecoration.ITALIC))
+                    .clickEvent(ClickEvent.runCommand("/rtp select " + candidate.index()))
+                    .hoverEvent(HoverEvent.showText(
+                            Component.text("Click to teleport").color(NamedTextColor.WHITE)));
 
             player.sendMessage(entry);
+            player.sendMessage(hintLine);
         }
 
         player.sendMessage(Component.empty());
