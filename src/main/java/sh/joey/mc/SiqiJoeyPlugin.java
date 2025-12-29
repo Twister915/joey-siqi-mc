@@ -132,6 +132,9 @@ import sh.joey.mc.rtp.RtpCommand;
 import sh.joey.mc.rtp.RtpConfig;
 import sh.joey.mc.rtp.RtpManager;
 import sh.joey.mc.rtp.RtpStorage;
+import sh.joey.mc.pregen.PregenCommand;
+import sh.joey.mc.pregen.PregenConfig;
+import sh.joey.mc.pregen.PregenManager;
 
 @SuppressWarnings("unused")
 public final class SiqiJoeyPlugin extends JavaPlugin {
@@ -370,6 +373,12 @@ public final class SiqiJoeyPlugin extends JavaPlugin {
         var rtpManager = new RtpManager(this, rtpConfig, rtpStorage);
         components.add(rtpManager);
         components.add(CmdExecutor.register(this, new RtpCommand(this, rtpManager, safeTeleporter, rtpConfig)));
+
+        // Chunk pre-generation system (runs when server is empty)
+        var pregenConfig = PregenConfig.load(this);
+        var pregenManager = new PregenManager(this, pregenConfig);
+        components.add(pregenManager);
+        components.add(CmdExecutor.register(this, new PregenCommand(pregenManager)));
 
         // Statue generator
         components.add(CmdExecutor.register(this, new StatueCommand(this, confirmationManager)));

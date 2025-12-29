@@ -161,6 +161,9 @@ commands:
   rtp:
     description: Randomly teleport to a new location
     usage: /rtp [select <1-5>]
+  pregen:
+    description: Control chunk pre-generation
+    usage: /pregen [status|start|stop|pause]
 
 permissions:
   smp.*:
@@ -169,6 +172,7 @@ permissions:
     children:
       smp.rtp: true
       smp.rtp.bypass: true
+      smp.pregen: true
       smp.msg: true
       smp.tp: true
       smp.tphere: true
@@ -399,4 +403,8 @@ permissions:
 
   smp.rtp.bypass:
     description: Bypass RTP cooldown
+    default: op
+
+  smp.pregen:
+    description: Control chunk pre-generation
     default: op

@@ -37,6 +37,22 @@ rtp:
   # Per-candidate timeout for chunk loading (in seconds)
   chunk-timeout-seconds: 3
 
+# Chunk pre-generation (runs when server is empty)
+# Generates chunks in a spiral pattern from world spawn outward
+pregen:
+  # Enable/disable the pre-generation system
+  enabled: false
+  # Worlds to pre-generate (in order)
+  worlds:
+    - world
+  # Size of area to generate (blocks per side, centered on spawn)
+  # 25000 = ~25km x 25km = ~1562 x 1562 chunks = ~2.4 million chunks
+  side-length: 25000
+  # Generation speed: SLOW (1-2/tick), FAST (5-10/tick), FASTEST (20-30/tick)
+  rate: FAST
+  # How often to log progress (seconds)
+  progress-log-interval-seconds: 60
+
 # Custom whitelist system - replaces vanilla whitelist
 # When enabled, only whitelisted players can join
 # Use /invite or /whitelist add to whitelist players
