@@ -175,6 +175,7 @@ permissions:
       smp.pregen: true
       smp.msg: true
       smp.tp: true
+      smp.tp.admin: true
       smp.tphere: true
       smp.back: true
       smp.home: true
@@ -213,6 +214,10 @@ permissions:
 
   smp.tp:
     description: Send teleport requests to other players
+
+  smp.tp.admin:
+    description: Instantly teleport to players without sending a request
+    default: op
 
   smp.tphere:
     description: Request to teleport players to you

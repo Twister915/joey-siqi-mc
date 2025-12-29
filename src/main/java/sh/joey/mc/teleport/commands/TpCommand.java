@@ -80,7 +80,13 @@ public final class TpCommand implements Command {
                 return Completable.complete();
             }
 
-            sendRequest(player, target);
+            // Admin permission allows instant teleport without request
+            if (player.hasPermission("smp.tp.admin")) {
+                Messages.success(player, "Teleporting to " + target.getName() + "...");
+                safeTeleporter.teleport(player, target.getLocation(), s -> {});
+            } else {
+                sendRequest(player, target);
+            }
             return Completable.complete();
         });
     }
