@@ -8,6 +8,9 @@ import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import sh.joey.mc.SiqiJoeyPlugin;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -78,6 +81,9 @@ public final class PregenManager implements Disposable {
 
     // Forced mode: runs at SLOW speed even with players online (for testing)
     private boolean forcedMode = false;
+
+    // Progress file name stored in world folder
+    private static final String PROGRESS_FILE_NAME = "pregen-progress.txt";
 
     public PregenManager(SiqiJoeyPlugin plugin, PregenConfig config) {
         this.plugin = plugin;
@@ -150,18 +156,29 @@ public final class PregenManager implements Disposable {
             SpiralIterator iterator = new SpiralIterator(
                     spawnChunkX, spawnChunkZ, config.sideChunks()
             );
+
+            // Load saved progress and skip to resume position
+            long savedProgress = loadProgress(world);
+            if (savedProgress > 0) {
+                iterator.skip(savedProgress);
+                logger.info("[Pregen] Resuming " + worldName + " from chunk " + savedProgress);
+            }
+
             worldIterators.put(worldName, iterator);
             worldProgress.put(worldName, new WorldProgress(
-                    worldName, 0, 0, config.totalChunks(), System.currentTimeMillis(), false
+                    worldName, 0, savedProgress, config.totalChunks(), System.currentTimeMillis(), false
             ));
         }
 
         if (!worldIterators.isEmpty()) {
-            // Find first non-empty world
+            // Find first non-complete world
             for (String worldName : config.worlds()) {
                 if (worldIterators.containsKey(worldName)) {
-                    currentWorld = worldName;
-                    break;
+                    SpiralIterator iterator = worldIterators.get(worldName);
+                    if (iterator.hasNext()) {
+                        currentWorld = worldName;
+                        break;
+                    }
                 }
             }
         }
@@ -274,6 +291,11 @@ public final class PregenManager implements Disposable {
                     current.totalChunks(), current.startTimeMillis(), true
             ));
         }
+        // Clear progress file since world is complete
+        World world = Bukkit.getWorld(worldName);
+        if (world != null) {
+            clearProgress(world);
+        }
         logger.info("[Pregen] Completed generation for world: " + worldName);
     }
 
@@ -324,6 +346,53 @@ public final class PregenManager implements Disposable {
                 progress.skippedChunks(),
                 progress.getEtaFormatted()
         ));
+
+        // Save progress to file
+        saveProgress(currentWorld);
+    }
+
+    // === Progress persistence ===
+
+    private Path getProgressFile(World world) {
+        return world.getWorldFolder().toPath().resolve(PROGRESS_FILE_NAME);
+    }
+
+    private void saveProgress(String worldName) {
+        World world = Bukkit.getWorld(worldName);
+        if (world == null) return;
+
+        SpiralIterator iterator = worldIterators.get(worldName);
+        if (iterator == null) return;
+
+        Path file = getProgressFile(world);
+        try {
+            Files.writeString(file, String.valueOf(iterator.getIndex()));
+        } catch (IOException e) {
+            logger.warning("[Pregen] Failed to save progress for " + worldName + ": " + e.getMessage());
+        }
+    }
+
+    private long loadProgress(World world) {
+        Path file = getProgressFile(world);
+        if (!Files.exists(file)) {
+            return 0;
+        }
+        try {
+            String content = Files.readString(file).trim();
+            return Long.parseLong(content);
+        } catch (IOException | NumberFormatException e) {
+            logger.warning("[Pregen] Failed to load progress for " + world.getName() + ": " + e.getMessage());
+            return 0;
+        }
+    }
+
+    private void clearProgress(World world) {
+        Path file = getProgressFile(world);
+        try {
+            Files.deleteIfExists(file);
+        } catch (IOException e) {
+            logger.warning("[Pregen] Failed to clear progress file for " + world.getName() + ": " + e.getMessage());
+        }
     }
 
     // === Admin control methods ===
@@ -349,6 +418,10 @@ public final class PregenManager implements Disposable {
     }
 
     public void stop() {
+        // Save progress before stopping
+        for (String worldName : worldIterators.keySet()) {
+            saveProgress(worldName);
+        }
         state = State.IDLE;
         stopTicking();
         worldIterators.clear();
@@ -356,7 +429,7 @@ public final class PregenManager implements Disposable {
         currentWorld = null;
         currentWorldIndex = 0;
         forcedMode = false;  // Exit forced mode on stop
-        logger.info("[Pregen] Stopped and reset");
+        logger.info("[Pregen] Stopped (progress saved)");
     }
 
     public void pause() {
@@ -364,6 +437,10 @@ public final class PregenManager implements Disposable {
             state = State.PAUSED;
             stopTicking();
             forcedMode = false;  // Exit forced mode on pause
+            // Save progress for all worlds
+            for (String worldName : worldIterators.keySet()) {
+                saveProgress(worldName);
+            }
             logger.info("[Pregen] Paused");
         }
     }
@@ -424,6 +501,10 @@ public final class PregenManager implements Disposable {
 
     @Override
     public void dispose() {
+        // Save progress before shutdown
+        for (String worldName : worldIterators.keySet()) {
+            saveProgress(worldName);
+        }
         stopTicking();
         disposables.dispose();
     }

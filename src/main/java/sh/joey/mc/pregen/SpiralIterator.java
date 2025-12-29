@@ -131,4 +131,27 @@ public final class SpiralIterator implements Iterator<int[]> {
     public int getHalfSide() {
         return sideChunks / 2;
     }
+
+    /**
+     * Skip forward by a number of chunks without returning values.
+     * Used to resume from saved progress.
+     *
+     * @param count number of chunks to skip
+     */
+    public void skip(long count) {
+        if (count <= 0) return;
+
+        // Clamp to remaining chunks
+        long toSkip = Math.min(count, totalChunks - index);
+
+        for (long i = 0; i < toSkip; i++) {
+            if (!started) {
+                started = true;
+                index++;
+            } else {
+                advance();
+                index++;
+            }
+        }
+    }
 }
