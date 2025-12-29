@@ -4,10 +4,20 @@ import io.reactivex.rxjava3.disposables.CompositeDisposable;
 import io.reactivex.rxjava3.disposables.Disposable;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
+import org.bukkit.Color;
 import org.bukkit.GameMode;
+import org.bukkit.Material;
 import org.bukkit.entity.Player;
+import org.bukkit.event.Cancellable;
+import org.bukkit.event.entity.EntityDamageByEntityEvent;
+import org.bukkit.event.entity.EntityPickupItemEvent;
+import org.bukkit.event.inventory.InventoryClickEvent;
+import org.bukkit.event.player.PlayerDropItemEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerPortalEvent;
+import org.bukkit.inventory.EquipmentSlot;
+import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.meta.LeatherArmorMeta;
 import org.bukkit.permissions.PermissionAttachment;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
@@ -80,6 +90,30 @@ public final class AdminModeManager implements Disposable {
         disposables.add(plugin.watchEvent(PlayerPortalEvent.class)
                 .filter(e -> playersInAdminMode.contains(e.getPlayer().getUniqueId()))
                 .subscribe(this::blockPortal));
+
+        // Block dropping items
+        disposables.add(plugin.watchEvent(PlayerDropItemEvent.class)
+                .filter(e -> playersInAdminMode.contains(e.getPlayer().getUniqueId()))
+                .subscribe(this::cancel));
+
+        // Block picking up items
+        disposables.add(plugin.watchEvent(EntityPickupItemEvent.class)
+                .filter(e -> e.getEntity() instanceof Player)
+                .filter(e -> playersInAdminMode.contains(e.getEntity().getUniqueId()))
+                .subscribe(this::cancel));
+
+        // Block damaging entities
+        disposables.add(plugin.watchEvent(EntityDamageByEntityEvent.class)
+                .filter(e -> e.getDamager() instanceof Player)
+                .filter(e -> playersInAdminMode.contains(e.getDamager().getUniqueId()))
+                .subscribe(this::cancel));
+
+        // Block removing admin hat
+        disposables.add(plugin.watchEvent(InventoryClickEvent.class)
+                .filter(e -> e.getWhoClicked() instanceof Player)
+                .filter(e -> playersInAdminMode.contains(e.getWhoClicked().getUniqueId()))
+                .filter(e -> e.getSlot() == 39) // Helmet slot
+                .subscribe(this::cancel));
     }
 
     /**
@@ -124,6 +158,7 @@ public final class AdminModeManager implements Disposable {
                         () -> {
                             playersInAdminMode.add(playerId);
                             InventorySnapshot.clearPlayer(player);
+                            equipAdminHat(player);
                             player.setGameMode(GameMode.CREATIVE);
                             attachPermissions(player);
                             success(player, "Entered admin mode. Your inventory has been saved.");
@@ -154,6 +189,7 @@ public final class AdminModeManager implements Disposable {
                         () -> {
                             // State exists in cache but not in DB - just clean up
                             detachPermissions(player);
+                            removeAdminHat(player);
                             playersInAdminMode.remove(playerId);
                             player.setGameMode(GameMode.SURVIVAL);
                             grantSlowFalling(player);
@@ -166,8 +202,9 @@ public final class AdminModeManager implements Disposable {
     private void applySnapshotAndCleanup(Player player, InventorySnapshot snapshot, Consumer<Boolean> callback) {
         UUID playerId = player.getUniqueId();
 
-        // Remove admin mode permissions
+        // Remove admin mode permissions and hat
         detachPermissions(player);
+        removeAdminHat(player);
 
         // Apply snapshot (no effect decay - we want exact restore)
         snapshot.applyTo(player, false);
@@ -208,6 +245,23 @@ public final class AdminModeManager implements Disposable {
         event.setCancelled(true);
         error(event.getPlayer(), "You cannot use portals while in admin mode.");
         info(event.getPlayer(), "Use /adminmode to exit first.");
+    }
+
+    private void cancel(Cancellable event) {
+        event.setCancelled(true);
+    }
+
+    private void equipAdminHat(Player player) {
+        ItemStack hat = new ItemStack(Material.LEATHER_HELMET);
+        LeatherArmorMeta meta = (LeatherArmorMeta) hat.getItemMeta();
+        meta.setColor(Color.RED);
+        meta.displayName(Component.text("Admin Hat", NamedTextColor.RED));
+        hat.setItemMeta(meta);
+        player.getInventory().setHelmet(hat);
+    }
+
+    private void removeAdminHat(Player player) {
+        player.getInventory().setHelmet(null);
     }
 
     private void success(Player player, String message) {
