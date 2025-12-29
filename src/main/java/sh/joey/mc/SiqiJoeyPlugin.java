@@ -64,6 +64,9 @@ import sh.joey.mc.permissions.PermissionCache;
 import sh.joey.mc.permissions.PermissionResolver;
 import sh.joey.mc.permissions.PermissionStorage;
 import sh.joey.mc.permissions.cmd.PermCommand;
+import sh.joey.mc.settings.SettingsCommand;
+import sh.joey.mc.settings.SettingsManager;
+import sh.joey.mc.settings.SettingsStorage;
 import sh.joey.mc.utility.ClearCommand;
 import sh.joey.mc.utility.GiveCommand;
 import sh.joey.mc.utility.ItemCommand;
@@ -206,10 +209,16 @@ public final class SiqiJoeyPlugin extends JavaPlugin {
                 new PermCommand(this, permissionStorage, playerSessionStorage,
                         permissionCache, permissionAttacher, displayManager)));
 
+        // Player settings system (needs to be initialized before boss bar for TimeOfDayProvider)
+        var settingsStorage = new SettingsStorage(storageService);
+        var settingsManager = new SettingsManager(this, settingsStorage);
+        components.add(settingsManager);
+        components.add(CmdExecutor.register(this, new SettingsCommand(settingsManager)));
+
         // Boss bar system with priority-based providers
         var bossBarManager = new BossBarManager(this);
         components.add(bossBarManager);
-        bossBarManager.registerProvider(new TimeOfDayProvider());
+        bossBarManager.registerProvider(new TimeOfDayProvider(settingsManager));
         bossBarManager.registerProvider(new LodestoneCompassProvider());
 
         var biomeChangeProvider = new BiomeChangeProvider(this);

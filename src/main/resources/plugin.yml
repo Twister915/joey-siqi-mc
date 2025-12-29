@@ -119,6 +119,9 @@ commands:
   genstatue:
     description: Generate a wool statue of a player
     usage: /genstatue <player>
+  settings:
+    description: Manage your player settings
+    usage: /settings [setting] [value]
   ban:
     description: Permanently ban a player
     usage: /ban <player> [reason]
@@ -211,6 +214,9 @@ permissions:
       smp.punish.*: true
       smp.invite: true
       smp.whitelist: true
+      smp.settings.keepinventory: true
+      smp.settings.displaytime: true
+      smp.settings.easymode: true
 
   smp.tp:
     description: Send teleport requests to other players
@@ -412,4 +418,16 @@ permissions:
 
   smp.pregen:
     description: Control chunk pre-generation
+    default: op
+
+  smp.settings.keepinventory:
+    description: Toggle keep inventory on death
+    default: op
+
+  smp.settings.displaytime:
+    description: Configure time display in boss bar
+    default: true
+
+  smp.settings.easymode:
+    description: Enable easy mode (reduced damage, insta-kills)
     default: op

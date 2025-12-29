@@ -2,10 +2,13 @@ package sh.joey.mc.bossbar;
 
 import org.bukkit.ChatColor;
 import org.bukkit.GameRule;
+import org.bukkit.Material;
 import org.bukkit.World;
 import org.bukkit.boss.BarColor;
 import org.bukkit.boss.BarStyle;
 import org.bukkit.entity.Player;
+import sh.joey.mc.settings.DisplayTimeSetting;
+import sh.joey.mc.settings.SettingsManager;
 
 import java.text.NumberFormat;
 import java.util.HashMap;
@@ -31,8 +34,13 @@ public final class TimeOfDayProvider implements BossBarProvider {
 
     // Cache per world - all players in same world see same time
     private final Map<UUID, CachedState> worldCache = new HashMap<>();
+    private final SettingsManager settingsManager;
 
     private record CachedState(long days, byte hour, byte minute, BossBarState state) {}
+
+    public TimeOfDayProvider(SettingsManager settingsManager) {
+        this.settingsManager = settingsManager;
+    }
 
     @Override
     public int getPriority() {
@@ -41,6 +49,19 @@ public final class TimeOfDayProvider implements BossBarProvider {
 
     @Override
     public Optional<BossBarState> getState(Player player) {
+        // Check player's display time setting
+        DisplayTimeSetting displaySetting = settingsManager.getSettings(player.getUniqueId()).displayTime();
+
+        if (displaySetting == DisplayTimeSetting.NEVER) {
+            return Optional.empty();
+        }
+
+        if (displaySetting == DisplayTimeSetting.HOLDING_CLOCK) {
+            if (!isHoldingClock(player)) {
+                return Optional.empty();
+            }
+        }
+
         World world = player.getWorld();
 
         // Only show for overworld-type environments
@@ -94,6 +115,12 @@ public final class TimeOfDayProvider implements BossBarProvider {
           .append(clock.toStringFast());
 
         return new BossBarState(sb.toString(), color, clock.progress(), style);
+    }
+
+    private boolean isHoldingClock(Player player) {
+        Material main = player.getInventory().getItemInMainHand().getType();
+        Material off = player.getInventory().getItemInOffHand().getType();
+        return main == Material.CLOCK || off == Material.CLOCK;
     }
 
     static WorldTime getWorldTime(World world) {
