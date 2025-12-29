@@ -163,7 +163,7 @@ commands:
     usage: /rtp [select <1-5>]
   pregen:
     description: Control chunk pre-generation
-    usage: /pregen [status|start|stop|pause]
+    usage: /pregen [status|start|stop|pause|force|monitor]
 
 permissions:
   smp.*:

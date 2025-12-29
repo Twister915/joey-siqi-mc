@@ -207,16 +207,23 @@ public final class PregenManager implements Disposable {
             return;
         }
 
-        // Rate limiting: don't exceed max concurrent requests
+        // Rate limiting: only limit actual chunk generation, not existence checks
         // Use SLOW rate when in forced mode (players online) to minimize impact
         PregenRate effectiveRate = forcedMode ? PregenRate.SLOW : config.rate();
         int maxConcurrent = effectiveRate.getMaxChunksPerTick();
         int canRequest = maxConcurrent - inFlightRequests.get();
 
-        for (int i = 0; i < canRequest && iterator.hasNext(); i++) {
+        // Check many chunks quickly, but only generate up to canRequest new ones
+        // Limit checks per tick to avoid blocking the main thread too long
+        int maxChecksPerTick = 1000;
+        int checksThisTick = 0;
+        int generatedThisTick = 0;
+
+        while (iterator.hasNext() && generatedThisTick < canRequest && checksThisTick < maxChecksPerTick) {
             int[] coords = iterator.next();
             int chunkX = coords[0];
             int chunkZ = coords[1];
+            checksThisTick++;
 
             // Check if already generated (fast, synchronous)
             if (world.isChunkGenerated(chunkX, chunkZ)) {
@@ -225,6 +232,7 @@ public final class PregenManager implements Disposable {
             }
 
             // Request async chunk generation
+            generatedThisTick++;
             inFlightRequests.incrementAndGet();
             String worldName = currentWorld;  // Capture for lambda
 

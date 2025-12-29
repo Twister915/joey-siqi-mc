@@ -19,9 +19,11 @@ import java.util.Map;
 public final class PregenCommand implements Command {
 
     private final PregenManager manager;
+    private final PregenBossBarProvider bossBarProvider;
 
-    public PregenCommand(PregenManager manager) {
+    public PregenCommand(PregenManager manager, PregenBossBarProvider bossBarProvider) {
         this.manager = manager;
+        this.bossBarProvider = bossBarProvider;
     }
 
     @Override
@@ -63,7 +65,19 @@ public final class PregenCommand implements Command {
                         Messages.info(sender, "Forced mode disabled.");
                     }
                 }
-                default -> Messages.error(sender, "Usage: /pregen [status|start|stop|pause|force]");
+                case "monitor" -> {
+                    if (!(sender instanceof org.bukkit.entity.Player player)) {
+                        Messages.error(sender, "This command can only be used by players.");
+                        return;
+                    }
+                    boolean enabled = bossBarProvider.toggleMonitoring(player.getUniqueId());
+                    if (enabled) {
+                        Messages.success(sender, "Boss bar monitoring enabled.");
+                    } else {
+                        Messages.info(sender, "Boss bar monitoring disabled.");
+                    }
+                }
+                default -> Messages.error(sender, "Usage: /pregen [status|start|stop|pause|force|monitor]");
             }
         });
     }
@@ -157,7 +171,7 @@ public final class PregenCommand implements Command {
         }
 
         sender.sendMessage(Component.empty());
-        sender.sendMessage(Component.text("Commands: /pregen start|stop|pause|force")
+        sender.sendMessage(Component.text("Commands: /pregen start|stop|pause|force|monitor")
                 .color(NamedTextColor.DARK_GRAY));
     }
 
@@ -178,7 +192,7 @@ public final class PregenCommand implements Command {
         return Maybe.fromCallable(() -> {
             if (args.length == 1) {
                 String prefix = args[0].toLowerCase();
-                return List.of("status", "start", "stop", "pause", "force").stream()
+                return List.of("status", "start", "stop", "pause", "force", "monitor").stream()
                         .filter(s -> s.startsWith(prefix))
                         .map(Completion::completion)
                         .toList();

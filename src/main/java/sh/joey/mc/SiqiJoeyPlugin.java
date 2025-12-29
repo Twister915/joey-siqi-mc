@@ -132,6 +132,7 @@ import sh.joey.mc.rtp.RtpCommand;
 import sh.joey.mc.rtp.RtpConfig;
 import sh.joey.mc.rtp.RtpManager;
 import sh.joey.mc.rtp.RtpStorage;
+import sh.joey.mc.pregen.PregenBossBarProvider;
 import sh.joey.mc.pregen.PregenCommand;
 import sh.joey.mc.pregen.PregenConfig;
 import sh.joey.mc.pregen.PregenManager;
@@ -378,7 +379,10 @@ public final class SiqiJoeyPlugin extends JavaPlugin {
         var pregenConfig = PregenConfig.load(this);
         var pregenManager = new PregenManager(this, pregenConfig);
         components.add(pregenManager);
-        components.add(CmdExecutor.register(this, new PregenCommand(pregenManager)));
+        var pregenBossBarProvider = new PregenBossBarProvider(this, pregenManager);
+        components.add(pregenBossBarProvider);
+        bossBarManager.registerProvider(pregenBossBarProvider);
+        components.add(CmdExecutor.register(this, new PregenCommand(pregenManager, pregenBossBarProvider)));
 
         // Statue generator
         components.add(CmdExecutor.register(this, new StatueCommand(this, confirmationManager)));
