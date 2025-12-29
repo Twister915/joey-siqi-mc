@@ -46,8 +46,7 @@ pregen:
   worlds:
     - world
   # Size of area to generate (blocks per side, centered on spawn)
-  # 25000 = ~25km x 25km = ~1562 x 1562 chunks = ~2.4 million chunks
-  side-length: 25000
+  side-length: 12500
   # Generation speed: SLOW (1-2/tick), FAST (5-10/tick), FASTEST (20-30/tick)
   rate: FAST
   # How often to log progress (seconds)
