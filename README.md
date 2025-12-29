@@ -109,6 +109,17 @@ All server messages styled to match the plugin's visual theme:
 - `/spawn` - Teleport to the world's spawn point
 - `/setspawn` - Set the spawn point for the current world (requires permission)
 
+### Random Teleport
+Find new unexplored areas for resource gathering:
+- `/rtp` - Generate 5 random location options in the overworld
+- `/rtp select <1-5>` - Teleport to a chosen location
+- Each option shows biome name, distance from spawn, cardinal direction, and a vague hint
+- Clickable list - just click to teleport!
+- **Safety**: Excludes oceans, mushroom fields, deep dark, and checks for nearby lava
+- **Scalable**: Works with search radius up to 25,000+ blocks using async chunk loading
+- **Cooldown**: 5-minute cooldown between uses (admins can bypass with `smp.rtp.bypass`)
+- **First-join tip**: New players automatically receive a tip about `/rtp`
+
 ### Resource Pack System
 - `/resourcepack` - List available resource packs
 - `/resourcepack select <pack>` - Apply a resource pack (alias: `/rp`)
@@ -224,6 +235,8 @@ All commands use the `smp.` permission prefix. Key permissions:
 | `smp.warp.set` | Create/delete warps | op |
 | `smp.spawn` | Teleport to spawn | everyone |
 | `smp.setspawn` | Set spawn point | op |
+| `smp.rtp` | Use random teleport | everyone |
+| `smp.rtp.bypass` | Bypass RTP cooldown | op |
 | `smp.suicide` | Kill yourself to respawn | everyone |
 | `smp.remove` | Remove entities | op |
 | `smp.seed` | View world seed | op |
@@ -286,6 +299,11 @@ teleport:
 requests:
   timeout-seconds: 60
 
+rtp:
+  cooldown-minutes: 5
+  search-radius: 25000
+  min-distance: 500
+
 whitelist:
   enabled: true  # Set to false to allow all players
 
@@ -313,6 +331,7 @@ All persistent data is stored in PostgreSQL:
 - **player_groups** - Player-to-group membership
 - **warps** - Named warp locations
 - **world_spawns** - Per-world spawn points
+- **rtp_cooldowns** - Random teleport cooldown tracking
 - **player_resource_packs** - Player resource pack preferences
 - **nicknames** - Player display name customizations
 - **private_messages** - Private message history for `/reply`

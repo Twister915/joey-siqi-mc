@@ -33,6 +33,7 @@ src/main/java/sh/joey/mc/
 ├── pagination/               # Chat pagination utilities
 ├── messages/                 # Shared message generation (word banks)
 ├── permissions/              # Permission system (groups, grants, display)
+├── rtp/                      # Random teleport system
 └── utility/                  # Utility commands (clear, item, give, time, weather, etc.)
 ```
 
@@ -492,6 +493,73 @@ A complete permissions system with groups, player overrides, world-scoped permis
 - `ChatMessageProvider` calls `DisplayManager.getChatPrefix/Suffix()` during rendering
 - Supports both legacy (`&a`) and MiniMessage (`<green>`) color formats
 
+### 12. Random Teleport System (`rtp/`)
+
+Allows players to teleport to random locations in the overworld for resource gathering and exploration.
+
+**Key Classes:**
+- `RtpCommand` - `/rtp` command handler with `/rtp select <1-5>` subcommand
+- `RtpManager` - Core logic: location generation, candidate storage, cooldown management
+- `RtpStorage` - PostgreSQL storage for cooldown persistence across restarts
+- `RtpConfig` - Configuration record loaded from `config.yml`
+- `RtpCandidate` - Immutable record for candidate location data
+- `BiomeHints` - Generates vague, mysterious hints by biome category
+- `Messages` - Formatted message utilities with `[RTP]` prefix
+
+**Commands:** `/rtp`, `/rtp select <1-5>`
+
+**Features:**
+- Generates 5 random candidate locations from world spawn
+- Presents clickable list with biome name, distance, direction, and vague hint
+- Scalable to 25k+ blocks with hybrid chunk loading (prefers generated chunks, 3s timeout)
+- Configurable cooldown (default 5 minutes), persisted to database
+- Admin bypass via `smp.rtp.bypass` permission
+- First-join tip automatically sent to new players
+
+**Safety Features:**
+- Excludes dangerous biomes: all ocean variants, mushroom fields, deep dark, void
+- Checks for nearby surface lava (5-block radius)
+- Verifies safe landing (passable feet/head, solid ground)
+- Y-bounds validation
+
+**Biome Blacklist:**
+```java
+Set.of(OCEAN, DEEP_OCEAN, FROZEN_OCEAN, DEEP_FROZEN_OCEAN,
+       COLD_OCEAN, DEEP_COLD_OCEAN, LUKEWARM_OCEAN, DEEP_LUKEWARM_OCEAN,
+       WARM_OCEAN, MUSHROOM_FIELDS, DEEP_DARK, THE_VOID)
+```
+
+**Location Generation Algorithm:**
+1. Player runs `/rtp` → shows "Finding locations..."
+2. Generate 5 candidates in parallel (up to 15 attempts total)
+3. For each candidate:
+   - Random angle and distance from spawn (min to max radius)
+   - Async chunk load with 3-second timeout
+   - Check biome against blacklist
+   - Find surface Y, verify safety
+4. Present clickable list to player
+5. Player clicks option → teleport via SafeTeleporter
+
+**Candidate Display Format:**
+```
+[RTP] 5 locations found:
+
+[1] Dark Forest - 2.4km NE
+[2] Plains - 1.8km S
+[3] Taiga - 3.1km W
+[4] Savanna - 2.9km SE
+[5] Birch Forest - 2.2km N
+
+[RTP] Click a location to teleport!
+```
+
+Hover text shows the vague hint (e.g., "dense woodland awaits").
+
+**Cooldown Implementation:**
+- Hybrid approach: in-memory map for fast checks, database for persistence
+- On startup, restores active cooldowns from database
+- Admin bypass with `smp.rtp.bypass` permission
+
 ---
 
 ## Common Conventions
@@ -541,6 +609,7 @@ Each system has a consistent prefix:
 - Weather: `[Weather]` (aqua)
 - Warp: `[Warp]` (gold)
 - Spawn: `[Spawn]` (green)
+- RTP: `[RTP]` (gold)
 - Suicide: `[!]` (red)
 
 ---
@@ -562,9 +631,17 @@ teleport:
   movement-tolerance-blocks: 0.5
 requests:
   timeout-seconds: 60
+
+rtp:
+  cooldown-minutes: 5
+  search-radius: 25000
+  min-distance: 500
+  candidate-count: 5
+  candidate-timeout-seconds: 120
+  chunk-timeout-seconds: 3
 ```
 
-Loaded via `DatabaseConfig.load(plugin)` and `PluginConfig.load(plugin)` into immutable records.
+Loaded via `DatabaseConfig.load(plugin)`, `PluginConfig.load(plugin)`, and `RtpConfig.load(plugin)` into immutable records.
 
 ---
 
@@ -630,6 +707,8 @@ SQL migrations live in `src/main/resources/migrations/` and follow the pattern:
 009_world_positions_use_uuid.sql
 010_create_permissions.sql
 011_create_warps_and_spawns.sql
+...
+020_create_rtp_cooldowns.sql
 ```
 
 - Files are sorted by numeric prefix and run in order

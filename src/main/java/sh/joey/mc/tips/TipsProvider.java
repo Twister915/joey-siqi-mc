@@ -10,6 +10,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import sh.joey.mc.SiqiJoeyPlugin;
+import sh.joey.mc.session.PlayerSessionStorage;
 import sh.joey.mc.utility.MapConfig;
 
 import java.util.ArrayList;
@@ -42,11 +43,14 @@ public final class TipsProvider implements Disposable {
     private final Random random = new Random();
     private final SiqiJoeyPlugin plugin;
     private final MapConfig mapConfig;
+    private final PlayerSessionStorage playerSessionStorage;
     private final boolean enabled;
 
-    public TipsProvider(SiqiJoeyPlugin plugin, TipsConfig config, MapConfig mapConfig) {
+    public TipsProvider(SiqiJoeyPlugin plugin, TipsConfig config, MapConfig mapConfig,
+                        PlayerSessionStorage playerSessionStorage) {
         this.plugin = plugin;
         this.mapConfig = mapConfig;
+        this.playerSessionStorage = playerSessionStorage;
         this.enabled = config.enabled();
         this.tips = buildTips();
         this.dynamicTips = buildDynamicTips();
@@ -60,10 +64,38 @@ public final class TipsProvider implements Disposable {
 
         // Watch for joins/quits
         disposables.add(plugin.watchEvent(PlayerJoinEvent.class)
-                .subscribe(event -> startTipsForPlayer(event.getPlayer())));
+                .subscribe(event -> {
+                    Player player = event.getPlayer();
+                    UUID playerId = player.getUniqueId();
+
+                    // Check if first join for RTP tip
+                    playerSessionStorage.isFirstJoin(playerId)
+                            .observeOn(plugin.mainScheduler())
+                            .subscribe(isFirst -> {
+                                if (isFirst) {
+                                    sendFirstJoinRtpTip(playerId);
+                                }
+                                startTipsForPlayer(player);
+                            }, err -> {
+                                // On error, just start normal tips
+                                startTipsForPlayer(player);
+                            });
+                }));
 
         disposables.add(plugin.watchEvent(PlayerQuitEvent.class)
                 .subscribe(event -> stopTipsForPlayer(event.getPlayer().getUniqueId())));
+    }
+
+    private void sendFirstJoinRtpTip(UUID playerId) {
+        disposables.add(plugin.timer(5, TimeUnit.SECONDS).subscribe(tick -> {
+            Player player = plugin.getServer().getPlayer(playerId);
+            if (player != null && player.isOnline()) {
+                player.sendMessage(PREFIX.append(
+                        Component.text("Welcome! Use ", NamedTextColor.GRAY)
+                                .append(cmd("/rtp"))
+                                .append(Component.text(" to find a random spot to build your base!", NamedTextColor.GRAY))));
+            }
+        }));
     }
 
     private void startTipsForPlayer(Player player) {
@@ -188,6 +220,15 @@ public final class TipsProvider implements Disposable {
         tipList.add(Component.text("Use ", NamedTextColor.GRAY)
                 .append(cmd("/spawn"))
                 .append(Component.text(" to teleport to the world's spawn point.", NamedTextColor.GRAY)));
+
+        // === RTP TIPS ===
+        tipList.add(Component.text("Use ", NamedTextColor.GRAY)
+                .append(cmd("/rtp"))
+                .append(Component.text(" to teleport to a random unexplored location!", NamedTextColor.GRAY)));
+
+        tipList.add(Component.text("Looking for resources? ", NamedTextColor.GRAY)
+                .append(cmd("/rtp"))
+                .append(Component.text(" finds 5 random locations for you to choose from.", NamedTextColor.GRAY)));
 
         // === UTILITY TIPS ===
         tipList.add(Component.text("Use ", NamedTextColor.GRAY)

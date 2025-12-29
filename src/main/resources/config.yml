@@ -22,6 +22,21 @@ requests:
 tips:
   enabled: true
 
+# Random teleport configuration
+rtp:
+  # Cooldown between RTP uses (in minutes)
+  cooldown-minutes: 5
+  # Maximum distance from spawn (in blocks)
+  search-radius: 25000
+  # Minimum distance from spawn (in blocks)
+  min-distance: 500
+  # Number of candidate locations to generate
+  candidate-count: 5
+  # How long generated candidates remain valid (in seconds)
+  candidate-timeout-seconds: 120
+  # Per-candidate timeout for chunk loading (in seconds)
+  chunk-timeout-seconds: 3
+
 # Custom whitelist system - replaces vanilla whitelist
 # When enabled, only whitelisted players can join
 # Use /invite or /whitelist add to whitelist players

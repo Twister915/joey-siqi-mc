@@ -421,4 +421,24 @@ public final class PlayerSessionStorage {
      * @param until when this username stopped being used, or null if current
      */
     public record UsernameHistoryEntry(String username, Instant from, @Nullable Instant until) {}
+
+    /**
+     * Check if this is the player's first ever session (no previous joins).
+     * A count of 1 means this is their current/first session.
+     */
+    public Single<Boolean> isFirstJoin(UUID playerId) {
+        return storage.query(conn -> {
+            String sql = "SELECT COUNT(*) FROM player_sessions WHERE player_id = ?";
+
+            try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+                stmt.setObject(1, playerId);
+
+                try (ResultSet rs = stmt.executeQuery()) {
+                    rs.next();
+                    // Count <= 1 means this is their first session (current one)
+                    return rs.getInt(1) <= 1;
+                }
+            }
+        });
+    }
 }

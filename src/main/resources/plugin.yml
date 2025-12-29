@@ -158,12 +158,17 @@ commands:
   whitelist:
     description: Manage the server whitelist
     usage: /whitelist <add|remove|list|audit>
+  rtp:
+    description: Randomly teleport to a new location
+    usage: /rtp [select <1-5>]
 
 permissions:
   smp.*:
     description: All SMP permissions
     default: op
     children:
+      smp.rtp: true
+      smp.rtp.bypass: true
       smp.msg: true
       smp.tp: true
       smp.tphere: true
@@ -387,4 +392,11 @@ permissions:
 
   smp.whitelist:
     description: Manage the server whitelist (add, remove, list, audit)
+    default: op
+
+  smp.rtp:
+    description: Use random teleport
+
+  smp.rtp.bypass:
+    description: Bypass RTP cooldown
     default: op

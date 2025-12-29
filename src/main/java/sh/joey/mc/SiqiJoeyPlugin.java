@@ -128,6 +128,10 @@ import sh.joey.mc.whitelist.WhitelistEnforcer;
 import sh.joey.mc.whitelist.WhitelistStorage;
 import sh.joey.mc.whitelist.cmd.InviteCommand;
 import sh.joey.mc.whitelist.cmd.WhitelistCommand;
+import sh.joey.mc.rtp.RtpCommand;
+import sh.joey.mc.rtp.RtpConfig;
+import sh.joey.mc.rtp.RtpManager;
+import sh.joey.mc.rtp.RtpStorage;
 
 @SuppressWarnings("unused")
 public final class SiqiJoeyPlugin extends JavaPlugin {
@@ -330,7 +334,7 @@ public final class SiqiJoeyPlugin extends JavaPlugin {
 
         // Tips system
         var tipsConfig = TipsConfig.load(this);
-        var tipsProvider = new TipsProvider(this, tipsConfig, mapConfig);
+        var tipsProvider = new TipsProvider(this, tipsConfig, mapConfig, playerSessionStorage);
         components.add(tipsProvider);
 
         // Tablist header/footer
@@ -359,6 +363,13 @@ public final class SiqiJoeyPlugin extends JavaPlugin {
         var spawnStorage = new SpawnStorage(storageService);
         components.add(CmdExecutor.register(this, new SpawnCommand(this, spawnStorage, safeTeleporter)));
         components.add(CmdExecutor.register(this, new SetSpawnCommand(this, spawnStorage)));
+
+        // RTP system (random teleport)
+        var rtpConfig = RtpConfig.load(this);
+        var rtpStorage = new RtpStorage(storageService);
+        var rtpManager = new RtpManager(this, rtpConfig, rtpStorage);
+        components.add(rtpManager);
+        components.add(CmdExecutor.register(this, new RtpCommand(this, rtpManager, safeTeleporter, rtpConfig)));
 
         // Statue generator
         components.add(CmdExecutor.register(this, new StatueCommand(this, confirmationManager)));
