@@ -12,6 +12,7 @@ import org.bukkit.event.Cancellable;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityPickupItemEvent;
 import org.bukkit.event.inventory.InventoryClickEvent;
+import com.destroystokyo.paper.event.player.PlayerPickupExperienceEvent;
 import org.bukkit.event.player.PlayerDropItemEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerPortalEvent;
@@ -113,6 +114,11 @@ public final class AdminModeManager implements Disposable {
                 .filter(e -> e.getWhoClicked() instanceof Player)
                 .filter(e -> playersInAdminMode.contains(e.getWhoClicked().getUniqueId()))
                 .filter(e -> e.getSlot() == 39) // Helmet slot
+                .subscribe(this::cancel));
+
+        // Block picking up XP orbs (leaves them for survival players)
+        disposables.add(plugin.watchEvent(PlayerPickupExperienceEvent.class)
+                .filter(e -> playersInAdminMode.contains(e.getPlayer().getUniqueId()))
                 .subscribe(this::cancel));
     }
 
