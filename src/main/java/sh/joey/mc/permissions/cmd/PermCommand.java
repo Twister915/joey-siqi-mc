@@ -127,12 +127,15 @@ public final class PermCommand implements Command {
             sender.sendMessage(Component.text("  /perm group <name> grants").color(NamedTextColor.AQUA));
             sender.sendMessage(Component.text("  /perm group <name> add <player>").color(NamedTextColor.AQUA));
             sender.sendMessage(Component.text("  /perm group <name> remove <player>").color(NamedTextColor.AQUA));
+            sender.sendMessage(Component.text("  /perm group <name> members").color(NamedTextColor.AQUA));
             sender.sendMessage(Component.text("  /perm group <name> chat|nameplate prefix|suffix <value>").color(NamedTextColor.AQUA));
+            sender.sendMessage(Component.text("  /perm group <name> color <color|clear>").color(NamedTextColor.AQUA));
             sender.sendMessage(Component.text("  /perm group <name> inspect").color(NamedTextColor.AQUA));
             sender.sendMessage(Component.empty());
             sender.sendMessage(Component.text("  /perm player <name> set <perm> [world] true/false").color(NamedTextColor.AQUA));
             sender.sendMessage(Component.text("  /perm player <name> unset <perm>").color(NamedTextColor.AQUA));
             sender.sendMessage(Component.text("  /perm player <name> chat|nameplate prefix|suffix <value>").color(NamedTextColor.AQUA));
+            sender.sendMessage(Component.text("  /perm player <name> color <color|clear>").color(NamedTextColor.AQUA));
             sender.sendMessage(Component.text("  /perm player <name> inspect").color(NamedTextColor.AQUA));
             sender.sendMessage(Component.empty());
             sender.sendMessage(Component.text("  /perm reload").color(NamedTextColor.AQUA));

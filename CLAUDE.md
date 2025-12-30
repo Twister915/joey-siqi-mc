@@ -473,14 +473,25 @@ A complete permissions system with groups, player overrides, world-scoped permis
 - `PermissibleAttributes` - Chat and nameplate prefix/suffix for display
 
 **Commands** (`permissions/cmd/`):
+- `/perm group list` - List all groups
 - `/perm group <name> create [priority]` - Create group
-- `/perm group <name> set <perm> true/false` - Add permission grant
+- `/perm group <name> delete` - Delete group
+- `/perm group <name> default true/false` - Set whether group applies to all players
+- `/perm group <name> priority <int>` - Set group priority
+- `/perm group <name> set <perm> [world] true/false` - Add permission grant
 - `/perm group <name> unset <perm>` - Remove permission grant
+- `/perm group <name> grants` - List all permission grants
 - `/perm group <name> add <player>` - Add player to group
 - `/perm group <name> remove <player>` - Remove player from group
-- `/perm group <name> chat prefix|suffix <value>` - Set chat display
-- `/perm group <name> nameplate prefix|suffix <value>` - Set nameplate display
-- `/perm player <name> set <perm> true/false` - Player-specific override
+- `/perm group <name> members` - List all group members
+- `/perm group <name> chat|nameplate prefix|suffix <value>` - Set display attributes
+- `/perm group <name> color <color|clear>` - Set name color
+- `/perm group <name> inspect` - View group details
+- `/perm player <name> set <perm> [world] true/false` - Player-specific override
+- `/perm player <name> unset <perm>` - Remove player permission
+- `/perm player <name> chat|nameplate prefix|suffix <value>` - Set player display attributes
+- `/perm player <name> color <color|clear>` - Set player name color
+- `/perm player <name> inspect` - View player permissions
 - `/perm reload` - Refresh all caches and displays
 
 **Resolution Algorithm:**

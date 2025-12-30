@@ -34,7 +34,7 @@ public final class GroupSubcommand {
 
     private static final Set<String> ACTIONS = Set.of(
             "create", "delete", "default", "priority", "set", "unset",
-            "grants", "add", "remove", "chat", "nameplate", "color", "inspect"
+            "grants", "add", "remove", "members", "chat", "nameplate", "color", "inspect"
     );
 
     private final SiqiJoeyPlugin plugin;
@@ -85,6 +85,7 @@ public final class GroupSubcommand {
                 case "grants" -> handleListGrants(sender, groupName, remaining);
                 case "add" -> handleAdd(sender, groupName, remaining);
                 case "remove" -> handleRemove(sender, groupName, remaining);
+                case "members" -> handleMembers(sender, groupName, remaining);
                 case "chat", "nameplate" -> handleAttribute(sender, groupName, action, remaining);
                 case "color" -> handleColor(sender, groupName, remaining);
                 case "inspect" -> handleInspect(sender, groupName, remaining);
@@ -479,6 +480,62 @@ public final class GroupSubcommand {
     }
 
     private record RemoveResult(UUID playerId, String playerName, boolean removed) {}
+
+    private Completable handleMembers(CommandSender sender, String groupName, String[] args) {
+        // /perm group <name> members [page]
+        int page = 1;
+        if (args.length >= 1) {
+            try {
+                page = Integer.parseInt(args[0]);
+            } catch (NumberFormatException ignored) {
+            }
+        }
+
+        int finalPage = page;
+        return storage.getGroup(groupName)
+                .switchIfEmpty(Maybe.defer(() -> {
+                    error(sender, "Group '" + groupName + "' not found.");
+                    return Maybe.empty();
+                }))
+                .flatMapSingle(group ->
+                        storage.getGroupMembers(groupName)
+                                .flatMapMaybe(uuid -> sessionStorage.findUsernameById(uuid)
+                                        .map(name -> new MemberEntry(uuid, name)))
+                                .toSortedList((a, b) -> a.name.compareToIgnoreCase(b.name))
+                                .map(members -> new MembersResult(group, members)))
+                .observeOn(plugin.mainScheduler())
+                .doOnSuccess(result -> displayMembers(sender, result.group, result.members, finalPage))
+                .doOnError(err -> logAndError(sender, "Failed to list members", err))
+                .onErrorComplete()
+                .ignoreElement();
+    }
+
+    private record MemberEntry(UUID id, String name) {}
+    private record MembersResult(Group group, List<MemberEntry> members) {}
+
+    private void displayMembers(CommandSender sender, Group group, List<MemberEntry> members, int page) {
+        ChatPaginator paginator = new ChatPaginator()
+                .title(PermCommand.PREFIX.append(Component.text("Members: " + group.displayName()).color(NamedTextColor.WHITE)))
+                .subtitle(Component.text(members.size() + " members").color(NamedTextColor.GRAY))
+                .command(p -> "/perm group " + group.canonicalName() + " members " + p)
+                .backButton("Back", "/perm group " + group.canonicalName() + " inspect");
+
+        for (MemberEntry member : members) {
+            Component entry = Component.text("  ")
+                    .append(Component.text(member.name())
+                            .color(NamedTextColor.WHITE)
+                            .clickEvent(ClickEvent.runCommand("/perm player " + member.name() + " inspect")));
+
+            paginator.add(PaginatedItem.simple(entry));
+        }
+
+        if (members.isEmpty()) {
+            paginator.add(PaginatedItem.simple(
+                    Component.text("  No members (explicit memberships only).").color(NamedTextColor.GRAY)));
+        }
+
+        paginator.sendPage(sender, page);
+    }
 
     private Completable handleAttribute(CommandSender sender, String groupName, String attrType, String[] args) {
         if (args.length < 2) {

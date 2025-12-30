@@ -232,13 +232,16 @@ Quick teleport commands for configured worlds:
 - `/ontime` - View your current session time and total playtime
 
 ### Permissions System
-- `/perm group <name> create` - Create a permission group
-- `/perm group <name> set <permission> true/false` - Grant/deny permissions
-- `/perm group <name> add <player>` - Add player to group
+- `/perm group list` - List all permission groups
+- `/perm group <name> create [priority]` - Create a permission group
+- `/perm group <name> set <permission> [world] true/false` - Grant/deny permissions
+- `/perm group <name> add/remove <player>` - Manage group membership
+- `/perm group <name> members` - List group members
+- `/perm group <name> inspect` - View group details
 - `/perm player <name> set <permission> true/false` - Set player-specific permissions
 - `/perm reload` - Reload permission cache
 
-Permission-based prefix/suffix display in chat and above player names. Groups support priority ordering for inheritance.
+Permission-based prefix/suffix and name color display in chat and above player names. Groups support priority ordering for inheritance. See [doc/permissions.md](doc/permissions.md) for full documentation.
 
 ### Punishments System
 Full punishment management with duration support and history tracking:

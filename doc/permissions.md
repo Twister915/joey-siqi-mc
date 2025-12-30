@@ -30,10 +30,12 @@ All commands can be run from console or by players.
 | `/perm group <name> grants` | List all permission grants (paginated) |
 | `/perm group <name> add <player>` | Add a player to the group |
 | `/perm group <name> remove <player>` | Remove a player from the group |
+| `/perm group <name> members` | List all members of the group (paginated) |
 | `/perm group <name> chat prefix <value>` | Set chat prefix |
 | `/perm group <name> chat suffix <value>` | Set chat suffix |
 | `/perm group <name> nameplate prefix <value>` | Set nameplate/tablist prefix |
 | `/perm group <name> nameplate suffix <value>` | Set nameplate/tablist suffix |
+| `/perm group <name> color <color\|clear>` | Set name color for group members |
 | `/perm group <name> inspect` | View group details (paginated) |
 
 ### Player Commands
@@ -47,6 +49,7 @@ All commands can be run from console or by players.
 | `/perm player <name> chat suffix <value>` | Set chat suffix override |
 | `/perm player <name> nameplate prefix <value>` | Set nameplate/tablist prefix override |
 | `/perm player <name> nameplate suffix <value>` | Set nameplate/tablist suffix override |
+| `/perm player <name> color <color\|clear>` | Set name color override |
 | `/perm player <name> inspect` | View player's permissions and groups (paginated) |
 
 ### Admin Commands
