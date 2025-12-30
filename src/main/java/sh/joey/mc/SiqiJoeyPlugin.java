@@ -142,6 +142,7 @@ import sh.joey.mc.pregen.PregenManager;
 import sh.joey.mc.steve.SteveConfig;
 import sh.joey.mc.steve.SteveManager;
 import sh.joey.mc.steve.SteveModelRegistry;
+import sh.joey.mc.steve.SteveStorage;
 import sh.joey.mc.steve.SteveSystemPrompt;
 import sh.joey.mc.steve.provider.AnthropicSteveProvider;
 
@@ -455,6 +456,7 @@ public final class SiqiJoeyPlugin extends JavaPlugin {
         var steveConfig = SteveConfig.load(this);
         if (steveConfig.enabled()) {
             var registry = new SteveModelRegistry();
+            var steveStorage = new SteveStorage(storageService);
 
             // Register Anthropic provider if API key configured
             if (!steveConfig.anthropicApiKey().isEmpty()) {
@@ -469,7 +471,7 @@ public final class SiqiJoeyPlugin extends JavaPlugin {
             var provider = registry.get(steveConfig.model());
             if (provider.isPresent()) {
                 var model = provider.get().create(SteveSystemPrompt.DEFAULT);
-                var steveManager = new SteveManager(this, steveConfig, model, displayManager);
+                var steveManager = new SteveManager(this, steveConfig, model, steveStorage, displayManager);
                 components.add(steveManager);
                 getLogger().info("Steve AI enabled: " + provider.get().info().displayName());
             } else {

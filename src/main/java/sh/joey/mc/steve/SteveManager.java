@@ -15,6 +15,7 @@ import sh.joey.mc.steve.SteveAnswer.Citation;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -34,20 +35,25 @@ public final class SteveManager implements Disposable {
     private final SiqiJoeyPlugin plugin;
     private final SteveConfig config;
     private final SteveModel model;
+    private final SteveStorage storage;
     private final DisplayManager displayManager;
     private final CompositeDisposable disposables = new CompositeDisposable();
 
-    // Cooldown tracking
-    private final Map<UUID, Instant> cooldowns = new ConcurrentHashMap<>();
+    // In-memory cooldowns for fast checks (cooldown end times)
+    private final Map<UUID, Instant> cooldownEndTimes = new HashMap<>();
     // Prevent duplicate questions while one is pending
     private final Set<UUID> pendingQuestions = ConcurrentHashMap.newKeySet();
 
     public SteveManager(SiqiJoeyPlugin plugin, SteveConfig config, SteveModel model,
-                        DisplayManager displayManager) {
+                        SteveStorage storage, DisplayManager displayManager) {
         this.plugin = plugin;
         this.config = config;
         this.model = model;
+        this.storage = storage;
         this.displayManager = displayManager;
+
+        // Restore cooldowns from database on startup
+        restoreCooldownsFromDatabase();
 
         // Listen for chat messages mentioning Steve
         disposables.add(plugin.watchEvent(AsyncChatEvent.class)
@@ -61,6 +67,22 @@ public final class SteveManager implements Disposable {
                 }));
     }
 
+    private void restoreCooldownsFromDatabase() {
+        Duration cooldownDuration = Duration.ofSeconds(config.cooldownSeconds());
+        storage.getActiveCooldowns(cooldownDuration)
+                .toList()
+                .observeOn(plugin.mainScheduler())
+                .subscribe(entries -> {
+                    for (var entry : entries) {
+                        Instant endTime = entry.lastUsedAt().plus(cooldownDuration);
+                        if (endTime.isAfter(Instant.now())) {
+                            cooldownEndTimes.put(entry.playerId(), endTime);
+                        }
+                    }
+                    plugin.getLogger().info("Restored " + cooldownEndTimes.size() + " Steve cooldowns from database");
+                }, err -> plugin.getLogger().warning("Failed to restore Steve cooldowns: " + err.getMessage()));
+    }
+
     private boolean containsSteveMention(Component message) {
         String text = PlainTextComponentSerializer.plainText().serialize(message);
         return STEVE_MENTION.matcher(text).find();
@@ -71,15 +93,12 @@ public final class SteveManager implements Disposable {
         UUID playerId = player.getUniqueId();
 
         // Check cooldown
-        Instant lastUsed = cooldowns.get(playerId);
-        if (lastUsed != null) {
-            long secondsRemaining = config.cooldownSeconds() -
-                    Duration.between(lastUsed, Instant.now()).getSeconds();
-            if (secondsRemaining > 0) {
-                plugin.getServer().getScheduler().runTask(plugin, () ->
-                        Messages.error(player, "Please wait " + secondsRemaining + "s before asking Steve again."));
-                return;
-            }
+        Instant cooldownEnd = cooldownEndTimes.get(playerId);
+        if (cooldownEnd != null && cooldownEnd.isAfter(Instant.now())) {
+            long secondsRemaining = Duration.between(Instant.now(), cooldownEnd).getSeconds();
+            plugin.getServer().getScheduler().runTask(plugin, () ->
+                    Messages.error(player, "Please wait " + secondsRemaining + "s before asking Steve again."));
+            return;
         }
 
         // Prevent duplicate questions while one is pending
@@ -97,7 +116,7 @@ public final class SteveManager implements Disposable {
         }
 
         // Set cooldown
-        cooldowns.put(playerId, Instant.now());
+        startCooldown(playerId);
 
         // Send private thinking message after a short delay (so it appears after the chat message)
         plugin.timer(500, TimeUnit.MILLISECONDS)
@@ -194,6 +213,20 @@ public final class SteveManager implements Disposable {
         }
 
         plugin.getServer().broadcast(message);
+    }
+
+    /**
+     * Start the cooldown for a player - updates in-memory cache and persists to database.
+     */
+    private void startCooldown(UUID playerId) {
+        Instant endTime = Instant.now().plus(Duration.ofSeconds(config.cooldownSeconds()));
+        cooldownEndTimes.put(playerId, endTime);
+
+        // Persist to database
+        storage.recordSteveUsage(playerId).subscribe(
+                () -> {},
+                err -> plugin.getLogger().warning("Failed to record Steve usage: " + err.getMessage())
+        );
     }
 
     @Override

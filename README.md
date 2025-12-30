@@ -159,6 +159,7 @@ An AI chatbot powered by Claude that answers Minecraft questions:
 - Responses appear in chat like a regular player message
 - Clickable source links let you read more on the wiki
 - Shows cost per query (typically 1-3¢)
+- 10-minute cooldown between questions (persists across server restarts)
 
 **Example:**
 ```
@@ -171,10 +172,15 @@ Steve: Pandas spawn in jungle biomes on grass blocks with 2+ blocks of space abo
 ```yaml
 steve:
   enabled: true
-  api-key: "sk-ant-..."  # Your Anthropic API key
-  cooldown-seconds: 30    # Per-player cooldown
-  max-searches: 3         # Web searches per question
+  model: anthropic                  # Which model provider to use
+  cooldown-seconds: 600             # Per-player cooldown (persisted to database)
+
+  anthropic:
+    api-key: "sk-ant-..."           # Your Anthropic API key
+    max-searches: 3                 # Web searches per question
 ```
+
+**Architecture**: Steve uses a pluggable model provider system. New providers can be added by implementing `SteveModelProvider` and registering them in the plugin. Each provider encapsulates its own API logic, web search configuration, and response parsing.
 
 ### Resource Pack System
 - `/resourcepack` - List available resource packs

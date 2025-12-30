@@ -73,7 +73,8 @@ steve:
   # Which model provider to use (e.g., "anthropic")
   model: anthropic
   # Cooldown between questions per player (seconds)
-  cooldown-seconds: 30
+  # Persisted to database, survives server restarts
+  cooldown-seconds: 600
 
   # Anthropic provider configuration
   anthropic:

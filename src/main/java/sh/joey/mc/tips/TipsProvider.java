@@ -373,6 +373,16 @@ public final class TipsProvider implements Disposable {
                     .append(Component.text(" - mobs deal less damage and you might insta-kill them!", NamedTextColor.GRAY));
         });
 
+        // Steve AI tip - only shows to players with steve permission
+        tipList.add(player -> {
+            if (!player.hasPermission("smp.steve")) {
+                return null;
+            }
+            return Component.text("Have a Minecraft question? Type ", NamedTextColor.GRAY)
+                    .append(Component.text("@Steve", NamedTextColor.AQUA))
+                    .append(Component.text(" in chat to ask our AI assistant!", NamedTextColor.GRAY));
+        });
+
         return tipList;
     }
 
