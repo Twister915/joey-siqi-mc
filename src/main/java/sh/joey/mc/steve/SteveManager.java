@@ -11,6 +11,7 @@ import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.bukkit.entity.Player;
 import sh.joey.mc.SiqiJoeyPlugin;
 import sh.joey.mc.permissions.DisplayManager;
+import sh.joey.mc.steve.SteveAnswer.Citation;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -32,7 +33,7 @@ public final class SteveManager implements Disposable {
 
     private final SiqiJoeyPlugin plugin;
     private final SteveConfig config;
-    private final SteveApiService apiService;
+    private final SteveModel model;
     private final DisplayManager displayManager;
     private final CompositeDisposable disposables = new CompositeDisposable();
 
@@ -41,11 +42,11 @@ public final class SteveManager implements Disposable {
     // Prevent duplicate questions while one is pending
     private final Set<UUID> pendingQuestions = ConcurrentHashMap.newKeySet();
 
-    public SteveManager(SiqiJoeyPlugin plugin, SteveConfig config, SteveApiService apiService,
+    public SteveManager(SiqiJoeyPlugin plugin, SteveConfig config, SteveModel model,
                         DisplayManager displayManager) {
         this.plugin = plugin;
         this.config = config;
-        this.apiService = apiService;
+        this.model = model;
         this.displayManager = displayManager;
 
         // Listen for chat messages mentioning Steve
@@ -103,7 +104,7 @@ public final class SteveManager implements Disposable {
                 .subscribe(tick -> sendThinking(player));
 
         // Call API
-        apiService.ask(question)
+        model.ask(question)
                 .observeOn(plugin.mainScheduler())
                 .doFinally(() -> pendingQuestions.remove(playerId))
                 .subscribe(
@@ -152,7 +153,7 @@ public final class SteveManager implements Disposable {
     /**
      * Broadcasts Steve's response to all players, formatted like a player chat message.
      */
-    private void broadcastResponse(SteveResponse response) {
+    private void broadcastResponse(SteveAnswer response) {
         // Build the message: "Steve: <answer> (sources: [1] [2] ...)"
         Component message = Component.text("Steve")
                 .color(displayManager.getDefaultNameColor())
@@ -168,7 +169,7 @@ public final class SteveManager implements Disposable {
 
             // Add citations
             for (int i = 0; i < response.citations().size(); i++) {
-                SteveResponse.Citation cite = response.citations().get(i);
+                Citation cite = response.citations().get(i);
                 if (i > 0) {
                     suffix = suffix.append(Component.text(" ").color(NamedTextColor.GRAY));
                 }

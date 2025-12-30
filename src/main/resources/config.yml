@@ -70,12 +70,17 @@ adminmode:
 steve:
   # Enable/disable Steve
   enabled: true
-  # Anthropic API key (required - get one at console.anthropic.com)
-  api-key: ""
+  # Which model provider to use (e.g., "anthropic")
+  model: anthropic
   # Cooldown between questions per player (seconds)
   cooldown-seconds: 30
-  # Maximum web searches per question (affects cost)
-  max-searches: 3
+
+  # Anthropic provider configuration
+  anthropic:
+    # API key (required - get one at console.anthropic.com)
+    api-key: ""
+    # Maximum web searches per question (affects cost)
+    max-searches: 3
 
 # Multi-world configuration
 # Worlds listed here will be created/loaded on startup

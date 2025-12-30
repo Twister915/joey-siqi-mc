@@ -139,9 +139,11 @@ import sh.joey.mc.pregen.PregenBossBarProvider;
 import sh.joey.mc.pregen.PregenCommand;
 import sh.joey.mc.pregen.PregenConfig;
 import sh.joey.mc.pregen.PregenManager;
-import sh.joey.mc.steve.SteveApiService;
 import sh.joey.mc.steve.SteveConfig;
 import sh.joey.mc.steve.SteveManager;
+import sh.joey.mc.steve.SteveModelRegistry;
+import sh.joey.mc.steve.SteveSystemPrompt;
+import sh.joey.mc.steve.provider.AnthropicSteveProvider;
 
 @SuppressWarnings("unused")
 public final class SiqiJoeyPlugin extends JavaPlugin {
@@ -451,13 +453,28 @@ public final class SiqiJoeyPlugin extends JavaPlugin {
 
         // Steve AI chatbot (Minecraft expert powered by Claude)
         var steveConfig = SteveConfig.load(this);
-        if (steveConfig.enabled() && !steveConfig.apiKey().isEmpty()) {
-            var steveApi = new SteveApiService(steveConfig, getLogger());
-            var steveManager = new SteveManager(this, steveConfig, steveApi, displayManager);
-            components.add(steveManager);
-            getLogger().info("Steve AI chatbot enabled");
-        } else if (steveConfig.enabled()) {
-            getLogger().info("Steve AI chatbot disabled (no API key configured)");
+        if (steveConfig.enabled()) {
+            var registry = new SteveModelRegistry();
+
+            // Register Anthropic provider if API key configured
+            if (!steveConfig.anthropicApiKey().isEmpty()) {
+                registry.register(new AnthropicSteveProvider(
+                        steveConfig.anthropicApiKey(),
+                        steveConfig.anthropicMaxSearches(),
+                        getLogger()
+                ));
+            }
+
+            // Get configured provider
+            var provider = registry.get(steveConfig.model());
+            if (provider.isPresent()) {
+                var model = provider.get().create(SteveSystemPrompt.DEFAULT);
+                var steveManager = new SteveManager(this, steveConfig, model, displayManager);
+                components.add(steveManager);
+                getLogger().info("Steve AI enabled: " + provider.get().info().displayName());
+            } else {
+                getLogger().warning("Steve: Unknown model '" + steveConfig.model() + "' or missing API key");
+            }
         }
 
         getLogger().info("Plugin enabled!");

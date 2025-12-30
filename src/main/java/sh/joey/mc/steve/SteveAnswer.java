@@ -3,9 +3,9 @@ package sh.joey.mc.steve;
 import java.util.List;
 
 /**
- * Parsed response from Claude API for Steve.
+ * Answer from a Steve AI model.
  */
-public record SteveResponse(
+public record SteveAnswer(
         String text,
         List<Citation> citations,
         double costCents

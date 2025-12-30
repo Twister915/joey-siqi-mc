@@ -8,17 +8,20 @@ import org.bukkit.plugin.java.JavaPlugin;
  */
 public record SteveConfig(
         boolean enabled,
-        String apiKey,
+        String model,
         int cooldownSeconds,
-        int maxSearches
+        // Anthropic provider config
+        String anthropicApiKey,
+        int anthropicMaxSearches
 ) {
     public static SteveConfig load(JavaPlugin plugin) {
         FileConfiguration config = plugin.getConfig();
         return new SteveConfig(
                 config.getBoolean("steve.enabled", true),
-                config.getString("steve.api-key", ""),
+                config.getString("steve.model", "anthropic"),
                 config.getInt("steve.cooldown-seconds", 30),
-                config.getInt("steve.max-searches", 3)
+                config.getString("steve.anthropic.api-key", ""),
+                config.getInt("steve.anthropic.max-searches", 3)
         );
     }
 }
