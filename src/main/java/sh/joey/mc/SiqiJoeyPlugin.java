@@ -140,12 +140,14 @@ import sh.joey.mc.pregen.PregenBossBarProvider;
 import sh.joey.mc.pregen.PregenCommand;
 import sh.joey.mc.pregen.PregenConfig;
 import sh.joey.mc.pregen.PregenManager;
+import sh.joey.mc.steve.SteveCommand;
 import sh.joey.mc.steve.SteveConfig;
 import sh.joey.mc.steve.SteveManager;
 import sh.joey.mc.steve.SteveModelRegistry;
 import sh.joey.mc.steve.SteveStorage;
 import sh.joey.mc.steve.SteveSystemPrompt;
 import sh.joey.mc.steve.provider.AnthropicSteveProvider;
+import sh.joey.mc.steve.provider.LmStudioSteveProvider;
 
 @SuppressWarnings("unused")
 public final class SiqiJoeyPlugin extends JavaPlugin {
@@ -454,7 +456,7 @@ public final class SiqiJoeyPlugin extends JavaPlugin {
         components.add(CmdExecutor.register(this, new InviteCommand(this, whitelistStorage, playerResolver)));
         components.add(CmdExecutor.register(this, new WhitelistCommand(this, whitelistStorage, playerResolver)));
 
-        // Steve AI chatbot (Minecraft expert powered by Claude)
+        // Steve AI chatbot (Minecraft expert powered by Claude or local LLM)
         var steveConfig = SteveConfig.load(this);
         if (steveConfig.enabled()) {
             var registry = new SteveModelRegistry();
@@ -469,12 +471,22 @@ public final class SiqiJoeyPlugin extends JavaPlugin {
                 ));
             }
 
+            // Register LM Studio provider if model configured
+            if (!steveConfig.lmstudioModel().isEmpty()) {
+                registry.register(new LmStudioSteveProvider(
+                        steveConfig.lmstudioEndpoint(),
+                        steveConfig.lmstudioModel(),
+                        getLogger()
+                ));
+            }
+
             // Get configured provider
             var provider = registry.get(steveConfig.model());
             if (provider.isPresent()) {
                 var model = provider.get().create(SteveSystemPrompt.DEFAULT);
                 var steveManager = new SteveManager(this, steveConfig, model, steveStorage, displayManager);
                 components.add(steveManager);
+                components.add(CmdExecutor.register(this, new SteveCommand(model)));
                 getLogger().info("Steve AI enabled: " + provider.get().info().displayName());
             } else {
                 getLogger().warning("Steve: Unknown model '" + steveConfig.model() + "' or missing API key");

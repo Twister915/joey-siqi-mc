@@ -12,7 +12,10 @@ public record SteveConfig(
         int cooldownSeconds,
         // Anthropic provider config
         String anthropicApiKey,
-        int anthropicMaxSearches
+        int anthropicMaxSearches,
+        // LM Studio provider config
+        String lmstudioEndpoint,
+        String lmstudioModel
 ) {
     public static SteveConfig load(JavaPlugin plugin) {
         FileConfiguration config = plugin.getConfig();
@@ -21,7 +24,9 @@ public record SteveConfig(
                 config.getString("steve.model", "anthropic"),
                 config.getInt("steve.cooldown-seconds", 30),
                 config.getString("steve.anthropic.api-key", ""),
-                config.getInt("steve.anthropic.max-searches", 3)
+                config.getInt("steve.anthropic.max-searches", 3),
+                config.getString("steve.lmstudio.endpoint", "http://localhost:1234"),
+                config.getString("steve.lmstudio.model", "")
         );
     }
 }

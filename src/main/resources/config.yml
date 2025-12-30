@@ -83,6 +83,16 @@ steve:
     # Maximum web searches per question (affects cost)
     max-searches: 3
 
+  # LM Studio provider configuration
+  # LM Studio exposes an OpenAI-compatible API for local LLMs
+  # No cost tracking or web search (local model)
+  lmstudio:
+    # LM Studio server endpoint (default port is 1234)
+    endpoint: "http://localhost:1234"
+    # Model identifier from LM Studio (required)
+    # Check the "My Models" section in LM Studio for the exact model name
+    model: ""
+
 # Multi-world configuration
 # Worlds listed here will be created/loaded on startup
 # Default Minecraft worlds (world, world_nether, world_the_end) use "default" inventory group

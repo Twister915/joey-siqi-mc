@@ -170,6 +170,9 @@ commands:
   pregen:
     description: Control chunk pre-generation
     usage: /pregen [status|start|stop|pause|force|monitor]
+  steve:
+    description: View Steve AI status
+    usage: /steve
 
 permissions:
   smp.*:
