@@ -27,7 +27,7 @@ public final class SteveApiService {
 
     private static final String API_URL = "https://api.anthropic.com/v1/messages";
     private static final String API_VERSION = "2023-06-01";
-    private static final String MODEL = "claude-sonnet-4-5-20250514";
+    private static final String MODEL = "claude-sonnet-4-20250514";
     private static final Duration TIMEOUT = Duration.ofSeconds(60);
 
     private static final String SYSTEM_PROMPT = """
