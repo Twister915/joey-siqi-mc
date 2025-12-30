@@ -80,6 +80,7 @@ import sh.joey.mc.utility.SpawnCommand;
 import sh.joey.mc.utility.SpawnStorage;
 import sh.joey.mc.utility.SuicideCommand;
 import sh.joey.mc.utility.TimeCommand;
+import sh.joey.mc.utility.UptimeCommand;
 import sh.joey.mc.utility.WarpCommand;
 import sh.joey.mc.utility.WarpStorage;
 import sh.joey.mc.utility.WeatherCommand;
@@ -373,6 +374,7 @@ public final class SiqiJoeyPlugin extends JavaPlugin {
         components.add(CmdExecutor.register(this, new SuicideCommand(confirmationManager, settingsManager)));
         components.add(CmdExecutor.register(this, new RemoveCommand()));
         components.add(CmdExecutor.register(this, new SeedCommand()));
+        components.add(CmdExecutor.register(this, new UptimeCommand()));
 
         // Warp system
         var warpStorage = new WarpStorage(storageService);
