@@ -7,9 +7,12 @@ import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Location;
 import org.bukkit.Particle;
 import org.bukkit.Sound;
+import org.bukkit.entity.Boss;
 import org.bukkit.entity.LivingEntity;
+import org.bukkit.entity.Monster;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.Projectile;
+import org.bukkit.entity.Warden;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.PlayerDeathEvent;
@@ -152,10 +155,17 @@ public final class SettingsManager implements Disposable {
 
     private void handleOutgoingDamage(EntityDamageByEntityEvent event) {
         Player attacker = (Player) event.getDamager();
+        LivingEntity mob = (LivingEntity) event.getEntity();
+
+        // Only apply to hostile mobs (Monster), not passive mobs
+        // Exclude bosses (EnderDragon, Wither) and Warden
+        if (!(mob instanceof Monster) || mob instanceof Boss || mob instanceof Warden) {
+            return;
+        }
+
         PlayerSettings settings = getSettings(attacker.getUniqueId());
 
         if (settings.easyMode() && random.nextDouble() < 0.05) {
-            LivingEntity mob = (LivingEntity) event.getEntity();
 
             // Schedule insta-kill for next tick to let damage apply first
             plugin.getServer().getScheduler().runTask(plugin, () -> {
