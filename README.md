@@ -153,13 +153,21 @@ Per-player gameplay customization:
 - Easy Mode only affects mob combat - PvP damage is unchanged
 
 ### Steve - AI Minecraft Expert
-An AI chatbot powered by Claude that answers Minecraft questions:
+An AI chatbot that answers Minecraft questions. Supports multiple model providers:
+- **Anthropic (Claude)** - Cloud-based with web search for accurate, sourced answers
+- **LM Studio** - Run local LLMs for free, private queries
+
+**Chat Usage:**
 - Mention `@Steve` anywhere in chat to ask a question
-- Steve searches the Minecraft Wiki for accurate, up-to-date answers
 - Responses appear in chat like a regular player message
-- Clickable source links let you read more on the wiki
-- Shows cost per query (typically 1-3¢)
+- Hover over "Steve" in the response to see model info and response time
+- Anthropic provider shows clickable source links and cost per query
 - 10-minute cooldown between questions (persists across server restarts)
+
+**Admin Commands:**
+- `/steve` - View current model status (provider, model ID, display name)
+- `/steve model` - List all available model providers
+- `/steve model <provider>` - Switch to a different provider (e.g., `anthropic`, `lmstudio`)
 
 **Example:**
 ```
@@ -167,20 +175,36 @@ Joey: Hey @Steve, how do I find pandas?
 Steve: thinking...
 Steve: Pandas spawn in jungle biomes on grass blocks with 2+ blocks of space above them, more common in bamboo jungles. ([1] [2] | 1.2¢)
 ```
+*(Hovering over "Steve" shows: Model: Claude Sonnet 4, Response time: 2.3s)*
 
 **Configuration** in `config.yml`:
 ```yaml
 steve:
   enabled: true
-  model: anthropic                  # Which model provider to use
+  model: anthropic                  # Which provider to use: "anthropic" or "lmstudio"
   cooldown-seconds: 600             # Per-player cooldown (persisted to database)
 
+  # Anthropic provider - cloud-based with web search
   anthropic:
     api-key: "sk-ant-..."           # Your Anthropic API key
-    max-searches: 3                 # Web searches per question
+    max-searches: 3                 # Web searches per question (affects cost)
+
+  # LM Studio provider - local LLMs via OpenAI-compatible API
+  lmstudio:
+    endpoint: "http://localhost:1234"  # LM Studio server URL
+    model: "your-model-name"           # Model identifier from LM Studio
 ```
 
-**Architecture**: Steve uses a pluggable model provider system. New providers can be added by implementing `SteveModelProvider` and registering them in the plugin. Each provider encapsulates its own API logic, web search configuration, and response parsing.
+**Provider Comparison:**
+| Feature | Anthropic | LM Studio |
+|---------|-----------|-----------|
+| Web Search | Yes (minecraft.wiki) | No |
+| Source Citations | Yes | No |
+| Cost Tracking | Yes (~1-3¢/query) | Free |
+| Privacy | Cloud | Local |
+| Response Quality | High | Depends on model |
+
+**Architecture**: Steve uses a pluggable model provider system. Providers can be switched at runtime via `/steve model`. Each provider encapsulates its own API logic, response parsing, and capabilities.
 
 ### Resource Pack System
 - `/resourcepack` - List available resource packs
@@ -307,6 +331,7 @@ All commands use the `smp.` permission prefix. Key permissions:
 | `smp.settings.displaytime` | Configure time display in boss bar | everyone |
 | `smp.settings.easymode` | Enable easy mode (reduced damage, insta-kills) | op |
 | `smp.steve` | Ask Steve questions in chat | everyone |
+| `smp.steve.admin` | View Steve status and switch models | op |
 | `smp.suicide` | Kill yourself to respawn | everyone |
 | `smp.remove` | Remove entities | op |
 | `smp.seed` | View world seed | op |
@@ -335,7 +360,8 @@ All commands use the `smp.` permission prefix. Key permissions:
 ### Optional Dependencies
 - **[BlueMap](https://bluemap.bluecolored.de/)** - Enables `/map` command and player markers
 - **[FastAsyncWorldEdit](https://www.spigotmc.org/resources/fast-async-worldedit.13932/) or WorldEdit** - Enables `//undo` for statues
-- **[Anthropic API Key](https://console.anthropic.com/)** - Enables Steve AI chatbot (costs ~1-3¢ per query)
+- **[Anthropic API Key](https://console.anthropic.com/)** - Enables Steve AI chatbot with web search (~1-3¢ per query)
+- **[LM Studio](https://lmstudio.ai/)** - Alternative Steve provider using local LLMs (free, no API key needed)
 
 ## Building
 
