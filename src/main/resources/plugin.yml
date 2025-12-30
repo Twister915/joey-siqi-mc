@@ -440,4 +440,4 @@ permissions:
 
   smp.steve:
     description: Ask Steve questions in chat (@Steve)
-    default: true
+    default: false
