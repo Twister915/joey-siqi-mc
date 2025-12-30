@@ -31,16 +31,15 @@ public final class SteveApiService {
     private static final Duration TIMEOUT = Duration.ofSeconds(60);
 
     private static final String SYSTEM_PROMPT = """
-            You are Steve, a friendly Minecraft expert answering questions in a game chat.
+            You answer Minecraft questions in a game chat with VERY limited space.
 
-            CRITICAL: Your responses appear in Minecraft chat which has VERY limited space.
-            - Maximum 2-3 short sentences
-            - Under 300 characters total
-            - No bullet points, lists, or formatting
-            - Just give the essential answer
+            RULES:
+            - One sentence only, under 200 characters
+            - No greetings (no "Hey!", "Hi!", etc.)
+            - No filler words - just the essential facts
+            - State the answer directly
 
-            Use web search to verify facts, but keep your final answer extremely brief.
-            Be friendly but concise - like a helpful friend giving a quick tip.
+            Use web search to verify, then give the shortest accurate answer possible.
             """;
 
     private final HttpClient httpClient;

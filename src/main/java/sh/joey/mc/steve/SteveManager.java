@@ -7,23 +7,18 @@ import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.event.ClickEvent;
 import net.kyori.adventure.text.event.HoverEvent;
 import net.kyori.adventure.text.format.NamedTextColor;
-import net.kyori.adventure.text.format.TextDecoration;
+import net.kyori.adventure.text.format.TextColor;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.bukkit.entity.Player;
 import sh.joey.mc.SiqiJoeyPlugin;
 
 import java.time.Duration;
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-
-import static sh.joey.mc.steve.Messages.PREFIX;
 
 /**
  * Manages Steve AI chatbot interactions.
@@ -32,7 +27,9 @@ import static sh.joey.mc.steve.Messages.PREFIX;
 public final class SteveManager implements Disposable {
 
     private static final Pattern STEVE_MENTION = Pattern.compile("@steve", Pattern.CASE_INSENSITIVE);
-    private static final int MAX_LINE_LENGTH = 250;
+
+    // Player chat color from the server config
+    private static final TextColor PLAYER_NAME_COLOR = TextColor.fromHexString("#eded9d");
 
     private final SiqiJoeyPlugin plugin;
     private final SteveConfig config;
@@ -94,20 +91,20 @@ public final class SteveManager implements Disposable {
         // Set cooldown
         cooldowns.put(playerId, Instant.now());
 
-        // Broadcast thinking message on main thread
+        // Send private thinking message to just the asker
         plugin.getServer().getScheduler().runTask(plugin, () ->
-                broadcastThinking(player, question));
+                sendThinking(player));
 
         // Call API
         apiService.ask(question)
                 .observeOn(plugin.mainScheduler())
                 .doFinally(() -> pendingQuestions.remove(playerId))
                 .subscribe(
-                        response -> broadcastResponse(player, response),
+                        response -> broadcastResponse(response),
                         error -> {
                             plugin.getLogger().warning("Steve API error: " + error.getMessage());
                             error.printStackTrace();
-                            Messages.error(player, "Sorry, I couldn't research that right now. Try again later!");
+                            Messages.error(player, "Sorry, I couldn't find an answer. Try again later!");
                         }
                 );
     }
@@ -118,35 +115,32 @@ public final class SteveManager implements Disposable {
         return STEVE_MENTION.matcher(text).replaceAll("").trim();
     }
 
-    private void broadcastThinking(Player asker, String question) {
-        // [Steve] PlayerName asked: "question..."
-        Component header = PREFIX
-                .append(Component.text(asker.getName()).color(NamedTextColor.WHITE))
-                .append(Component.text(" asked: ").color(NamedTextColor.GRAY))
-                .append(Component.text("\"" + truncate(question, 60) + "\"").color(NamedTextColor.WHITE)
-                        .decorate(TextDecoration.ITALIC));
+    /**
+     * Sends a private "thinking" message to just the asker.
+     */
+    private void sendThinking(Player asker) {
+        // Format like a player message: "Steve: thinking..."
+        Component thinking = Component.text("Steve")
+                .color(PLAYER_NAME_COLOR)
+                .append(Component.text(": ").color(NamedTextColor.DARK_GRAY))
+                .append(Component.text("thinking...").color(NamedTextColor.GRAY));
 
-        // [Steve] Researching...
-        Component thinking = PREFIX
-                .append(Component.text("Researching...").color(NamedTextColor.YELLOW)
-                        .decorate(TextDecoration.ITALIC));
-
-        plugin.getServer().broadcast(header);
-        plugin.getServer().broadcast(thinking);
+        asker.sendMessage(thinking);
     }
 
-    private void broadcastResponse(Player asker, SteveResponse response) {
-        // Split long responses into multiple messages
-        List<String> lines = splitResponse(response.text(), MAX_LINE_LENGTH);
+    /**
+     * Broadcasts Steve's response to all players, formatted like a player chat message.
+     */
+    private void broadcastResponse(SteveResponse response) {
+        // Build the message: "Steve: <answer> (sources: [1] [2] ...)"
+        Component message = Component.text("Steve")
+                .color(PLAYER_NAME_COLOR)
+                .append(Component.text(": ").color(NamedTextColor.DARK_GRAY))
+                .append(Component.text(response.text()).color(NamedTextColor.WHITE));
 
-        for (String line : lines) {
-            Component msg = PREFIX.append(Component.text(line).color(NamedTextColor.WHITE));
-            plugin.getServer().broadcast(msg);
-        }
-
-        // Add clickable source links if we have citations
+        // Add inline sources if we have citations
         if (!response.citations().isEmpty()) {
-            Component sources = PREFIX.append(Component.text("Sources: ").color(NamedTextColor.GRAY));
+            Component sources = Component.text(" (").color(NamedTextColor.GRAY);
 
             for (int i = 0; i < response.citations().size(); i++) {
                 SteveResponse.Citation cite = response.citations().get(i);
@@ -155,75 +149,15 @@ public final class SteveManager implements Disposable {
                 }
                 sources = sources.append(
                         Component.text("[" + (i + 1) + "]").color(NamedTextColor.AQUA)
-                                .decorate(TextDecoration.UNDERLINED)
                                 .clickEvent(ClickEvent.openUrl(cite.url()))
                                 .hoverEvent(HoverEvent.showText(
-                                        Component.text(cite.title()).color(NamedTextColor.WHITE)
-                                                .append(Component.newline())
-                                                .append(Component.text("Click to open").color(NamedTextColor.GRAY)))));
+                                        Component.text(cite.title()).color(NamedTextColor.WHITE))));
             }
-            plugin.getServer().broadcast(sources);
-        }
-    }
-
-    private List<String> splitResponse(String text, int maxLength) {
-        List<String> lines = new ArrayList<>();
-
-        // Split on sentence boundaries
-        String[] sentences = text.split("(?<=[.!?])\\s+");
-        StringBuilder current = new StringBuilder();
-
-        for (String sentence : sentences) {
-            if (current.length() + sentence.length() + 1 > maxLength) {
-                if (current.length() > 0) {
-                    lines.add(current.toString().trim());
-                    current = new StringBuilder();
-                }
-                // If single sentence is too long, split by words
-                if (sentence.length() > maxLength) {
-                    lines.addAll(splitByWords(sentence, maxLength));
-                } else {
-                    current.append(sentence).append(" ");
-                }
-            } else {
-                current.append(sentence).append(" ");
-            }
+            sources = sources.append(Component.text(")").color(NamedTextColor.GRAY));
+            message = message.append(sources);
         }
 
-        if (current.length() > 0) {
-            lines.add(current.toString().trim());
-        }
-
-        return lines;
-    }
-
-    private List<String> splitByWords(String text, int maxLength) {
-        List<String> lines = new ArrayList<>();
-        String[] words = text.split("\\s+");
-        StringBuilder current = new StringBuilder();
-
-        for (String word : words) {
-            if (current.length() + word.length() + 1 > maxLength) {
-                if (current.length() > 0) {
-                    lines.add(current.toString().trim());
-                    current = new StringBuilder();
-                }
-            }
-            current.append(word).append(" ");
-        }
-
-        if (current.length() > 0) {
-            lines.add(current.toString().trim());
-        }
-
-        return lines;
-    }
-
-    private static String truncate(String text, int maxLength) {
-        if (text.length() <= maxLength) {
-            return text;
-        }
-        return text.substring(0, maxLength - 3) + "...";
+        plugin.getServer().broadcast(message);
     }
 
     @Override
