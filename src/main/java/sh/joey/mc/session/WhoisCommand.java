@@ -99,42 +99,48 @@ public final class WhoisCommand implements Command {
     }
 
     private Maybe<WhoisInfo> buildWhoisInfo(UUID playerId, boolean includeAdmin) {
-        // Get username from storage
+        // Get username from storage - if not found, the whole operation returns empty
         Maybe<String> usernameMaybe = storage.findUsernameById(playerId);
 
         return usernameMaybe.flatMap(username -> {
-            Player onlinePlayer = Bukkit.getPlayer(playerId);
-            boolean isOnline = onlinePlayer != null;
-            String nickname = nicknameManager.getNickname(playerId);
+            // Get nickname from cache or database (supports offline players)
+            Single<String> nicknameSingle = nicknameManager.getNicknameAsync(playerId)
+                    .defaultIfEmpty("");
 
-            if (!includeAdmin) {
-                // Basic info only
-                return Maybe.just(new WhoisInfo(
-                        playerId, username, nickname, isOnline,
-                        null, null, null, null, null));
-            }
+            return nicknameSingle.flatMapMaybe(nickname -> {
+                String actualNickname = nickname.isEmpty() ? null : nickname;
+                Player onlinePlayer = Bukkit.getPlayer(playerId);
+                boolean isOnline = onlinePlayer != null;
 
-            // Admin info - combine multiple async queries
-            Single<String> ipSingle = storage.getLastIpAddress(playerId)
-                    .defaultIfEmpty("Unknown");
+                if (!includeAdmin) {
+                    // Basic info only
+                    return Maybe.just(new WhoisInfo(
+                            playerId, username, actualNickname, isOnline,
+                            null, null, null, null, null));
+                }
 
-            Single<Instant> firstJoinSingle = storage.getFirstJoinDate(playerId)
-                    .defaultIfEmpty(Instant.EPOCH);
+                // Admin info - combine multiple async queries
+                Single<String> ipSingle = storage.getLastIpAddress(playerId)
+                        .defaultIfEmpty("Unknown");
 
-            Single<Instant> lastSeenSingle = storage.getLastSeenDate(playerId)
-                    .defaultIfEmpty(Instant.EPOCH);
+                Single<Instant> firstJoinSingle = storage.getFirstJoinDate(playerId)
+                        .defaultIfEmpty(Instant.EPOCH);
 
-            Single<Long> playtimeSingle = storage.getLifetimeOnlineTime(playerId)
-                    .defaultIfEmpty(0L);
+                Single<Instant> lastSeenSingle = storage.getLastSeenDate(playerId)
+                        .defaultIfEmpty(Instant.EPOCH);
 
-            Single<List<PlayerSessionStorage.UsernameHistoryEntry>> historySingle =
-                    storage.getUsernameHistory(playerId).toList();
+                Single<Long> playtimeSingle = storage.getLifetimeOnlineTime(playerId)
+                        .defaultIfEmpty(0L);
 
-            return Single.zip(ipSingle, firstJoinSingle, lastSeenSingle, playtimeSingle, historySingle,
-                    (ip, firstJoin, lastSeen, playtime, history) -> new WhoisInfo(
-                            playerId, username, nickname, isOnline,
-                            ip, firstJoin, lastSeen, playtime, history))
-                    .toMaybe();
+                Single<List<PlayerSessionStorage.UsernameHistoryEntry>> historySingle =
+                        storage.getUsernameHistory(playerId).toList();
+
+                return Single.zip(ipSingle, firstJoinSingle, lastSeenSingle, playtimeSingle, historySingle,
+                        (ip, firstJoin, lastSeen, playtime, history) -> new WhoisInfo(
+                                playerId, username, actualNickname, isOnline,
+                                ip, firstJoin, lastSeen, playtime, history))
+                        .toMaybe();
+            });
         });
     }
 

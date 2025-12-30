@@ -1,6 +1,7 @@
 package sh.joey.mc.nickname;
 
 import io.reactivex.rxjava3.core.Completable;
+import io.reactivex.rxjava3.core.Maybe;
 import io.reactivex.rxjava3.disposables.CompositeDisposable;
 import io.reactivex.rxjava3.disposables.Disposable;
 import net.kyori.adventure.text.Component;
@@ -166,11 +167,23 @@ public final class NicknameManager implements Disposable {
     }
 
     /**
-     * Get a player's nickname if set.
+     * Get a player's nickname if set (from cache only - for online players).
      */
     @Nullable
     public String getNickname(UUID playerId) {
         return nicknameCache.get(playerId);
+    }
+
+    /**
+     * Get a player's nickname, checking cache first then database.
+     * Use this for offline player lookups.
+     */
+    public Maybe<String> getNicknameAsync(UUID playerId) {
+        String cached = nicknameCache.get(playerId);
+        if (cached != null) {
+            return Maybe.just(cached);
+        }
+        return storage.getNickname(playerId).map(Nickname::nickname);
     }
 
     /**
