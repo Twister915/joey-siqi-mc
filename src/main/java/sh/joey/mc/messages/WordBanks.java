@@ -21,6 +21,44 @@ public final class WordBanks {
         return list.get(random.nextInt(list.size()));
     }
 
+    /**
+     * Returns "a" or "an" based on whether the word starts with a vowel sound.
+     */
+    public static String article(String word) {
+        if (word == null || word.isEmpty()) {
+            return "a";
+        }
+        char first = Character.toLowerCase(word.charAt(0));
+        return (first == 'a' || first == 'e' || first == 'i' || first == 'o' || first == 'u') ? "an" : "a";
+    }
+
+    /**
+     * Returns "A" or "An" (capitalized) based on whether the word starts with a vowel sound.
+     */
+    public static String Article(String word) {
+        if (word == null || word.isEmpty()) {
+            return "A";
+        }
+        char first = Character.toLowerCase(word.charAt(0));
+        return (first == 'a' || first == 'e' || first == 'i' || first == 'o' || first == 'u') ? "An" : "A";
+    }
+
+    /**
+     * Picks a random element and prefixes with "a" or "an".
+     */
+    public static String pickWithArticle(List<String> list) {
+        String word = pick(list);
+        return article(word) + " " + word;
+    }
+
+    /**
+     * Picks a random element and prefixes with "A" or "An" (capitalized).
+     */
+    public static String pickWithArticleCap(List<String> list) {
+        String word = pick(list);
+        return Article(word) + " " + word;
+    }
+
     // ========================================
     // ACTIVITY WORD BANKS
     // ========================================
