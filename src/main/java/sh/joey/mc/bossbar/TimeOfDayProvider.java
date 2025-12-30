@@ -1,7 +1,7 @@
 package sh.joey.mc.bossbar;
 
 import org.bukkit.ChatColor;
-import org.bukkit.GameRule;
+import org.bukkit.GameRules;
 import org.bukkit.Material;
 import org.bukkit.World;
 import org.bukkit.boss.BarColor;
@@ -70,8 +70,8 @@ public final class TimeOfDayProvider implements BossBarProvider {
         }
 
         // Hide if daylight cycle is disabled (time frozen)
-        Boolean doDaylightCycle = world.getGameRuleValue(GameRule.DO_DAYLIGHT_CYCLE);
-        if (doDaylightCycle != null && !doDaylightCycle) {
+        Boolean advanceTime = world.getGameRuleValue(GameRules.ADVANCE_TIME);
+        if (advanceTime != null && !advanceTime) {
             return Optional.empty();
         }
 

@@ -34,6 +34,7 @@ src/main/java/sh/joey/mc/
 ├── messages/                 # Shared message generation (word banks)
 ├── permissions/              # Permission system (groups, grants, display)
 ├── rtp/                      # Random teleport system
+├── settings/                 # Per-player settings (keep inventory, easy mode, etc.)
 └── utility/                  # Utility commands (clear, item, give, time, weather, etc.)
 ```
 
@@ -560,6 +561,80 @@ Hover text shows the vague hint (e.g., "dense woodland awaits").
 - On startup, restores active cooldowns from database
 - Admin bypass with `smp.rtp.bypass` permission
 
+### 13. Player Settings System (`settings/`)
+
+Per-player gameplay customization with permission-gated features.
+
+**Key Classes:**
+- `PlayerSettings` - Immutable record with all setting values
+- `DisplayTimeSetting` - Enum: `ALWAYS`, `HOLDING_CLOCK`, `NEVER`
+- `SettingsStorage` - PostgreSQL persistence for settings
+- `SettingsManager` - Central manager with in-memory cache and event handlers
+- `SettingsCommand` - `/settings` command with clickable UI
+
+**Command:** `/settings`
+
+**Available Settings:**
+
+| Setting | Values | Permission | Description |
+|---------|--------|------------|-------------|
+| Keep Inventory | On/Off | `smp.settings.keepinventory` | Preserve items and XP on death |
+| Display Time | Always/Clock/Never | `smp.settings.displaytime` | When to show time in boss bar |
+| Easy Mode | On/Off | `smp.settings.easymode` | Reduced mob damage + insta-kill chance |
+
+**Defaults:** Keep Inventory=Off, Display Time=Always, Easy Mode=Off
+
+**Keep Inventory Implementation:**
+- Listens to `PlayerDeathEvent` at `HIGHEST` priority
+- Sets `keepInventory=true`, `keepLevel=true`, clears drops, sets `droppedExp=0`
+- Uses synchronous cache lookup (no async timing issues)
+
+**Easy Mode Implementation:**
+- **Damage Reduction:** Mobs deal 25% damage to player
+- **Insta-Kill:** 5% chance to instantly kill mobs when attacking
+- Effects: Heart particles, level-up sound, action bar message ("Critical hit!", "One-shot!", etc.)
+- PvP excluded: Player-to-player damage and player-shot arrows are unaffected
+
+**Easy Mode Damage Detection:**
+```java
+// Distinguishes mob damage from PvP
+private boolean isPlayerSourcedDamage(EntityDamageByEntityEvent event) {
+    var damager = event.getDamager();
+    if (damager instanceof Player) return true;
+    if (damager instanceof Projectile projectile) {
+        return projectile.getShooter() instanceof Player;
+    }
+    return false;
+}
+```
+
+**Display Time Integration:**
+- `TimeOfDayProvider` checks player's display time setting
+- `HOLDING_CLOCK` mode shows time only when holding a clock in main/off hand
+- `NEVER` hides the time boss bar entirely
+
+**Cache Strategy:**
+- `ConcurrentHashMap<UUID, PlayerSettings>` for thread-safe access
+- All settings loaded on startup (blocking)
+- Player settings loaded on join, removed on quit
+- Cache is authoritative; database updates happen async after cache updates
+
+**Command UI:**
+```
+[Settings] Your Settings:
+
+  Keep Inventory: [On] [Off]
+    ⤷ Preserve items and XP when you die
+
+  Display Time: [Always] [Clock] [Never]
+    ⤷ When to show the time in the boss bar
+
+  Easy Mode: [On] [Off]
+    ⤷ Mobs deal 25% damage + 5% insta-kill chance
+```
+
+Current value highlighted in green, other options in yellow (clickable). Settings without permission are hidden.
+
 ---
 
 ## Common Conventions
@@ -610,6 +685,7 @@ Each system has a consistent prefix:
 - Warp: `[Warp]` (gold)
 - Spawn: `[Spawn]` (green)
 - RTP: `[RTP]` (gold)
+- Settings: `[Settings]` (light purple)
 - Suicide: `[!]` (red)
 
 ---

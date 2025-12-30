@@ -189,9 +189,17 @@ public final class SafeTeleporter implements Disposable {
     }
 
     /**
-     * Checks if teleport warmup should be skipped for the player's current world.
+     * Checks if teleport warmup should be skipped for the player.
+     * Warmup is skipped if the player has smp.tp.instant permission or
+     * if the current world has teleport_warmup: false.
      */
     private boolean shouldSkipWarmup(Player player) {
+        // Check instant teleport permission first
+        if (player.hasPermission("smp.tp.instant")) {
+            return true;
+        }
+
+        // Check world config
         String worldName = player.getWorld().getName().toLowerCase();
         var worldConfig = worldsConfig.worlds().get(worldName);
         return worldConfig != null && !worldConfig.teleportWarmup();

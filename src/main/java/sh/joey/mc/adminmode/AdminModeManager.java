@@ -16,6 +16,7 @@ import com.destroystokyo.paper.event.player.PlayerPickupExperienceEvent;
 import org.bukkit.event.player.PlayerDropItemEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerPortalEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.LeatherArmorMeta;
@@ -120,6 +121,12 @@ public final class AdminModeManager implements Disposable {
         disposables.add(plugin.watchEvent(PlayerPickupExperienceEvent.class)
                 .filter(e -> playersInAdminMode.contains(e.getPlayer().getUniqueId()))
                 .subscribe(this::cancel));
+
+        // Clean up permission attachment when player quits (it becomes invalid)
+        // They stay in admin mode for auto-exit on rejoin, but the attachment is cleared
+        disposables.add(plugin.watchEvent(PlayerQuitEvent.class)
+                .filter(e -> playersInAdminMode.contains(e.getPlayer().getUniqueId()))
+                .subscribe(e -> attachments.remove(e.getPlayer().getUniqueId())));
     }
 
     /**
@@ -297,7 +304,12 @@ public final class AdminModeManager implements Disposable {
     private void detachPermissions(Player player) {
         PermissionAttachment attachment = attachments.remove(player.getUniqueId());
         if (attachment != null) {
-            player.removeAttachment(attachment);
+            try {
+                player.removeAttachment(attachment);
+            } catch (IllegalArgumentException e) {
+                // Attachment was for a different player instance (e.g., after rejoin)
+                // This is safe to ignore - the attachment is already invalid
+            }
         }
     }
 

@@ -62,7 +62,7 @@ whitelist:
 # /adminmode lets admins temporarily enter creative mode while preserving inventory
 adminmode:
   # Additional permissions granted while in admin mode
-  # Example: worldedit.*, worldguard.*, etc.
+  # Examples: worldedit.*, worldguard.*, smp.tp.instant
   permissions: []
 
 # Multi-world configuration

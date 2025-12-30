@@ -179,6 +179,7 @@ permissions:
       smp.msg: true
       smp.tp: true
       smp.tp.admin: true
+      smp.tp.instant: true
       smp.tphere: true
       smp.back: true
       smp.home: true
@@ -223,6 +224,10 @@ permissions:
 
   smp.tp.admin:
     description: Instantly teleport to players without sending a request
+    default: op
+
+  smp.tp.instant:
+    description: Teleport instantly without warmup countdown
     default: op
 
   smp.tphere:

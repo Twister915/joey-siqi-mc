@@ -88,6 +88,22 @@ Toggle creative mode while preserving your survival inventory. See [doc/adminmod
 - **Configurable permissions** - Grant WorldEdit, WorldGuard, etc. only while in admin mode
 - Blocked from portals and cross-world teleports while active
 
+### Chunk Pre-generation
+Pre-generate world chunks to reduce lag when players explore new areas:
+- `/pregen` or `/pregen status` - Show current pre-generation status
+- `/pregen start` - Start pre-generation
+- `/pregen stop` - Stop and reset pre-generation
+- `/pregen pause` - Pause pre-generation (resumes with `/pregen start`)
+- `/pregen force` - Toggle forced mode (runs at slow speed even with players online)
+- `/pregen monitor` - Toggle boss bar progress display
+
+**Features:**
+- **Adaptive rate** - Faster when server is empty, slower with players online
+- **Progress persistence** - Resumes from where it left off after server restart
+- **Multiple worlds** - Configures which worlds to pre-generate in `config.yml`
+- **Size estimation** - Shows estimated map file size in status output
+- **Spiral pattern** - Generates chunks outward from world spawn
+
 ### Custom Messages
 All server messages styled to match the plugin's visual theme:
 - **Join/Leave**: `[+] PlayerName` (green plus) / `[-] PlayerName` (red minus)
@@ -119,6 +135,22 @@ Find new unexplored areas for resource gathering:
 - **Scalable**: Works with search radius up to 25,000+ blocks using async chunk loading
 - **Cooldown**: 5-minute cooldown between uses (admins can bypass with `smp.rtp.bypass`)
 - **First-join tip**: New players automatically receive a tip about `/rtp`
+
+### Player Settings
+Per-player gameplay customization:
+- `/settings` - Open the settings menu with clickable options
+
+**Available Settings:**
+| Setting | Options | Description |
+|---------|---------|-------------|
+| Keep Inventory | On/Off | Preserve items and XP when you die |
+| Display Time | Always/Clock/Never | When to show the time in the boss bar |
+| Easy Mode | On/Off | Mobs deal 25% damage + 5% chance to insta-kill mobs |
+
+- Each setting requires a permission (`smp.settings.keepinventory`, `smp.settings.displaytime`, `smp.settings.easymode`)
+- Settings you don't have permission for are hidden from the menu
+- **Easy Mode** includes fun effects: heart particles, level-up sound, and action bar messages like "Critical hit!" and "One-shot!"
+- Easy Mode only affects mob combat - PvP damage is unchanged
 
 ### Resource Pack System
 - `/resourcepack` - List available resource packs
@@ -216,6 +248,7 @@ All commands use the `smp.` permission prefix. Key permissions:
 |------------|-------------|---------|
 | `smp.*` | All SMP permissions | op |
 | `smp.tp` | Send teleport requests | everyone |
+| `smp.tp.instant` | Teleport instantly without warmup | op |
 | `smp.tphere` | Request to teleport players to you | everyone |
 | `smp.back` | Return to death/teleport location | everyone |
 | `smp.home` | Use home commands | everyone |
@@ -237,6 +270,9 @@ All commands use the `smp.` permission prefix. Key permissions:
 | `smp.setspawn` | Set spawn point | op |
 | `smp.rtp` | Use random teleport | everyone |
 | `smp.rtp.bypass` | Bypass RTP cooldown | op |
+| `smp.settings.keepinventory` | Toggle keep inventory on death | op |
+| `smp.settings.displaytime` | Configure time display in boss bar | everyone |
+| `smp.settings.easymode` | Enable easy mode (reduced damage, insta-kills) | op |
 | `smp.suicide` | Kill yourself to respawn | everyone |
 | `smp.remove` | Remove entities | op |
 | `smp.seed` | View world seed | op |
@@ -246,6 +282,7 @@ All commands use the `smp.` permission prefix. Key permissions:
 | `smp.adminmode` | Toggle admin creative mode | op |
 | `smp.statue` | Generate wool statues | op |
 | `smp.perm.admin` | Manage permissions | op |
+| `smp.pregen` | Control chunk pre-generation | op |
 | `smp.ban` | Ban/unban players | op |
 | `smp.ipban` | IP ban/unban players | op |
 | `smp.kick` | Kick players | op |
@@ -332,6 +369,7 @@ All persistent data is stored in PostgreSQL:
 - **warps** - Named warp locations
 - **world_spawns** - Per-world spawn points
 - **rtp_cooldowns** - Random teleport cooldown tracking
+- **player_settings** - Per-player settings (keep inventory, display time, easy mode)
 - **player_resource_packs** - Player resource pack preferences
 - **nicknames** - Player display name customizations
 - **private_messages** - Private message history for `/reply`
