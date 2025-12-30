@@ -127,9 +127,29 @@ public final class SteveApiService {
         StringBuilder text = new StringBuilder();
         Set<SteveResponse.Citation> citations = new LinkedHashSet<>();
 
+        // Parse usage for cost calculation
+        double costCents = 0.0;
+        if (response.has("usage")) {
+            JsonObject usage = response.getAsJsonObject("usage");
+            int inputTokens = usage.has("input_tokens") ? usage.get("input_tokens").getAsInt() : 0;
+            int outputTokens = usage.has("output_tokens") ? usage.get("output_tokens").getAsInt() : 0;
+            int webSearches = 0;
+            if (usage.has("server_tool_use")) {
+                JsonObject serverToolUse = usage.getAsJsonObject("server_tool_use");
+                webSearches = serverToolUse.has("web_search_requests")
+                        ? serverToolUse.get("web_search_requests").getAsInt() : 0;
+            }
+
+            // Sonnet 4 pricing: $3/1M input, $15/1M output, $10/1K searches
+            double inputCost = (inputTokens / 1_000_000.0) * 3.0;
+            double outputCost = (outputTokens / 1_000_000.0) * 15.0;
+            double searchCost = (webSearches / 1_000.0) * 10.0;
+            costCents = (inputCost + outputCost + searchCost) * 100.0; // Convert to cents
+        }
+
         JsonArray content = response.getAsJsonArray("content");
         if (content == null) {
-            return new SteveResponse("I couldn't find an answer to that question.", List.of());
+            return new SteveResponse("I couldn't find an answer to that question.", List.of(), costCents);
         }
 
         for (JsonElement element : content) {
@@ -182,7 +202,7 @@ public final class SteveApiService {
             responseText = "I found some information but couldn't summarize it properly. Check the sources below!";
         }
 
-        return new SteveResponse(responseText, limitedCitations);
+        return new SteveResponse(responseText, limitedCitations, costCents);
     }
 
     private static String truncate(String text, int maxLength) {

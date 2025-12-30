@@ -7,7 +7,8 @@ import java.util.List;
  */
 public record SteveResponse(
         String text,
-        List<Citation> citations
+        List<Citation> citations,
+        double costCents
 ) {
     /**
      * A citation to a source URL.

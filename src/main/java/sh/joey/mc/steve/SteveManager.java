@@ -138,23 +138,37 @@ public final class SteveManager implements Disposable {
                 .append(Component.text(": ").color(NamedTextColor.DARK_GRAY))
                 .append(Component.text(response.text()).color(NamedTextColor.WHITE));
 
-        // Add inline sources if we have citations
-        if (!response.citations().isEmpty()) {
-            Component sources = Component.text(" (").color(NamedTextColor.GRAY);
+        // Add inline sources and cost
+        boolean hasCitations = !response.citations().isEmpty();
+        boolean hasCost = response.costCents() > 0;
 
+        if (hasCitations || hasCost) {
+            Component suffix = Component.text(" (").color(NamedTextColor.GRAY);
+
+            // Add citations
             for (int i = 0; i < response.citations().size(); i++) {
                 SteveResponse.Citation cite = response.citations().get(i);
                 if (i > 0) {
-                    sources = sources.append(Component.text(" ").color(NamedTextColor.GRAY));
+                    suffix = suffix.append(Component.text(" ").color(NamedTextColor.GRAY));
                 }
-                sources = sources.append(
+                suffix = suffix.append(
                         Component.text("[" + (i + 1) + "]").color(NamedTextColor.AQUA)
                                 .clickEvent(ClickEvent.openUrl(cite.url()))
                                 .hoverEvent(HoverEvent.showText(
                                         Component.text(cite.title()).color(NamedTextColor.WHITE))));
             }
-            sources = sources.append(Component.text(")").color(NamedTextColor.GRAY));
-            message = message.append(sources);
+
+            // Add cost
+            if (hasCost) {
+                if (hasCitations) {
+                    suffix = suffix.append(Component.text(" | ").color(NamedTextColor.DARK_GRAY));
+                }
+                String costStr = String.format("%.1f¢", response.costCents());
+                suffix = suffix.append(Component.text(costStr).color(NamedTextColor.GRAY));
+            }
+
+            suffix = suffix.append(Component.text(")").color(NamedTextColor.GRAY));
+            message = message.append(suffix);
         }
 
         plugin.getServer().broadcast(message);
