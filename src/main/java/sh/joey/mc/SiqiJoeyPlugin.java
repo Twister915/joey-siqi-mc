@@ -65,6 +65,8 @@ import sh.joey.mc.permissions.PermissionResolver;
 import sh.joey.mc.permissions.PermissionStorage;
 import sh.joey.mc.permissions.cmd.PermCommand;
 import sh.joey.mc.settings.SettingsCommand;
+import sh.joey.mc.settings.EasyModeHandler;
+import sh.joey.mc.settings.PassiveModeHandler;
 import sh.joey.mc.settings.SettingsManager;
 import sh.joey.mc.settings.SettingsStorage;
 import sh.joey.mc.utility.ClearCommand;
@@ -222,6 +224,8 @@ public final class SiqiJoeyPlugin extends JavaPlugin {
         var settingsStorage = new SettingsStorage(storageService);
         var settingsManager = new SettingsManager(this, settingsStorage);
         components.add(settingsManager);
+        components.add(new EasyModeHandler(this, settingsManager));
+        components.add(new PassiveModeHandler(this, settingsManager));
         components.add(CmdExecutor.register(this, new SettingsCommand(settingsManager)));
 
         // Boss bar system with priority-based providers
