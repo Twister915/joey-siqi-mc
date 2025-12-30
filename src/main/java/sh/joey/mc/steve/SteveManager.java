@@ -7,10 +7,10 @@ import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.event.ClickEvent;
 import net.kyori.adventure.text.event.HoverEvent;
 import net.kyori.adventure.text.format.NamedTextColor;
-import net.kyori.adventure.text.format.TextColor;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.bukkit.entity.Player;
 import sh.joey.mc.SiqiJoeyPlugin;
+import sh.joey.mc.permissions.DisplayManager;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -28,13 +28,12 @@ import java.util.regex.Pattern;
 public final class SteveManager implements Disposable {
 
     private static final Pattern STEVE_MENTION = Pattern.compile("@steve", Pattern.CASE_INSENSITIVE);
-
-    // Player chat color from the server config
-    private static final TextColor PLAYER_NAME_COLOR = TextColor.fromHexString("#eded9d");
+    private static final String PERMISSION = "smp.steve";
 
     private final SiqiJoeyPlugin plugin;
     private final SteveConfig config;
     private final SteveApiService apiService;
+    private final DisplayManager displayManager;
     private final CompositeDisposable disposables = new CompositeDisposable();
 
     // Cooldown tracking
@@ -42,16 +41,23 @@ public final class SteveManager implements Disposable {
     // Prevent duplicate questions while one is pending
     private final Set<UUID> pendingQuestions = ConcurrentHashMap.newKeySet();
 
-    public SteveManager(SiqiJoeyPlugin plugin, SteveConfig config, SteveApiService apiService) {
+    public SteveManager(SiqiJoeyPlugin plugin, SteveConfig config, SteveApiService apiService,
+                        DisplayManager displayManager) {
         this.plugin = plugin;
         this.config = config;
         this.apiService = apiService;
+        this.displayManager = displayManager;
 
         // Listen for chat messages mentioning Steve
         disposables.add(plugin.watchEvent(AsyncChatEvent.class)
                 .filter(e -> containsSteveMention(e.message()))
-                .filter(e -> e.getPlayer().hasPermission("smp.steve"))
-                .subscribe(this::handleSteveMention));
+                .subscribe(event -> {
+                    if (event.getPlayer().hasPermission(PERMISSION)) {
+                        handleSteveMention(event);
+                    } else {
+                        sendNoPermission(event.getPlayer());
+                    }
+                }));
     }
 
     private boolean containsSteveMention(Component message) {
@@ -117,12 +123,26 @@ public final class SteveManager implements Disposable {
     }
 
     /**
+     * Sends a private "no permission" message to the player.
+     */
+    private void sendNoPermission(Player player) {
+        plugin.timer(500, TimeUnit.MILLISECONDS)
+                .subscribe(tick -> {
+                    Component message = Component.text("Steve")
+                            .color(displayManager.getDefaultNameColor())
+                            .append(Component.text(": ").color(NamedTextColor.DARK_GRAY))
+                            .append(Component.text("You do not have permission, sorry.").color(NamedTextColor.RED));
+                    player.sendMessage(message);
+                });
+    }
+
+    /**
      * Sends a private "thinking" message to just the asker.
      */
     private void sendThinking(Player asker) {
         // Format like a player message: "Steve: thinking..."
         Component thinking = Component.text("Steve")
-                .color(PLAYER_NAME_COLOR)
+                .color(displayManager.getDefaultNameColor())
                 .append(Component.text(": ").color(NamedTextColor.DARK_GRAY))
                 .append(Component.text("thinking...").color(NamedTextColor.GRAY));
 
@@ -135,7 +155,7 @@ public final class SteveManager implements Disposable {
     private void broadcastResponse(SteveResponse response) {
         // Build the message: "Steve: <answer> (sources: [1] [2] ...)"
         Component message = Component.text("Steve")
-                .color(PLAYER_NAME_COLOR)
+                .color(displayManager.getDefaultNameColor())
                 .append(Component.text(": ").color(NamedTextColor.DARK_GRAY))
                 .append(Component.text(response.text()).color(NamedTextColor.WHITE));
 

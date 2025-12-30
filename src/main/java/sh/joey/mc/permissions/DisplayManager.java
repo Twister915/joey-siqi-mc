@@ -37,13 +37,21 @@ public final class DisplayManager implements Disposable {
     private final CompositeDisposable disposables = new CompositeDisposable();
     private final SiqiJoeyPlugin plugin;
     private final PermissionCache cache;
+    private final PermissionResolver resolver;
     private final Scoreboard scoreboard;
     private final Map<UUID, String> playerTeams = new ConcurrentHashMap<>();
 
-    public DisplayManager(SiqiJoeyPlugin plugin, PermissionCache cache) {
+    // Cached default name color (resolved from default groups)
+    private volatile TextColor defaultNameColor = DEFAULT_NAME_COLOR;
+
+    public DisplayManager(SiqiJoeyPlugin plugin, PermissionCache cache, PermissionResolver resolver) {
         this.plugin = plugin;
         this.cache = cache;
+        this.resolver = resolver;
         this.scoreboard = Bukkit.getScoreboardManager().getMainScoreboard();
+
+        // Load default attributes on startup
+        loadDefaultAttributes();
 
         // Update display on join
         disposables.add(plugin.watchEvent(PlayerJoinEvent.class)
@@ -52,6 +60,35 @@ public final class DisplayManager implements Disposable {
         // Clean up on quit
         disposables.add(plugin.watchEvent(PlayerQuitEvent.class)
                 .subscribe(event -> cleanupPlayer(event.getPlayer())));
+    }
+
+    /**
+     * Load default attributes from the permission system.
+     * Called on startup and when refreshing.
+     */
+    private void loadDefaultAttributes() {
+        disposables.add(resolver.resolveDefaultAttributes()
+                .subscribe(
+                        attrs -> {
+                            TextColor color = PermissibleAttributes.parseColor(attrs.nameColor());
+                            if (color != null) {
+                                defaultNameColor = color;
+                            }
+                        },
+                        err -> plugin.getLogger().warning("Failed to load default attributes: " + err.getMessage())
+                ));
+    }
+
+    /**
+     * Get the default name color that applies to entities without explicit permissions.
+     * <p>
+     * This is the name color from the resolved default groups (is_default = true).
+     * Use this for non-player entities like NPCs or bots that should match player styling.
+     *
+     * @return the default name color, or {@link #DEFAULT_NAME_COLOR} if not set
+     */
+    public TextColor getDefaultNameColor() {
+        return defaultNameColor;
     }
 
     /**
@@ -156,9 +193,10 @@ public final class DisplayManager implements Disposable {
     }
 
     /**
-     * Refresh display for all online players.
+     * Refresh display for all online players and reload default attributes.
      */
     public void refreshAll() {
+        loadDefaultAttributes();
         for (Player player : plugin.getServer().getOnlinePlayers()) {
             updateDisplay(player);
         }

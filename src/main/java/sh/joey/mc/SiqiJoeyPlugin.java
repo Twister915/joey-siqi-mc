@@ -206,7 +206,7 @@ public final class SiqiJoeyPlugin extends JavaPlugin {
         components.add(permissionCache);
         var permissionAttacher = new PermissionAttacher(this, permissionCache);
         components.add(permissionAttacher);
-        var displayManager = new DisplayManager(this, permissionCache);
+        var displayManager = new DisplayManager(this, permissionCache, permissionResolver);
         components.add(displayManager);
         components.add(CmdExecutor.register(this,
                 new PermCommand(this, permissionStorage, playerSessionStorage,
@@ -453,7 +453,7 @@ public final class SiqiJoeyPlugin extends JavaPlugin {
         var steveConfig = SteveConfig.load(this);
         if (steveConfig.enabled() && !steveConfig.apiKey().isEmpty()) {
             var steveApi = new SteveApiService(steveConfig, getLogger());
-            var steveManager = new SteveManager(this, steveConfig, steveApi);
+            var steveManager = new SteveManager(this, steveConfig, steveApi, displayManager);
             components.add(steveManager);
             getLogger().info("Steve AI chatbot enabled");
         } else if (steveConfig.enabled()) {

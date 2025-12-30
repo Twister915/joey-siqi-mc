@@ -30,6 +30,20 @@ public final class PermissionResolver {
     }
 
     /**
+     * Resolve the default display attributes that would apply to any player
+     * without explicit attributes or group memberships.
+     * <p>
+     * Uses only default groups (is_default = true), merged by priority.
+     *
+     * @return A Single emitting the resolved default attributes
+     */
+    public Single<PermissibleAttributes> resolveDefaultAttributes() {
+        return storage.getDefaultGroups()
+                .toSortedList((a, b) -> Integer.compare(b.priority(), a.priority()))
+                .map(groups -> resolveAttributes(PermissibleAttributes.EMPTY, groups));
+    }
+
+    /**
      * Resolve all permissions and attributes for a player in a given world.
      *
      * @param playerId The player's UUID
