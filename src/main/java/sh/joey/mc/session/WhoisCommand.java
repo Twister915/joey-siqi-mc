@@ -14,6 +14,7 @@ import sh.joey.mc.SiqiJoeyPlugin;
 import sh.joey.mc.cmd.Command;
 import sh.joey.mc.nickname.NicknameManager;
 import sh.joey.mc.player.PlayerResolver;
+import sh.joey.mc.util.DurationFormat;
 
 import java.time.Instant;
 import java.time.ZoneId;
@@ -181,7 +182,7 @@ public final class WhoisCommand implements Command {
             // Playtime
             if (info.playtimeSeconds != null && info.playtimeSeconds > 0) {
                 sender.sendMessage(line("Total playtime",
-                        Component.text(formatDuration(info.playtimeSeconds)).color(NamedTextColor.GREEN)));
+                        Component.text(DurationFormat.formatShort(info.playtimeSeconds)).color(NamedTextColor.GREEN)));
             }
 
             // Username history
@@ -211,27 +212,6 @@ public final class WhoisCommand implements Command {
         return Component.text(" " + label + ": ")
                 .color(NamedTextColor.GRAY)
                 .append(value);
-    }
-
-    private static String formatDuration(long totalSeconds) {
-        if (totalSeconds < 60) {
-            return totalSeconds + "s";
-        }
-
-        long days = totalSeconds / 86400;
-        long hours = (totalSeconds % 86400) / 3600;
-        long minutes = (totalSeconds % 3600) / 60;
-
-        StringBuilder sb = new StringBuilder();
-        if (days > 0) {
-            sb.append(days).append("d ");
-        }
-        if (hours > 0 || days > 0) {
-            sb.append(hours).append("h ");
-        }
-        sb.append(minutes).append("m");
-
-        return sb.toString().trim();
     }
 
     @Override

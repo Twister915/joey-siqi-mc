@@ -12,6 +12,7 @@ import org.bukkit.entity.Player;
 import sh.joey.mc.SiqiJoeyPlugin;
 import sh.joey.mc.cmd.Command;
 import sh.joey.mc.player.PlayerResolver;
+import sh.joey.mc.util.DurationFormat;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -168,37 +169,12 @@ public final class OnTimeCommand implements Command {
         if (result.isOnline) {
             viewer.sendMessage(PREFIX.append(
                     Component.text("This session: ").color(NamedTextColor.GRAY)
-                            .append(Component.text(formatDuration(result.sessionSeconds)).color(NamedTextColor.AQUA))));
+                            .append(Component.text(DurationFormat.formatShort(result.sessionSeconds)).color(NamedTextColor.AQUA))));
         }
 
         viewer.sendMessage(PREFIX.append(
                 Component.text("Lifetime: ").color(NamedTextColor.GRAY)
-                        .append(Component.text(formatDuration(result.lifetimeSeconds)).color(NamedTextColor.GREEN))));
-    }
-
-    private static String formatDuration(long totalSeconds) {
-        if (totalSeconds < 60) {
-            return totalSeconds + "s";
-        }
-
-        long days = totalSeconds / 86400;
-        long hours = (totalSeconds % 86400) / 3600;
-        long minutes = (totalSeconds % 3600) / 60;
-        long seconds = totalSeconds % 60;
-
-        StringBuilder sb = new StringBuilder();
-        if (days > 0) {
-            sb.append(days).append("d ");
-        }
-        if (hours > 0 || days > 0) {
-            sb.append(hours).append("h ");
-        }
-        if (minutes > 0 || hours > 0 || days > 0) {
-            sb.append(minutes).append("m ");
-        }
-        sb.append(seconds).append("s");
-
-        return sb.toString().trim();
+                        .append(Component.text(DurationFormat.formatShort(result.lifetimeSeconds)).color(NamedTextColor.GREEN))));
     }
 
     private void error(CommandSender sender, String message) {

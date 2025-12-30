@@ -12,6 +12,7 @@ import org.bukkit.Tag;
 import org.bukkit.block.Block;
 import org.bukkit.event.player.PlayerQuitEvent;
 import sh.joey.mc.SiqiJoeyPlugin;
+import sh.joey.mc.util.DurationFormat;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -368,15 +369,7 @@ public final class RtpManager implements Disposable {
      */
     public String formatRemainingCooldown(UUID playerId) {
         Duration remaining = getRemainingCooldown(playerId);
-        long minutes = remaining.toMinutes();
-        long seconds = remaining.minusMinutes(minutes).getSeconds();
-
-        if (minutes > 0) {
-            return minutes + " minute" + (minutes != 1 ? "s" : "") +
-                    (seconds > 0 ? " " + seconds + " second" + (seconds != 1 ? "s" : "") : "");
-        } else {
-            return seconds + " second" + (seconds != 1 ? "s" : "");
-        }
+        return DurationFormat.formatShort(remaining);
     }
 
     @Override

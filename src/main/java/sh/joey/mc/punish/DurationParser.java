@@ -1,5 +1,7 @@
 package sh.joey.mc.punish;
 
+import sh.joey.mc.util.DurationFormat;
+
 import java.time.Duration;
 import java.util.Optional;
 
@@ -76,23 +78,7 @@ public final class DurationParser {
      * @return the formatted string (e.g., "2d1h30m15s")
      */
     public static String format(Duration duration) {
-        if (duration.isZero() || duration.isNegative()) {
-            return "0s";
-        }
-
-        StringBuilder sb = new StringBuilder();
-
-        long days = duration.toDays();
-        long hours = duration.toHoursPart();
-        long minutes = duration.toMinutesPart();
-        long seconds = duration.toSecondsPart();
-
-        if (days > 0) sb.append(days).append("d");
-        if (hours > 0) sb.append(hours).append("h");
-        if (minutes > 0) sb.append(minutes).append("m");
-        if (seconds > 0) sb.append(seconds).append("s");
-
-        return sb.isEmpty() ? "0s" : sb.toString();
+        return DurationFormat.formatCompact(duration);
     }
 
     /**
@@ -102,33 +88,6 @@ public final class DurationParser {
      * @return the formatted string (e.g., "2 days, 1 hour, 30 minutes")
      */
     public static String formatHumanReadable(Duration duration) {
-        if (duration.isZero() || duration.isNegative()) {
-            return "now";
-        }
-
-        StringBuilder sb = new StringBuilder();
-
-        long days = duration.toDays();
-        long hours = duration.toHoursPart();
-        long minutes = duration.toMinutesPart();
-        long seconds = duration.toSecondsPart();
-
-        if (days > 0) {
-            sb.append(days).append(days == 1 ? " day" : " days");
-        }
-        if (hours > 0) {
-            if (!sb.isEmpty()) sb.append(", ");
-            sb.append(hours).append(hours == 1 ? " hour" : " hours");
-        }
-        if (minutes > 0) {
-            if (!sb.isEmpty()) sb.append(", ");
-            sb.append(minutes).append(minutes == 1 ? " minute" : " minutes");
-        }
-        if (seconds > 0 || sb.isEmpty()) {
-            if (!sb.isEmpty()) sb.append(", ");
-            sb.append(seconds).append(seconds == 1 ? " second" : " seconds");
-        }
-
-        return sb.toString();
+        return DurationFormat.formatHumanReadable(duration);
     }
 }

@@ -4,6 +4,7 @@ import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextDecoration;
 import org.bukkit.command.CommandSender;
+import sh.joey.mc.util.DurationFormat;
 
 /**
  * Message formatting utilities for the pre-generation system.
@@ -37,20 +38,7 @@ public final class Messages {
      * Format a duration in milliseconds to a human-readable string.
      */
     public static String formatDuration(long millis) {
-        long seconds = millis / 1000;
-        long minutes = seconds / 60;
-        long hours = minutes / 60;
-        long days = hours / 24;
-
-        if (days > 0) {
-            return String.format("%dd %dh", days, hours % 24);
-        } else if (hours > 0) {
-            return String.format("%dh %dm", hours, minutes % 60);
-        } else if (minutes > 0) {
-            return String.format("%dm %ds", minutes, seconds % 60);
-        } else {
-            return String.format("%ds", seconds);
-        }
+        return DurationFormat.formatShortMillis(millis);
     }
 
     /**

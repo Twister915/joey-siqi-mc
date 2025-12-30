@@ -12,6 +12,7 @@ import org.bukkit.entity.Player;
 import sh.joey.mc.SiqiJoeyPlugin;
 import sh.joey.mc.permissions.DisplayManager;
 import sh.joey.mc.steve.SteveAnswer.Citation;
+import sh.joey.mc.util.DurationFormat;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -95,9 +96,10 @@ public final class SteveManager implements Disposable {
         // Check cooldown
         Instant cooldownEnd = cooldownEndTimes.get(playerId);
         if (cooldownEnd != null && cooldownEnd.isAfter(Instant.now())) {
-            long secondsRemaining = Duration.between(Instant.now(), cooldownEnd).getSeconds();
+            Duration remaining = Duration.between(Instant.now(), cooldownEnd);
+            String formatted = DurationFormat.formatShort(remaining);
             plugin.getServer().getScheduler().runTask(plugin, () ->
-                    Messages.error(player, "Please wait " + secondsRemaining + "s before asking Steve again."));
+                    Messages.error(player, "Please wait " + formatted + " before asking Steve again."));
             return;
         }
 
