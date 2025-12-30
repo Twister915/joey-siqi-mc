@@ -7,6 +7,7 @@ import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.event.ClickEvent;
 import net.kyori.adventure.text.event.HoverEvent;
 import net.kyori.adventure.text.format.NamedTextColor;
+import net.kyori.adventure.text.format.TextDecoration;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.bukkit.entity.Player;
 import sh.joey.mc.SiqiJoeyPlugin;
@@ -35,7 +36,7 @@ public final class SteveManager implements Disposable {
 
     private final SiqiJoeyPlugin plugin;
     private final SteveConfig config;
-    private final SteveModel model;
+    private volatile SteveModel model;
     private final SteveStorage storage;
     private final DisplayManager displayManager;
     private final CompositeDisposable disposables = new CompositeDisposable();
@@ -124,12 +125,17 @@ public final class SteveManager implements Disposable {
         plugin.timer(500, TimeUnit.MILLISECONDS)
                 .subscribe(tick -> sendThinking(player));
 
-        // Call API
-        model.ask(question)
+        // Call API and track response time
+        long startTime = System.currentTimeMillis();
+        SteveModel currentModel = model; // Capture for lambda
+        currentModel.ask(question)
                 .observeOn(plugin.mainScheduler())
                 .doFinally(() -> pendingQuestions.remove(playerId))
                 .subscribe(
-                        response -> broadcastResponse(response),
+                        response -> {
+                            long elapsedMs = System.currentTimeMillis() - startTime;
+                            broadcastResponse(response, currentModel.info(), elapsedMs);
+                        },
                         error -> {
                             plugin.getLogger().warning("Steve API error: " + error.getMessage());
                             error.printStackTrace();
@@ -174,10 +180,19 @@ public final class SteveManager implements Disposable {
     /**
      * Broadcasts Steve's response to all players, formatted like a player chat message.
      */
-    private void broadcastResponse(SteveAnswer response) {
+    private void broadcastResponse(SteveAnswer response, SteveModelInfo modelInfo, long elapsedMs) {
+        // Build hover text with model info and response time
+        String timeFormatted = formatResponseTime(elapsedMs);
+        Component hoverText = Component.text("Model: ").color(NamedTextColor.GRAY)
+                .append(Component.text(modelInfo.displayName()).color(NamedTextColor.WHITE))
+                .append(Component.newline())
+                .append(Component.text("Response time: ").color(NamedTextColor.GRAY))
+                .append(Component.text(timeFormatted).color(NamedTextColor.WHITE));
+
         // Build the message: "Steve: <answer> (sources: [1] [2] ...)"
         Component message = Component.text("Steve")
                 .color(displayManager.getDefaultNameColor())
+                .hoverEvent(HoverEvent.showText(hoverText))
                 .append(Component.text(": ").color(NamedTextColor.DARK_GRAY))
                 .append(Component.text(response.text()).color(NamedTextColor.WHITE));
 
@@ -229,6 +244,28 @@ public final class SteveManager implements Disposable {
                 () -> {},
                 err -> plugin.getLogger().warning("Failed to record Steve usage: " + err.getMessage())
         );
+    }
+
+    /**
+     * Gets the current model.
+     */
+    public SteveModel getModel() {
+        return model;
+    }
+
+    /**
+     * Sets the active model.
+     */
+    public void setModel(SteveModel model) {
+        this.model = model;
+    }
+
+    private static String formatResponseTime(long ms) {
+        if (ms < 1000) {
+            return ms + "ms";
+        } else {
+            return String.format("%.1fs", ms / 1000.0);
+        }
     }
 
     @Override

@@ -486,7 +486,7 @@ public final class SiqiJoeyPlugin extends JavaPlugin {
                 var model = provider.get().create(SteveSystemPrompt.DEFAULT);
                 var steveManager = new SteveManager(this, steveConfig, model, steveStorage, displayManager);
                 components.add(steveManager);
-                components.add(CmdExecutor.register(this, new SteveCommand(model)));
+                components.add(CmdExecutor.register(this, new SteveCommand(steveManager, registry, SteveSystemPrompt.DEFAULT)));
                 getLogger().info("Steve AI enabled: " + provider.get().info().displayName());
             } else {
                 getLogger().warning("Steve: Unknown model '" + steveConfig.model() + "' or missing API key");
