@@ -401,6 +401,7 @@ All persistent data is stored in PostgreSQL:
 - **warps** - Named warp locations
 - **world_spawns** - Per-world spawn points
 - **rtp_cooldowns** - Random teleport cooldown tracking
+- **steve_cooldowns** - Steve AI chatbot cooldown tracking
 - **player_settings** - Per-player settings (keep inventory, display time, easy mode)
 - **player_resource_packs** - Player resource pack preferences
 - **nicknames** - Player display name customizations
