@@ -8,6 +8,7 @@ import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.World;
 import org.bukkit.block.Biome;
+import org.bukkit.Tag;
 import org.bukkit.block.Block;
 import org.bukkit.event.player.PlayerQuitEvent;
 import sh.joey.mc.SiqiJoeyPlugin;
@@ -143,18 +144,22 @@ public final class RtpManager implements Disposable {
                                 int z = coords[1];
                                 int dist = coords[2];
 
-                                // Check biome
-                                Location tempLoc = new Location(world, x + 0.5, 64, z + 0.5);
-                                Biome biome = world.getBiome(tempLoc);
+                                // Find surface Y, avoiding leaves and other undesirable blocks
+                                int y = findSafeGroundY(world, x, z);
+                                if (y < 0) {
+                                    emitter.onComplete(); // No safe ground found
+                                    return;
+                                }
+
+                                Location location = new Location(world, x + 0.5, y + 1, z + 0.5);
+
+                                // Check biome at actual surface level (not underground)
+                                Biome biome = world.getBiome(location);
 
                                 if (isBiomeBlacklisted(biome)) {
                                     emitter.onComplete(); // Skip this candidate
                                     return;
                                 }
-
-                                // Find surface Y
-                                int y = world.getHighestBlockYAt(x, z);
-                                Location location = new Location(world, x + 0.5, y + 1, z + 0.5);
 
                                 // Safety checks
                                 if (!isSafeLocation(location)) {
@@ -195,6 +200,60 @@ public final class RtpManager implements Disposable {
 
     private boolean isBiomeBlacklisted(Biome biome) {
         return BLACKLISTED_BIOMES.contains(biome);
+    }
+
+    /**
+     * Find a safe ground Y level, avoiding leaves and other undesirable landing spots.
+     * Returns -1 if no safe ground is found.
+     */
+    private int findSafeGroundY(World world, int x, int z) {
+        int highestY = world.getHighestBlockYAt(x, z);
+
+        // Search downward from highest block to find solid non-leaf ground
+        for (int y = highestY; y >= world.getMinHeight() + 5; y--) {
+            Block block = world.getBlockAt(x, y, z);
+            Material type = block.getType();
+
+            // Skip air and passable blocks
+            if (block.isPassable()) {
+                continue;
+            }
+
+            // Skip leaves - we don't want to land on trees
+            if (Tag.LEAVES.isTagged(type)) {
+                continue;
+            }
+
+            // Skip other undesirable landing blocks
+            if (isUndesirableLanding(type)) {
+                continue;
+            }
+
+            // Found solid ground - check if there's space above
+            Block above = block.getRelative(0, 1, 0);
+            Block aboveHead = block.getRelative(0, 2, 0);
+            if (above.isPassable() && aboveHead.isPassable()) {
+                return y;
+            }
+        }
+
+        return -1; // No safe ground found
+    }
+
+    /**
+     * Check if a material is an undesirable landing spot.
+     */
+    private boolean isUndesirableLanding(Material type) {
+        return type == Material.CACTUS
+                || type == Material.SWEET_BERRY_BUSH
+                || type == Material.POWDER_SNOW
+                || type == Material.MAGMA_BLOCK
+                || type == Material.CAMPFIRE
+                || type == Material.SOUL_CAMPFIRE
+                || type == Material.POINTED_DRIPSTONE
+                || type == Material.SCAFFOLDING
+                || Tag.FENCES.isTagged(type)
+                || Tag.FENCE_GATES.isTagged(type);
     }
 
     private boolean isSafeLocation(Location location) {
