@@ -56,9 +56,9 @@ public final class SettingsManager implements Disposable {
         // Load all settings into cache on startup (blocking)
         loadCacheBlocking();
 
-        // Player join - ensure in cache
+        // Player join - load settings from database into cache
         disposables.add(plugin.watchEvent(PlayerJoinEvent.class)
-                .subscribe(event -> ensureInCache(event.getPlayer().getUniqueId())));
+                .subscribe(event -> loadPlayerSettings(event.getPlayer().getUniqueId())));
 
         // Player quit - remove from cache
         disposables.add(plugin.watchEvent(PlayerQuitEvent.class)
@@ -99,10 +99,17 @@ public final class SettingsManager implements Disposable {
         }
     }
 
-    private void ensureInCache(UUID playerId) {
-        if (!cache.containsKey(playerId)) {
-            cache.put(playerId, PlayerSettings.DEFAULTS);
-        }
+    private void loadPlayerSettings(UUID playerId) {
+        // Load from database, falling back to defaults if not found
+        storage.getSettings(playerId)
+                .defaultIfEmpty(PlayerSettings.DEFAULTS)
+                .subscribe(
+                        settings -> cache.put(playerId, settings),
+                        err -> {
+                            logger.warning("[Settings] Failed to load settings for " + playerId + ": " + err.getMessage());
+                            cache.put(playerId, PlayerSettings.DEFAULTS);
+                        }
+                );
     }
 
     private void handleDeath(PlayerDeathEvent event) {
