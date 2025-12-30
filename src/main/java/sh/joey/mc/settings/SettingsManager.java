@@ -9,6 +9,7 @@ import org.bukkit.Particle;
 import org.bukkit.Sound;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
+import org.bukkit.entity.Projectile;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.PlayerDeathEvent;
@@ -70,7 +71,7 @@ public final class SettingsManager implements Disposable {
         // Easy mode - damage reduction (mobs dealing damage to players)
         disposables.add(plugin.watchEvent(EntityDamageByEntityEvent.class)
                 .filter(e -> e.getEntity() instanceof Player)
-                .filter(e -> !(e.getDamager() instanceof Player))  // Mobs only, not PvP
+                .filter(e -> !isPlayerSourcedDamage(e))  // Mobs only, not PvP
                 .subscribe(this::handleIncomingDamage));
 
         // Easy mode - insta-kill chance (player dealing damage to mobs)
@@ -108,6 +109,22 @@ public final class SettingsManager implements Disposable {
             event.getDrops().clear();
             event.setDroppedExp(0);
         }
+    }
+
+    private boolean isPlayerSourcedDamage(EntityDamageByEntityEvent event) {
+        var damager = event.getDamager();
+
+        // Direct player damage
+        if (damager instanceof Player) {
+            return true;
+        }
+
+        // Projectile shot by a player (arrows, tridents, etc.)
+        if (damager instanceof Projectile projectile) {
+            return projectile.getShooter() instanceof Player;
+        }
+
+        return false;
     }
 
     private void handleIncomingDamage(EntityDamageByEntityEvent event) {
