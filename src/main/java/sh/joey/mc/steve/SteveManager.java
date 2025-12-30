@@ -18,6 +18,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 
 /**
@@ -91,9 +92,9 @@ public final class SteveManager implements Disposable {
         // Set cooldown
         cooldowns.put(playerId, Instant.now());
 
-        // Send private thinking message to just the asker
-        plugin.getServer().getScheduler().runTask(plugin, () ->
-                sendThinking(player));
+        // Send private thinking message after a short delay (so it appears after the chat message)
+        plugin.timer(500, TimeUnit.MILLISECONDS)
+                .subscribe(tick -> sendThinking(player));
 
         // Call API
         apiService.ask(question)

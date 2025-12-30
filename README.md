@@ -152,6 +152,30 @@ Per-player gameplay customization:
 - **Easy Mode** includes fun effects: heart particles, level-up sound, and action bar messages like "Critical hit!" and "One-shot!"
 - Easy Mode only affects mob combat - PvP damage is unchanged
 
+### Steve - AI Minecraft Expert
+An AI chatbot powered by Claude that answers Minecraft questions:
+- Mention `@Steve` anywhere in chat to ask a question
+- Steve searches the Minecraft Wiki for accurate, up-to-date answers
+- Responses appear in chat like a regular player message
+- Clickable source links let you read more on the wiki
+- Shows cost per query (typically 1-3¢)
+
+**Example:**
+```
+Joey: Hey @Steve, how do I find pandas?
+Steve: thinking...
+Steve: Pandas spawn in jungle biomes on grass blocks with 2+ blocks of space above them, more common in bamboo jungles. ([1] [2] | 1.2¢)
+```
+
+**Configuration** in `config.yml`:
+```yaml
+steve:
+  enabled: true
+  api-key: "sk-ant-..."  # Your Anthropic API key
+  cooldown-seconds: 30    # Per-player cooldown
+  max-searches: 3         # Web searches per question
+```
+
 ### Resource Pack System
 - `/resourcepack` - List available resource packs
 - `/resourcepack select <pack>` - Apply a resource pack (alias: `/rp`)
@@ -273,6 +297,7 @@ All commands use the `smp.` permission prefix. Key permissions:
 | `smp.settings.keepinventory` | Toggle keep inventory on death | op |
 | `smp.settings.displaytime` | Configure time display in boss bar | everyone |
 | `smp.settings.easymode` | Enable easy mode (reduced damage, insta-kills) | op |
+| `smp.steve` | Ask Steve questions in chat | everyone |
 | `smp.suicide` | Kill yourself to respawn | everyone |
 | `smp.remove` | Remove entities | op |
 | `smp.seed` | View world seed | op |
@@ -301,6 +326,7 @@ All commands use the `smp.` permission prefix. Key permissions:
 ### Optional Dependencies
 - **[BlueMap](https://bluemap.bluecolored.de/)** - Enables `/map` command and player markers
 - **[FastAsyncWorldEdit](https://www.spigotmc.org/resources/fast-async-worldedit.13932/) or WorldEdit** - Enables `//undo` for statues
+- **[Anthropic API Key](https://console.anthropic.com/)** - Enables Steve AI chatbot (costs ~1-3¢ per query)
 
 ## Building
 
