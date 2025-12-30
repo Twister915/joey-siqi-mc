@@ -190,15 +190,16 @@ public final class AnthropicSteveProvider implements SteveModelProvider {
                 String type = block.get("type").getAsString();
 
                 if ("text".equals(type)) {
-                    String blockText = block.get("text").getAsString();
+                    String blockText = block.has("text") ? block.get("text").getAsString() : "";
                     text.append(blockText);
 
                     // Extract citations from text block
-                    if (block.has("citations")) {
+                    if (block.has("citations") && block.get("citations").isJsonArray()) {
                         JsonArray citationsArr = block.getAsJsonArray("citations");
                         for (JsonElement citeEl : citationsArr) {
+                            if (!citeEl.isJsonObject()) continue;
                             JsonObject cite = citeEl.getAsJsonObject();
-                            if ("web_search_result_location".equals(cite.get("type").getAsString())) {
+                            if (cite.has("type") && "web_search_result_location".equals(cite.get("type").getAsString())) {
                                 String title = cite.has("title") ? cite.get("title").getAsString() : "Source";
                                 String url = cite.has("url") ? cite.get("url").getAsString() : "";
                                 if (!url.isEmpty()) {
@@ -209,11 +210,12 @@ public final class AnthropicSteveProvider implements SteveModelProvider {
                     }
                 } else if ("web_search_tool_result".equals(type)) {
                     // Extract URLs from search results
-                    if (block.has("content")) {
+                    if (block.has("content") && block.get("content").isJsonArray()) {
                         JsonArray searchContent = block.getAsJsonArray("content");
                         for (JsonElement searchEl : searchContent) {
+                            if (!searchEl.isJsonObject()) continue;
                             JsonObject searchResult = searchEl.getAsJsonObject();
-                            if ("web_search_result".equals(searchResult.get("type").getAsString())) {
+                            if (searchResult.has("type") && "web_search_result".equals(searchResult.get("type").getAsString())) {
                                 String title = searchResult.has("title") ? searchResult.get("title").getAsString() : "Source";
                                 String url = searchResult.has("url") ? searchResult.get("url").getAsString() : "";
                                 if (!url.isEmpty()) {
