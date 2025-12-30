@@ -108,10 +108,9 @@ public final class SteveApiService {
         webSearchTool.addProperty("name", "web_search");
         webSearchTool.addProperty("max_uses", config.maxSearches());
 
-        // Allowed domains
+        // Allowed domains (YouTube blocks Anthropic's crawler)
         JsonArray allowedDomains = new JsonArray();
         allowedDomains.add("minecraft.wiki");
-        allowedDomains.add("youtube.com");
         webSearchTool.add("allowed_domains", allowedDomains);
 
         tools.add(webSearchTool);
