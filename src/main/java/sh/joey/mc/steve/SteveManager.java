@@ -190,9 +190,13 @@ public final class SteveManager implements Disposable {
                 .append(Component.text(timeFormatted).color(NamedTextColor.WHITE));
 
         // Build the message: "Steve: <answer> (sources: [1] [2] ...)"
-        Component message = Component.text("Steve")
+        // Use Component.empty() as base to prevent hover from propagating
+        Component steveName = Component.text("Steve")
                 .color(displayManager.getDefaultNameColor())
-                .hoverEvent(HoverEvent.showText(hoverText))
+                .hoverEvent(HoverEvent.showText(hoverText));
+
+        Component message = Component.empty()
+                .append(steveName)
                 .append(Component.text(": ").color(NamedTextColor.DARK_GRAY))
                 .append(Component.text(response.text()).color(NamedTextColor.WHITE));
 
