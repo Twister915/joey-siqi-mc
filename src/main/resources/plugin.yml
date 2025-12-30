@@ -226,6 +226,7 @@ permissions:
       smp.settings.displaytime: true
       smp.settings.easymode: true
       smp.steve: true
+      smp.steve.admin: true
 
   smp.tp:
     description: Send teleport requests to other players
@@ -452,3 +453,6 @@ permissions:
   smp.steve:
     description: Ask Steve questions in chat (@Steve)
     default: false
+  smp.steve.admin:
+    description: View Steve AI status (/steve)
+    default: op

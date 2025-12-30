@@ -169,12 +169,20 @@ public final class LmStudioSteveProvider implements SteveModelProvider {
                 }
             }
 
+            // Strip <think>...</think> tags (reasoning models like DeepSeek)
+            text = stripThinkTags(text);
+
             if (text.isEmpty()) {
                 text = "I couldn't generate a response. Please try again.";
             }
 
             // No citations or cost for local models
             return new SteveAnswer(text, List.of(), 0.0);
+        }
+
+        private static String stripThinkTags(String text) {
+            // Remove <think>...</think> blocks (including multiline)
+            return text.replaceAll("(?s)<think>.*?</think>", "").trim();
         }
 
         private static String truncate(String text, int maxLength) {
