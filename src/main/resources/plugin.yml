@@ -218,6 +218,7 @@ permissions:
       smp.settings.keepinventory: true
       smp.settings.displaytime: true
       smp.settings.easymode: true
+      smp.steve: true
 
   smp.tp:
     description: Send teleport requests to other players
@@ -436,3 +437,7 @@ permissions:
   smp.settings.easymode:
     description: Enable easy mode (reduced damage, insta-kills)
     default: op
+
+  smp.steve:
+    description: Ask Steve questions in chat (@Steve)
+    default: true

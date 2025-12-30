@@ -65,6 +65,18 @@ adminmode:
   # Examples: worldedit.*, worldguard.*, smp.tp.instant
   permissions: []
 
+# Steve AI chatbot - Minecraft expert powered by Claude
+# Mention @Steve in chat to ask questions about Minecraft
+steve:
+  # Enable/disable Steve
+  enabled: true
+  # Anthropic API key (required - get one at console.anthropic.com)
+  api-key: ""
+  # Cooldown between questions per player (seconds)
+  cooldown-seconds: 30
+  # Maximum web searches per question (affects cost)
+  max-searches: 3
+
 # Multi-world configuration
 # Worlds listed here will be created/loaded on startup
 # Default Minecraft worlds (world, world_nether, world_the_end) use "default" inventory group

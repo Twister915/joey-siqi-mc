@@ -139,6 +139,9 @@ import sh.joey.mc.pregen.PregenBossBarProvider;
 import sh.joey.mc.pregen.PregenCommand;
 import sh.joey.mc.pregen.PregenConfig;
 import sh.joey.mc.pregen.PregenManager;
+import sh.joey.mc.steve.SteveApiService;
+import sh.joey.mc.steve.SteveConfig;
+import sh.joey.mc.steve.SteveManager;
 
 @SuppressWarnings("unused")
 public final class SiqiJoeyPlugin extends JavaPlugin {
@@ -445,6 +448,17 @@ public final class SiqiJoeyPlugin extends JavaPlugin {
         components.add(whitelistEnforcer);
         components.add(CmdExecutor.register(this, new InviteCommand(this, whitelistStorage, playerResolver)));
         components.add(CmdExecutor.register(this, new WhitelistCommand(this, whitelistStorage, playerResolver)));
+
+        // Steve AI chatbot (Minecraft expert powered by Claude)
+        var steveConfig = SteveConfig.load(this);
+        if (steveConfig.enabled() && !steveConfig.apiKey().isEmpty()) {
+            var steveApi = new SteveApiService(steveConfig, getLogger());
+            var steveManager = new SteveManager(this, steveConfig, steveApi);
+            components.add(steveManager);
+            getLogger().info("Steve AI chatbot enabled");
+        } else if (steveConfig.enabled()) {
+            getLogger().info("Steve AI chatbot disabled (no API key configured)");
+        }
 
         getLogger().info("Plugin enabled!");
     }
