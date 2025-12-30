@@ -110,16 +110,22 @@ public final class PregenManager implements Disposable {
                     }
                 }));
 
-        // Watch for player quits - resume if server empty
+        // Watch for player quits - resume if server empty, or exit forced mode
         disposables.add(plugin.watchEvent(PlayerQuitEvent.class)
                 .subscribe(event -> {
                     // Check after a short delay (player hasn't fully left yet)
                     disposables.add(plugin.timer(1, TimeUnit.SECONDS)
                             .subscribe(tick -> {
-                                if (state == State.WAITING && Bukkit.getOnlinePlayers().isEmpty()) {
-                                    logger.info("[Pregen] Server empty, resuming generation");
-                                    state = State.RUNNING;
-                                    startTicking();
+                                if (Bukkit.getOnlinePlayers().isEmpty()) {
+                                    if (state == State.WAITING) {
+                                        logger.info("[Pregen] Server empty, resuming generation");
+                                        state = State.RUNNING;
+                                        startTicking();
+                                    } else if (state == State.RUNNING && forcedMode) {
+                                        // Server empty while in forced mode - switch back to normal speed
+                                        forcedMode = false;
+                                        logger.info("[Pregen] Server empty, switching from SLOW to " + config.rate() + " speed");
+                                    }
                                 }
                             }));
                 }));

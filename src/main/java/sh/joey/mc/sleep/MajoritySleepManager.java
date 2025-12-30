@@ -53,9 +53,9 @@ public final class MajoritySleepManager implements Disposable {
         disposables.add(plugin.watchEvent(PlayerBedLeaveEvent.class)
                 .subscribe(this::handleBedLeave));
 
-        // Clean up when player quits
+        // Clean up when player quits and recheck threshold
         disposables.add(plugin.watchEvent(PlayerQuitEvent.class)
-                .subscribe(event -> removeSleepingPlayer(event.getPlayer())));
+                .subscribe(event -> handlePlayerQuit(event.getPlayer())));
 
         // Clean up when world unloads
         disposables.add(plugin.watchEvent(WorldUnloadEvent.class)
@@ -147,15 +147,19 @@ public final class MajoritySleepManager implements Disposable {
         updateThresholdState(world);
     }
 
-    private void removeSleepingPlayer(Player player) {
+    private void handlePlayerQuit(Player player) {
         UUID playerId = player.getUniqueId();
-        for (Map.Entry<UUID, Set<UUID>> entry : sleepingByWorld.entrySet()) {
-            if (entry.getValue().remove(playerId)) {
-                World world = plugin.getServer().getWorld(entry.getKey());
-                if (world != null) {
-                    updateThresholdState(world);
-                }
-            }
+        World playerWorld = player.getWorld();
+
+        // Remove from sleeping set if they were sleeping
+        for (Set<UUID> sleeping : sleepingByWorld.values()) {
+            sleeping.remove(playerId);
+        }
+
+        // Always recheck threshold for the player's world
+        // (even if they weren't sleeping, the eligible count changed)
+        if (playerWorld.getEnvironment() == World.Environment.NORMAL) {
+            updateThresholdState(playerWorld);
         }
     }
 
