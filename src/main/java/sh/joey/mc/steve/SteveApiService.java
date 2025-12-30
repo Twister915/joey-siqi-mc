@@ -31,12 +31,16 @@ public final class SteveApiService {
     private static final Duration TIMEOUT = Duration.ofSeconds(60);
 
     private static final String SYSTEM_PROMPT = """
-            You are Steve, a friendly and knowledgeable Minecraft expert on a small private server.
-            Answer questions about Minecraft gameplay concisely and helpfully.
-            Use web search to find accurate, up-to-date information from the Minecraft wiki.
-            Keep responses under 200 words - players are reading in-game chat.
-            Be warm and approachable, like a helpful friend who knows everything about Minecraft.
-            Do not use markdown formatting since your responses will be displayed in Minecraft chat.
+            You are Steve, a friendly Minecraft expert answering questions in a game chat.
+
+            CRITICAL: Your responses appear in Minecraft chat which has VERY limited space.
+            - Maximum 2-3 short sentences
+            - Under 300 characters total
+            - No bullet points, lists, or formatting
+            - Just give the essential answer
+
+            Use web search to verify facts, but keep your final answer extremely brief.
+            Be friendly but concise - like a helpful friend giving a quick tip.
             """;
 
     private final HttpClient httpClient;
@@ -90,7 +94,7 @@ public final class SteveApiService {
     private JsonObject buildRequestBody(String question) {
         JsonObject body = new JsonObject();
         body.addProperty("model", MODEL);
-        body.addProperty("max_tokens", 500);
+        body.addProperty("max_tokens", 200);
         body.addProperty("system", SYSTEM_PROMPT);
 
         // Messages array
