@@ -22,6 +22,7 @@ public final class SettingsCommand implements Command {
     private static final String PERM_KEEP_INVENTORY = "smp.settings.keepinventory";
     private static final String PERM_DISPLAY_TIME = "smp.settings.displaytime";
     private static final String PERM_EASY_MODE = "smp.settings.easymode";
+    private static final String PERM_PASSIVE_MODE = "smp.settings.passivemode";
 
     private final SettingsManager manager;
 
@@ -101,6 +102,16 @@ public final class SettingsCommand implements Command {
                 Messages.success(player, "Easy Mode " + (enabled ? "enabled" : "disabled") + ".");
                 showSettings(player);
             }
+            case "passivemode" -> {
+                if (!player.hasPermission(PERM_PASSIVE_MODE)) {
+                    Messages.error(player, "You don't have permission to change this setting.");
+                    return;
+                }
+                boolean enabled = value.equals("on");
+                manager.setPassiveMode(player.getUniqueId(), enabled);
+                Messages.success(player, "Passive Mode " + (enabled ? "enabled" : "disabled") + ".");
+                showSettings(player);
+            }
             default -> Messages.error(player, "Unknown setting.");
         }
     }
@@ -111,8 +122,9 @@ public final class SettingsCommand implements Command {
         boolean hasKeepInventory = player.hasPermission(PERM_KEEP_INVENTORY);
         boolean hasDisplayTime = player.hasPermission(PERM_DISPLAY_TIME);
         boolean hasEasyMode = player.hasPermission(PERM_EASY_MODE);
+        boolean hasPassiveMode = player.hasPermission(PERM_PASSIVE_MODE);
 
-        if (!hasKeepInventory && !hasDisplayTime && !hasEasyMode) {
+        if (!hasKeepInventory && !hasDisplayTime && !hasEasyMode && !hasPassiveMode) {
             Messages.error(player, "You don't have access to any settings.");
             return;
         }
@@ -165,6 +177,19 @@ public final class SettingsCommand implements Command {
                     .append(Component.text(" ", NamedTextColor.DARK_GRAY))
                     .append(offButton));
             player.sendMessage(Component.text("    Mobs deal 25% damage + 5% insta-kill chance", NamedTextColor.DARK_GRAY));
+            player.sendMessage(Component.empty());
+        }
+
+        // Passive Mode
+        if (hasPassiveMode) {
+            Component onButton = createToggleButton("On", settings.passiveMode(), "/settings passivemode on");
+            Component offButton = createToggleButton("Off", !settings.passiveMode(), "/settings passivemode off");
+
+            player.sendMessage(Component.text("  Passive Mode: ", NamedTextColor.GRAY)
+                    .append(onButton)
+                    .append(Component.text(" ", NamedTextColor.DARK_GRAY))
+                    .append(offButton));
+            player.sendMessage(Component.text("    Disable PvP - you can't hurt or be hurt by players", NamedTextColor.DARK_GRAY));
         }
     }
 
@@ -199,6 +224,9 @@ public final class SettingsCommand implements Command {
                 if (player.hasPermission(PERM_EASY_MODE) && "easymode".startsWith(prefix)) {
                     options.add("easymode");
                 }
+                if (player.hasPermission(PERM_PASSIVE_MODE) && "passivemode".startsWith(prefix)) {
+                    options.add("passivemode");
+                }
 
                 return Maybe.just(options.stream()
                         .map(Completion::completion)
@@ -210,7 +238,7 @@ public final class SettingsCommand implements Command {
                 String prefix = args[1].toLowerCase();
 
                 List<String> options = switch (setting) {
-                    case "keepinventory", "easymode" -> List.of("on", "off");
+                    case "keepinventory", "easymode", "passivemode" -> List.of("on", "off");
                     case "displaytime" -> List.of("always", "clock", "never");
                     default -> List.of();
                 };

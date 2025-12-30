@@ -81,6 +81,12 @@ public final class SettingsManager implements Disposable {
                 .filter(e -> !(e.getEntity() instanceof Player))  // Don't insta-kill players
                 .subscribe(this::handleOutgoingDamage));
 
+        // Passive mode - cancel PvP damage if either player has passive mode
+        disposables.add(plugin.watchEvent(EntityDamageByEntityEvent.class)
+                .filter(e -> e.getEntity() instanceof Player)
+                .filter(this::isPlayerSourcedDamage)
+                .subscribe(this::handlePvpDamage));
+
         logger.info("[Settings] Initialized with " + cache.size() + " cached settings");
     }
 
@@ -164,6 +170,41 @@ public final class SettingsManager implements Disposable {
         }
     }
 
+    private void handlePvpDamage(EntityDamageByEntityEvent event) {
+        Player victim = (Player) event.getEntity();
+        Player attacker = getAttackingPlayer(event);
+
+        if (attacker == null) {
+            return;
+        }
+
+        PlayerSettings victimSettings = getSettings(victim.getUniqueId());
+        PlayerSettings attackerSettings = getSettings(attacker.getUniqueId());
+
+        // Cancel damage if either player has passive mode enabled
+        if (victimSettings.passiveMode() || attackerSettings.passiveMode()) {
+            event.setCancelled(true);
+        }
+    }
+
+    /**
+     * Gets the attacking player from a damage event.
+     * Handles both direct attacks and projectile attacks (arrows, tridents, etc).
+     */
+    private Player getAttackingPlayer(EntityDamageByEntityEvent event) {
+        var damager = event.getDamager();
+
+        if (damager instanceof Player player) {
+            return player;
+        }
+
+        if (damager instanceof Projectile projectile && projectile.getShooter() instanceof Player player) {
+            return player;
+        }
+
+        return null;
+    }
+
     // === Public API ===
 
     /**
@@ -212,6 +253,22 @@ public final class SettingsManager implements Disposable {
     public void setEasyMode(UUID playerId, boolean enabled) {
         PlayerSettings current = getSettings(playerId);
         PlayerSettings updated = current.withEasyMode(enabled);
+        cache.put(playerId, updated);
+
+        // Persist async
+        storage.saveSettings(playerId, updated)
+                .subscribe(
+                        () -> {},
+                        err -> logger.warning("[Settings] Failed to save settings for " + playerId + ": " + err.getMessage())
+                );
+    }
+
+    /**
+     * Sets the passive mode setting for a player.
+     */
+    public void setPassiveMode(UUID playerId, boolean enabled) {
+        PlayerSettings current = getSettings(playerId);
+        PlayerSettings updated = current.withPassiveMode(enabled);
         cache.put(playerId, updated);
 
         // Persist async
