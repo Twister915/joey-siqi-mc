@@ -197,12 +197,82 @@ public final class HomeCommand implements Command {
                 return Completable.complete();
             }
 
-            Home home = new Home(name, player.getUniqueId(), player.getLocation());
-            return storage.setHome(player.getUniqueId(), home)
+            UUID playerId = player.getUniqueId();
+            Location location = player.getLocation();
+
+            // Check if home already exists
+            return storage.getHome(playerId, name)
+                    .filter(existing -> existing.isOwnedBy(playerId))
                     .observeOn(plugin.mainScheduler())
-                    .doOnComplete(() -> success(player, "Home '" + name + "' has been set!"))
+                    .doOnSuccess(existing -> requestOverwriteConfirmation(player, name, location))
+                    .switchIfEmpty(Maybe.defer(() -> {
+                        // No existing home - set it directly
+                        return setHomeDirectly(player, name, location).toMaybe();
+                    }))
                     .doOnError(err -> logAndError(player, "Failed to set home", err))
-                    .onErrorComplete();
+                    .onErrorComplete()
+                    .ignoreElement();
+        });
+    }
+
+    private Completable setHomeDirectly(Player player, String name, Location location) {
+        Home home = new Home(name, player.getUniqueId(), location);
+        return storage.setHome(player.getUniqueId(), home)
+                .observeOn(plugin.mainScheduler())
+                .doOnComplete(() -> success(player, "Home '" + name + "' has been set!"))
+                .doOnError(err -> logAndError(player, "Failed to set home", err))
+                .onErrorComplete();
+    }
+
+    private void requestOverwriteConfirmation(Player player, String name, Location newLocation) {
+        UUID playerId = player.getUniqueId();
+
+        confirmationManager.request(player, new ConfirmationRequest() {
+            @Override
+            public Component prefix() {
+                return PREFIX;
+            }
+
+            @Override
+            public String promptText() {
+                return "Home '" + name + "' already exists. Overwrite it?";
+            }
+
+            @Override
+            public String acceptText() {
+                return "Overwrite";
+            }
+
+            @Override
+            public String declineText() {
+                return "Cancel";
+            }
+
+            @Override
+            public void onAccept() {
+                Home home = new Home(name, playerId, newLocation);
+                storage.setHome(playerId, home)
+                        .observeOn(plugin.mainScheduler())
+                        .subscribe(
+                                () -> success(player, "Home '" + name + "' has been updated!"),
+                                err -> logAndError(player, "Failed to set home", err)
+                        );
+            }
+
+            @Override
+            public void onDecline() {
+                info(player, "Home not updated.");
+            }
+
+            @Override
+            public void onTimeout() {
+                info(player, "Overwrite confirmation expired.");
+            }
+
+            @Override
+            public int timeoutSeconds() {
+                return CONFIRM_TIMEOUT_SECONDS;
+            }
         });
     }
 
