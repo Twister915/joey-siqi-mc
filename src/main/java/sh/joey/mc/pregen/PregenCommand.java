@@ -12,6 +12,8 @@ import sh.joey.mc.cmd.Command;
 import java.util.List;
 import java.util.Map;
 
+import static sh.joey.mc.pregen.Messages.formatBytes;
+
 /**
  * Admin command for controlling chunk pre-generation.
  * Usage: /pregen [status|start|stop|pause]
@@ -122,6 +124,27 @@ public final class PregenCommand implements Command {
         sender.sendMessage(Component.text("Area: ").color(NamedTextColor.GRAY)
                 .append(Component.text(String.format("%,d x %,d blocks (%,d chunks/world)",
                                 config.sideLength(), config.sideLength(), config.totalChunks()))
+                        .color(NamedTextColor.DARK_GRAY)));
+
+        // Estimated map size (average ~8KB per chunk for overworld terrain)
+        long bytesPerChunk = 8 * 1024;
+        int worldCount = Math.max(1, progress.size());
+        long totalChunksAllWorlds = config.totalChunks() * worldCount;
+        long projectedTotalBytes = totalChunksAllWorlds * bytesPerChunk;
+
+        long generatedChunksAllWorlds = progress.values().stream()
+                .mapToLong(PregenManager.WorldProgress::generatedChunks)
+                .sum();
+        long generatedBytes = generatedChunksAllWorlds * bytesPerChunk;
+
+        sender.sendMessage(Component.text("Est. Size: ").color(NamedTextColor.GRAY)
+                .append(Component.text(formatBytes(generatedBytes))
+                        .color(NamedTextColor.WHITE))
+                .append(Component.text(" / ")
+                        .color(NamedTextColor.DARK_GRAY))
+                .append(Component.text(formatBytes(projectedTotalBytes))
+                        .color(NamedTextColor.WHITE))
+                .append(Component.text(" (~8KB/chunk)")
                         .color(NamedTextColor.DARK_GRAY)));
 
         sender.sendMessage(Component.empty());
