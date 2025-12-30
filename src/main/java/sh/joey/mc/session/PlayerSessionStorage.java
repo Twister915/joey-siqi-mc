@@ -441,4 +441,74 @@ public final class PlayerSessionStorage {
             }
         });
     }
+
+    /**
+     * Get top players by online time within a time range.
+     * Calculates online time for sessions that overlap with the range [since, now].
+     *
+     * @param since start of the time range
+     * @param limit maximum number of results
+     * @return list of player entries ordered by online time descending
+     */
+    public Flowable<TopOnlineTimeEntry> getTopOnlineTime(Instant since, int limit) {
+        return storage.queryFlowable(conn -> {
+            // Calculate online time for sessions that overlap with [since, now]
+            // For each session, we count the time that falls within the range:
+            // - Start of overlap: MAX(connected_at, since)
+            // - End of overlap: COALESCE(disconnected_at, last_seen_at) (capped at now)
+            String sql = """
+                SELECT
+                    ps.player_id,
+                    pn.username,
+                    SUM(
+                        EXTRACT(EPOCH FROM (
+                            LEAST(COALESCE(ps.disconnected_at, ps.last_seen_at), NOW())
+                            - GREATEST(ps.connected_at, ?)
+                        ))
+                    )::bigint AS seconds
+                FROM player_sessions ps
+                LEFT JOIN player_names pn ON ps.player_id = pn.player_id
+                WHERE ps.connected_at < NOW()
+                  AND COALESCE(ps.disconnected_at, ps.last_seen_at) > ?
+                GROUP BY ps.player_id, pn.username
+                HAVING SUM(
+                    EXTRACT(EPOCH FROM (
+                        LEAST(COALESCE(ps.disconnected_at, ps.last_seen_at), NOW())
+                        - GREATEST(ps.connected_at, ?)
+                    ))
+                ) > 0
+                ORDER BY seconds DESC
+                LIMIT ?
+                """;
+
+            List<TopOnlineTimeEntry> entries = new ArrayList<>();
+            try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+                var sinceTs = java.sql.Timestamp.from(since);
+                stmt.setTimestamp(1, sinceTs);
+                stmt.setTimestamp(2, sinceTs);
+                stmt.setTimestamp(3, sinceTs);
+                stmt.setInt(4, limit);
+
+                try (ResultSet rs = stmt.executeQuery()) {
+                    while (rs.next()) {
+                        entries.add(new TopOnlineTimeEntry(
+                                rs.getObject("player_id", UUID.class),
+                                rs.getString("username"),
+                                rs.getLong("seconds")
+                        ));
+                    }
+                }
+            }
+            return entries;
+        });
+    }
+
+    /**
+     * Entry for top online time leaderboard.
+     *
+     * @param playerId the player's UUID
+     * @param username the player's current username (may be null if no player_names entry)
+     * @param seconds online time in seconds within the queried range
+     */
+    public record TopOnlineTimeEntry(UUID playerId, @Nullable String username, long seconds) {}
 }

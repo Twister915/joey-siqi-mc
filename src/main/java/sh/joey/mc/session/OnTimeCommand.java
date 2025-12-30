@@ -12,6 +12,7 @@ import org.bukkit.entity.Player;
 import sh.joey.mc.SiqiJoeyPlugin;
 import sh.joey.mc.cmd.Command;
 import sh.joey.mc.player.PlayerResolver;
+import sh.joey.mc.punish.DurationParser;
 import sh.joey.mc.util.DurationFormat;
 
 import java.time.Duration;
@@ -21,6 +22,13 @@ import java.util.UUID;
 
 /**
  * /ontime command - shows online time for self or another player.
+ * <p>
+ * Usage:
+ * <ul>
+ *   <li>/ontime - show own online time</li>
+ *   <li>/ontime &lt;player&gt; - show another player's online time</li>
+ *   <li>/ontime top [duration] - show top 5 players by online time (default: 7d)</li>
+ * </ul>
  */
 public final class OnTimeCommand implements Command {
 
@@ -28,6 +36,9 @@ public final class OnTimeCommand implements Command {
             .color(NamedTextColor.DARK_GRAY)
             .append(Component.text("⏱").color(NamedTextColor.GOLD))
             .append(Component.text("] ").color(NamedTextColor.DARK_GRAY));
+
+    private static final Duration DEFAULT_TOP_DURATION = Duration.ofDays(7);
+    private static final int TOP_LIMIT = 5;
 
     private final SiqiJoeyPlugin plugin;
     private final PlayerSessionStorage storage;
@@ -57,10 +68,12 @@ public final class OnTimeCommand implements Command {
         return Completable.defer(() -> {
             if (args.length == 0) {
                 if (!(sender instanceof Player player)) {
-                    sender.sendMessage("Usage: /ontime <player>");
+                    sender.sendMessage("Usage: /ontime <player> or /ontime top [duration]");
                     return Completable.complete();
                 }
                 return showOwnTime(player);
+            } else if (args[0].equalsIgnoreCase("top")) {
+                return showTopPlayers(sender, args.length > 1 ? args[1] : null);
             } else {
                 return showOtherTime(sender, args[0]);
             }
@@ -70,19 +83,34 @@ public final class OnTimeCommand implements Command {
     @Override
     public Maybe<List<Completion>> tabComplete(SiqiJoeyPlugin plugin, CommandSender sender, String[] args) {
         return Maybe.defer(() -> {
-            if (args.length != 1) {
-                return Maybe.empty();
-            }
+            if (args.length == 1) {
+                String prefix = args[0].toLowerCase();
+                if (prefix.isEmpty()) {
+                    return Maybe.just(List.of(Completion.completion("top")));
+                }
 
-            String prefix = args[0].toLowerCase();
-            if (prefix.isEmpty()) {
-                return Maybe.empty();
+                // Include "top" in completions if it matches
+                return playerResolver.getCompletions(prefix, 10)
+                        .map(list -> {
+                            if ("top".startsWith(prefix)) {
+                                var withTop = new java.util.ArrayList<>(list);
+                                withTop.addFirst("top");
+                                return withTop.stream().map(Completion::completion).toList();
+                            }
+                            return list.stream().map(Completion::completion).toList();
+                        })
+                        .flatMapMaybe(list -> list.isEmpty() ? Maybe.empty() : Maybe.just(list));
+            } else if (args.length == 2 && args[0].equalsIgnoreCase("top")) {
+                // Suggest common durations
+                String prefix = args[1].toLowerCase();
+                List<String> suggestions = List.of("1d", "3d", "7d", "14d", "30d", "1h", "12h");
+                List<Completion> filtered = suggestions.stream()
+                        .filter(s -> s.startsWith(prefix))
+                        .map(Completion::completion)
+                        .toList();
+                return filtered.isEmpty() ? Maybe.empty() : Maybe.just(filtered);
             }
-
-            return playerResolver.getCompletions(prefix, 10)
-                    .flatMapMaybe(list -> list.isEmpty()
-                            ? Maybe.empty()
-                            : Maybe.just(list.stream().map(Completion::completion).toList()));
+            return Maybe.empty();
         });
     }
 
@@ -175,6 +203,65 @@ public final class OnTimeCommand implements Command {
         viewer.sendMessage(PREFIX.append(
                 Component.text("Lifetime: ").color(NamedTextColor.GRAY)
                         .append(Component.text(DurationFormat.formatShort(result.lifetimeSeconds)).color(NamedTextColor.GREEN))));
+    }
+
+    private Completable showTopPlayers(CommandSender viewer, String durationArg) {
+        Duration duration;
+        if (durationArg == null) {
+            duration = DEFAULT_TOP_DURATION;
+        } else {
+            var parsed = DurationParser.parse(durationArg);
+            if (parsed.isEmpty()) {
+                error(viewer, "Invalid duration. Examples: 1d, 7d, 2h30m");
+                return Completable.complete();
+            }
+            duration = parsed.get();
+        }
+
+        Instant since = Instant.now().minus(duration);
+        String durationStr = DurationParser.format(duration);
+
+        return storage.getTopOnlineTime(since, TOP_LIMIT)
+                .toList()
+                .observeOn(plugin.mainScheduler())
+                .doOnSuccess(entries -> displayTopPlayers(viewer, entries, durationStr))
+                .doOnError(err -> {
+                    plugin.getLogger().warning("Failed to get top online time: " + err.getMessage());
+                    error(viewer, "Failed to retrieve leaderboard.");
+                })
+                .onErrorComplete()
+                .ignoreElement();
+    }
+
+    private void displayTopPlayers(CommandSender viewer, List<PlayerSessionStorage.TopOnlineTimeEntry> entries, String duration) {
+        viewer.sendMessage(PREFIX.append(
+                Component.text("Top " + TOP_LIMIT + " Online Time (past " + duration + ")")
+                        .color(NamedTextColor.WHITE).decorate(TextDecoration.BOLD)));
+
+        if (entries.isEmpty()) {
+            viewer.sendMessage(PREFIX.append(
+                    Component.text("No players found in this time range.").color(NamedTextColor.GRAY)));
+            return;
+        }
+
+        for (int i = 0; i < entries.size(); i++) {
+            var entry = entries.get(i);
+            String name = entry.username() != null ? entry.username() : entry.playerId().toString().substring(0, 8);
+            String time = DurationFormat.formatShort(entry.seconds());
+
+            NamedTextColor rankColor = switch (i) {
+                case 0 -> NamedTextColor.GOLD;
+                case 1 -> NamedTextColor.GRAY;
+                case 2 -> NamedTextColor.YELLOW;
+                default -> NamedTextColor.WHITE;
+            };
+
+            viewer.sendMessage(PREFIX.append(
+                    Component.text((i + 1) + ". ").color(rankColor)
+                            .append(Component.text(name).color(NamedTextColor.WHITE))
+                            .append(Component.text(" - ").color(NamedTextColor.DARK_GRAY))
+                            .append(Component.text(time).color(NamedTextColor.GREEN))));
+        }
     }
 
     private void error(CommandSender sender, String message) {
