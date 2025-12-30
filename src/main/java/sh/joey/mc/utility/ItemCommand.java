@@ -81,7 +81,12 @@ public final class ItemCommand implements Command {
 
             Material material = materialOpt.get();
             ItemStack item = new ItemStack(material, amount);
-            player.getInventory().addItem(item);
+            var overflow = player.getInventory().addItem(item);
+
+            // Drop any items that didn't fit in inventory
+            for (ItemStack leftover : overflow.values()) {
+                player.getWorld().dropItem(player.getLocation(), leftover);
+            }
 
             String itemName = material.name().toLowerCase().replace("_", " ");
             sender.sendMessage(Component.text("Gave " + amount + "x " + itemName + ".")

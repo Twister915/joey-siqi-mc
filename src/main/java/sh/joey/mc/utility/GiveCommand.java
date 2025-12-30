@@ -96,7 +96,12 @@ public final class GiveCommand implements Command {
 
             Material material = materialOpt.get();
             ItemStack item = new ItemStack(material, amount);
-            target.getInventory().addItem(item);
+            var overflow = target.getInventory().addItem(item);
+
+            // Drop any items that didn't fit in inventory
+            for (ItemStack leftover : overflow.values()) {
+                target.getWorld().dropItem(target.getLocation(), leftover);
+            }
 
             String itemName = material.name().toLowerCase().replace("_", " ");
             sender.sendMessage(Component.text("Gave " + amount + "x " + itemName + " to " + target.getName() + ".")
