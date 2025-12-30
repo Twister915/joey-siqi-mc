@@ -1,5 +1,6 @@
 package sh.joey.mc.resourcepack;
 
+import io.reactivex.rxjava3.core.Completable;
 import io.reactivex.rxjava3.disposables.CompositeDisposable;
 import io.reactivex.rxjava3.disposables.Disposable;
 import net.kyori.adventure.text.Component;
@@ -48,7 +49,7 @@ public final class ResourcePackManager implements Disposable {
         disposables.add(plugin.watchEvent(PlayerResourcePackStatusEvent.class)
                 .subscribe(this::handlePackStatus));
 
-        // Send saved pack on join (with delay)
+        // Send saved pack on join (with delay, waiting for player to stop gliding)
         disposables.add(plugin.watchEvent(PlayerJoinEvent.class)
                 .flatMapCompletable(event -> {
                     Player player = event.getPlayer();
@@ -58,7 +59,7 @@ public final class ResourcePackManager implements Disposable {
                                     .flatMapCompletable(packId -> {
                                         // Player might have disconnected during delay
                                         if (!player.isOnline()) {
-                                            return io.reactivex.rxjava3.core.Completable.complete();
+                                            return Completable.complete();
                                         }
 
                                         ResourcePackEntry pack = config.get(packId);
@@ -70,9 +71,14 @@ public final class ResourcePackManager implements Disposable {
                                             return storage.clearPlayerPack(player.getUniqueId());
                                         }
 
-                                        // Send the pack (but don't track as pending since it's already saved)
-                                        sendPackInternal(player, pack, false);
-                                        return io.reactivex.rxjava3.core.Completable.complete();
+                                        // Wait for player to stop gliding before sending
+                                        return waitUntilNotGliding(player)
+                                                .observeOn(plugin.mainScheduler())
+                                                .doOnComplete(() -> {
+                                                    if (player.isOnline()) {
+                                                        sendPackInternal(player, pack, false);
+                                                    }
+                                                });
                                     })
                                     .onErrorComplete())
                             .onErrorComplete();
@@ -191,6 +197,22 @@ public final class ResourcePackManager implements Disposable {
 
     public static Component prefix() {
         return PREFIX;
+    }
+
+    /**
+     * Returns a Completable that completes when the player is no longer gliding.
+     * If the player is not gliding, completes immediately.
+     * If the player disconnects while waiting, completes immediately.
+     */
+    private Completable waitUntilNotGliding(Player player) {
+        if (!player.isGliding()) {
+            return Completable.complete();
+        }
+
+        // Poll every 500ms until player stops gliding or disconnects
+        return plugin.interval(500, TimeUnit.MILLISECONDS)
+                .takeUntil(tick -> !player.isOnline() || !player.isGliding())
+                .ignoreElements();
     }
 
     @Override
