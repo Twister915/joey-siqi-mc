@@ -135,6 +135,13 @@ public final class SteveManager implements Disposable {
                         response -> {
                             long elapsedMs = System.currentTimeMillis() - startTime;
                             broadcastResponse(response, currentModel.info(), elapsedMs);
+
+                            // Save to history
+                            storage.saveHistory(playerId, question, response, currentModel.info().displayName())
+                                    .subscribe(
+                                            () -> {},
+                                            err -> plugin.getLogger().warning("Failed to save Steve history: " + err.getMessage())
+                                    );
                         },
                         error -> {
                             plugin.getLogger().warning("Steve API error: " + error.getMessage());
@@ -262,6 +269,13 @@ public final class SteveManager implements Disposable {
      */
     public void setModel(SteveModel model) {
         this.model = model;
+    }
+
+    /**
+     * Gets the storage for history queries.
+     */
+    public SteveStorage getStorage() {
+        return storage;
     }
 
     private static String formatResponseTime(long ms) {
