@@ -138,6 +138,7 @@ import sh.joey.mc.rtp.RtpCommand;
 import sh.joey.mc.rtp.RtpConfig;
 import sh.joey.mc.rtp.RtpManager;
 import sh.joey.mc.rtp.RtpStorage;
+import sh.joey.mc.restart.AutoRestartManager;
 import sh.joey.mc.pregen.PregenBossBarProvider;
 import sh.joey.mc.pregen.PregenCommand;
 import sh.joey.mc.pregen.PregenConfig;
@@ -496,6 +497,9 @@ public final class SiqiJoeyPlugin extends JavaPlugin {
                 getLogger().warning("Steve: Unknown model '" + steveConfig.model() + "' or missing API key");
             }
         }
+
+        // Auto-restart (waits for server to be empty)
+        components.add(new AutoRestartManager(this));
 
         getLogger().info("Plugin enabled!");
     }
