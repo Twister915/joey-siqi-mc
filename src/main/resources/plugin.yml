@@ -102,6 +102,9 @@ commands:
   trails:
     description: Manage particle trail effects
     usage: /trails [elytra] [effect] [intensity]
+  pet:
+    description: Manage your companion pet
+    usage: /pet [spawn|despawn|sit|list] [type]
   nick:
     description: Set or clear your display name
     usage: /nick [name|clear] or /nick <player> [name|clear]
@@ -213,6 +216,7 @@ permissions:
       smp.trails.elytra: true
       smp.trails.ghast: true
       smp.trails.walk: true
+      smp.pet.hamster: true
       smp.nick: true
       smp.nick.others: true
       smp.whois: true
@@ -333,6 +337,10 @@ permissions:
 
   smp.trails.walk:
     description: Use walking particle trail effects
+    default: op
+
+  smp.pet.hamster:
+    description: Summon a hamster pet
     default: op
 
   smp.nick:

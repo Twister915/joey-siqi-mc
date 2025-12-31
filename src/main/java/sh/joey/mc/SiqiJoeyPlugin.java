@@ -96,6 +96,9 @@ import sh.joey.mc.resourcepack.ResourcePackCommand;
 import sh.joey.mc.trails.TrailStorage;
 import sh.joey.mc.trails.TrailManager;
 import sh.joey.mc.trails.TrailsCommand;
+import sh.joey.mc.pet.PetCommand;
+import sh.joey.mc.pet.PetManager;
+import sh.joey.mc.pet.PetStorage;
 import sh.joey.mc.multiworld.WorldAliasCommand;
 import sh.joey.mc.tablist.TablistProvider;
 import sh.joey.mc.bluemap.BlueMapIntegration;
@@ -431,6 +434,12 @@ public final class SiqiJoeyPlugin extends JavaPlugin {
         var trailManager = new TrailManager(this, trailStorage);
         components.add(trailManager);
         components.add(CmdExecutor.register(this, new TrailsCommand(this, trailManager)));
+
+        // Pet system (companion creatures)
+        var petStorage = new PetStorage(storageService);
+        var petManager = new PetManager(this, petStorage);
+        components.add(petManager);
+        components.add(CmdExecutor.register(this, new PetCommand(petManager)));
 
         // Anti-troll restrictions
         components.add(new AntiTrollManager(this));
