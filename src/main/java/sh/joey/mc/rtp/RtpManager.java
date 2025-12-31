@@ -280,12 +280,21 @@ public final class RtpManager implements Disposable {
             }
         }
 
-        // Safe landing (passable feet/head, solid ground)
+        // Safe landing (passable feet/head, solid ground, not underwater)
         Block feet = location.getBlock();
         Block head = feet.getRelative(0, 1, 0);
         Block ground = feet.getRelative(0, -1, 0);
 
-        return feet.isPassable() && head.isPassable() && ground.isSolid();
+        if (!feet.isPassable() || !head.isPassable() || !ground.isSolid()) {
+            return false;
+        }
+
+        // Reject underwater locations (water is passable but not safe)
+        if (feet.getType() == Material.WATER || head.getType() == Material.WATER) {
+            return false;
+        }
+
+        return true;
     }
 
     private String getCardinalDirection(double dx, double dz) {
