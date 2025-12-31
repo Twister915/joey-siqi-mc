@@ -217,7 +217,7 @@ public final class SteveCommand implements Command {
         // Add hover with full answer if truncated
         if (entry.answer().length() > 100) {
             answerLine = answerLine.hoverEvent(HoverEvent.showText(
-                    Component.text(truncate(entry.answer(), 256)).color(NamedTextColor.WHITE)));
+                    Component.text(entry.answer()).color(NamedTextColor.WHITE)));
         }
         items.add(PaginatedItem.wrapping(answerLine, "A: " + answerText));
 
