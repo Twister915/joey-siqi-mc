@@ -539,7 +539,7 @@ public final class GroupSubcommand {
 
     private Completable handleAttribute(CommandSender sender, String groupName, String attrType, String[] args) {
         if (args.length < 2) {
-            error(sender, "Usage: /perm group " + groupName + " " + attrType + " prefix|suffix <value>");
+            error(sender, "Usage: /perm group " + groupName + " " + attrType + " prefix|suffix <value|clear>");
             return Completable.complete();
         }
 
@@ -549,13 +549,20 @@ public final class GroupSubcommand {
             return Completable.complete();
         }
 
-        // Join remaining args as the value
-        String value = String.join(" ", java.util.Arrays.copyOfRange(args, 1, args.length));
+        // Join remaining args as the value, or null if "clear"
+        String rawValue = String.join(" ", java.util.Arrays.copyOfRange(args, 1, args.length));
+        String value = rawValue.equalsIgnoreCase("clear") ? null : rawValue;
 
         return storage.setGroupAttribute(groupName, attrType, prefixOrSuffix, value)
                 .andThen(effects.onGroupChanged(Group.normalize(groupName)))
                 .observeOn(plugin.mainScheduler())
-                .doOnComplete(() -> success(sender, "Set " + attrType + "_" + prefixOrSuffix + " for group '" + groupName + "'."))
+                .doOnComplete(() -> {
+                    if (value == null) {
+                        success(sender, "Cleared " + attrType + "_" + prefixOrSuffix + " for group '" + groupName + "'.");
+                    } else {
+                        success(sender, "Set " + attrType + "_" + prefixOrSuffix + " for group '" + groupName + "'.");
+                    }
+                })
                 .doOnError(err -> logAndError(sender, "Failed to set attribute", err))
                 .onErrorComplete();
     }
@@ -698,15 +705,23 @@ public final class GroupSubcommand {
     }
 
     private static Maybe<List<Completion>> completePrefixSuffix(String[] args) {
-        if (args.length != 1) return Maybe.empty();
-        String partial = args[0].toLowerCase();
-        List<Completion> completions = new ArrayList<>();
-        for (String val : List.of("prefix", "suffix")) {
-            if (val.startsWith(partial)) {
-                completions.add(Completion.completion(val));
+        if (args.length == 1) {
+            String partial = args[0].toLowerCase();
+            List<Completion> completions = new ArrayList<>();
+            for (String val : List.of("prefix", "suffix")) {
+                if (val.startsWith(partial)) {
+                    completions.add(Completion.completion(val));
+                }
+            }
+            return Maybe.just(completions);
+        }
+        if (args.length == 2) {
+            String partial = args[1].toLowerCase();
+            if ("clear".startsWith(partial)) {
+                return Maybe.just(List.of(Completion.completion("clear")));
             }
         }
-        return Maybe.just(completions);
+        return Maybe.empty();
     }
 
     private static Maybe<List<Completion>> completeColor(String[] args) {
