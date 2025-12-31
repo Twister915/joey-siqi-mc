@@ -6,6 +6,7 @@ import org.bukkit.World;
 
 import java.util.Map;
 import java.util.Optional;
+import java.util.OptionalInt;
 import java.util.OptionalLong;
 
 /**
@@ -26,6 +27,8 @@ import java.util.OptionalLong;
  * @param time              Optional fixed time (0-24000). Use with advance_time game rule set to false.
  * @param weather           Optional fixed weather (CLEAR, RAIN, THUNDER). Use with advance_weather game rule set to false.
  * @param disableAdvancements If true, players cannot earn advancements in this world
+ * @param pregenSize        Optional chunk pre-generation size in blocks per side. If set, chunks within this
+ *                          square area centered on spawn will be pre-generated when the server is empty.
  */
 public record WorldConfig(
         String name,
@@ -42,8 +45,23 @@ public record WorldConfig(
         boolean teleportWarmup,
         OptionalLong time,
         Optional<Weather> weather,
-        boolean disableAdvancements
+        boolean disableAdvancements,
+        OptionalInt pregenSize
 ) {
+    /**
+     * Convert pregen size in blocks to chunks.
+     */
+    public int pregenSideChunks() {
+        return pregenSize.isPresent() ? (pregenSize.getAsInt() + 15) / 16 : 0;
+    }
+
+    /**
+     * Total chunks in the pregen area.
+     */
+    public long pregenTotalChunks() {
+        long side = pregenSideChunks();
+        return side * side;
+    }
     /**
      * Weather states that can be set on a world.
      */

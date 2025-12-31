@@ -401,7 +401,7 @@ public final class SiqiJoeyPlugin extends JavaPlugin {
 
         // Chunk pre-generation system (runs when server is empty)
         var pregenConfig = PregenConfig.load(this);
-        var pregenManager = new PregenManager(this, pregenConfig);
+        var pregenManager = new PregenManager(this, pregenConfig, worldsConfig);
         components.add(pregenManager);
         var pregenBossBarProvider = new PregenBossBarProvider(this, pregenManager);
         components.add(pregenBossBarProvider);

@@ -7,10 +7,13 @@ import org.bukkit.World;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import sh.joey.mc.SiqiJoeyPlugin;
+import sh.joey.mc.multiworld.WorldConfig;
+import sh.joey.mc.multiworld.WorldsConfig;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -65,12 +68,14 @@ public final class PregenManager implements Disposable {
 
     private final SiqiJoeyPlugin plugin;
     private final PregenConfig config;
+    private final WorldsConfig worldsConfig;
     private final Logger logger;
     private final CompositeDisposable disposables = new CompositeDisposable();
 
     private State state = State.IDLE;
     private final Map<String, WorldProgress> worldProgress = new LinkedHashMap<>();
     private final Map<String, SpiralIterator> worldIterators = new HashMap<>();
+    private List<String> pregenWorldOrder = new ArrayList<>();  // Worlds with pregen configured, in order
     private String currentWorld = null;
     private int currentWorldIndex = 0;
 
@@ -85,9 +90,10 @@ public final class PregenManager implements Disposable {
     // Progress file name stored in world folder
     private static final String PROGRESS_FILE_NAME = "pregen-progress.txt";
 
-    public PregenManager(SiqiJoeyPlugin plugin, PregenConfig config) {
+    public PregenManager(SiqiJoeyPlugin plugin, PregenConfig config, WorldsConfig worldsConfig) {
         this.plugin = plugin;
         this.config = config;
+        this.worldsConfig = worldsConfig;
         this.logger = plugin.getLogger();
 
         if (!config.enabled()) {
@@ -95,8 +101,14 @@ public final class PregenManager implements Disposable {
             return;
         }
 
-        if (config.worlds().isEmpty()) {
-            logger.info("[Pregen] No worlds configured");
+        // Build ordered list of worlds that have pregen configured
+        pregenWorldOrder = worldsConfig.worlds().values().stream()
+                .filter(wc -> wc.pregenSize().isPresent())
+                .map(WorldConfig::name)
+                .toList();
+
+        if (pregenWorldOrder.isEmpty()) {
+            logger.info("[Pregen] No worlds have pregen_size configured");
             return;
         }
 
@@ -149,18 +161,23 @@ public final class PregenManager implements Disposable {
         worldProgress.clear();
         currentWorldIndex = 0;
 
-        for (String worldName : config.worlds()) {
+        for (String worldName : pregenWorldOrder) {
             World world = Bukkit.getWorld(worldName);
             if (world == null) {
                 logger.warning("[Pregen] World not found: " + worldName);
                 continue;
             }
 
+            WorldConfig worldConfig = worldsConfig.worlds().get(worldName);
+            if (worldConfig == null || worldConfig.pregenSize().isEmpty()) {
+                continue;  // Shouldn't happen, but be safe
+            }
+
             int spawnChunkX = world.getSpawnLocation().getBlockX() >> 4;
             int spawnChunkZ = world.getSpawnLocation().getBlockZ() >> 4;
 
             SpiralIterator iterator = new SpiralIterator(
-                    spawnChunkX, spawnChunkZ, config.sideChunks()
+                    spawnChunkX, spawnChunkZ, worldConfig.pregenSideChunks()
             );
 
             // Load saved progress and skip to resume position
@@ -172,13 +189,13 @@ public final class PregenManager implements Disposable {
 
             worldIterators.put(worldName, iterator);
             worldProgress.put(worldName, new WorldProgress(
-                    worldName, 0, savedProgress, config.totalChunks(), System.currentTimeMillis(), false
+                    worldName, 0, savedProgress, worldConfig.pregenTotalChunks(), System.currentTimeMillis(), false
             ));
         }
 
         if (!worldIterators.isEmpty()) {
             // Find first non-complete world
-            for (String worldName : config.worlds()) {
+            for (String worldName : pregenWorldOrder) {
                 if (worldIterators.containsKey(worldName)) {
                     SpiralIterator iterator = worldIterators.get(worldName);
                     if (iterator.hasNext()) {
@@ -306,12 +323,10 @@ public final class PregenManager implements Disposable {
     }
 
     private void advanceToNextWorld() {
-        List<String> worlds = config.worlds();
-
         // Find next valid world
         currentWorldIndex++;
-        while (currentWorldIndex < worlds.size()) {
-            String worldName = worlds.get(currentWorldIndex);
+        while (currentWorldIndex < pregenWorldOrder.size()) {
+            String worldName = pregenWorldOrder.get(currentWorldIndex);
             if (worldIterators.containsKey(worldName)) {
                 SpiralIterator iterator = worldIterators.get(worldName);
                 if (iterator.hasNext()) {

@@ -45,6 +45,7 @@ worlds:
 | `inventory_group` | string | (world name) | Inventory group name |
 | `teleport_warmup` | boolean | `true` | If false, teleports from this world are instant (no countdown) |
 | `disable_advancements` | boolean | `false` | If true, players cannot earn advancements in this world |
+| `pregen_size` | number | (none) | Pre-generate chunks in a square area centered on spawn (blocks per side) |
 
 ## Superflat Generator Settings
 
@@ -169,6 +170,32 @@ worlds:
 ```
 
 **Note:** Add `world` to config if you want gamemode to switch back to SURVIVAL when returning from creative worlds.
+
+### Example: Pre-generated Worlds
+
+```yaml
+worlds:
+  # Overworld with 30km pre-generation
+  world:
+    gamemode: SURVIVAL
+    inventory_group: default
+    pregen_size: 30000
+
+  # Nether with 5km pre-generation (smaller due to 1:8 scale)
+  world_nether:
+    gamemode: SURVIVAL
+    inventory_group: default
+    hidden: true
+    pregen_size: 5000
+
+  # Creative world - no pre-generation needed
+  creative:
+    superflat: true
+    gamemode: CREATIVE
+    inventory_group: creative
+```
+
+When `pregen.enabled: true` in config.yml, chunks will be pre-generated when the server is empty.
 
 ### Example: Linked Survival Worlds
 

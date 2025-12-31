@@ -10,6 +10,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.OptionalInt;
 import java.util.OptionalLong;
 
 /**
@@ -105,6 +106,14 @@ public record WorldsConfig(Map<String, WorldConfig> worlds) {
             // Parse disable advancements (default false)
             boolean disableAdvancements = worldSection.getBoolean("disable_advancements", false);
 
+            // Parse pregen size (optional - if not set, world is not pre-generated)
+            OptionalInt pregenSize;
+            if (worldSection.contains("pregen_size")) {
+                pregenSize = OptionalInt.of(worldSection.getInt("pregen_size"));
+            } else {
+                pregenSize = OptionalInt.empty();
+            }
+
             WorldConfig worldConfig = new WorldConfig(
                     worldName.toLowerCase(),
                     seed,
@@ -120,7 +129,8 @@ public record WorldsConfig(Map<String, WorldConfig> worlds) {
                     teleportWarmup,
                     time,
                     weather,
-                    disableAdvancements
+                    disableAdvancements,
+                    pregenSize
             );
 
             worlds.put(worldName.toLowerCase(), worldConfig);

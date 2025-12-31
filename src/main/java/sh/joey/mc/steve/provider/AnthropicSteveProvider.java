@@ -117,6 +117,9 @@ public final class AnthropicSteveProvider implements SteveModelProvider {
 
             if (response.statusCode() != 200) {
                 logger.warning("Anthropic API error: HTTP " + response.statusCode() + " - " + response.body());
+                if (response.statusCode() == 429) {
+                    throw new RateLimitException("Too many requests. Please try again in a minute!");
+                }
                 throw new IOException("Anthropic API error: HTTP " + response.statusCode());
             }
 

@@ -120,16 +120,11 @@ public final class PregenCommand implements Command {
         }
         sender.sendMessage(rateComponent);
 
-        // Area
-        sender.sendMessage(Component.text("Area: ").color(NamedTextColor.GRAY)
-                .append(Component.text(String.format("%,d x %,d blocks (%,d chunks/world)",
-                                config.sideLength(), config.sideLength(), config.totalChunks()))
-                        .color(NamedTextColor.DARK_GRAY)));
-
         // Estimated map size (average ~8KB per chunk for overworld terrain)
         long bytesPerChunk = 8 * 1024;
-        int worldCount = Math.max(1, progress.size());
-        long totalChunksAllWorlds = config.totalChunks() * worldCount;
+        long totalChunksAllWorlds = progress.values().stream()
+                .mapToLong(PregenManager.WorldProgress::totalChunks)
+                .sum();
         long projectedTotalBytes = totalChunksAllWorlds * bytesPerChunk;
 
         long generatedChunksAllWorlds = progress.values().stream()
@@ -153,7 +148,7 @@ public final class PregenCommand implements Command {
         if (progress.isEmpty()) {
             sender.sendMessage(Component.text("No worlds configured or initialized.")
                     .color(NamedTextColor.GRAY));
-            sender.sendMessage(Component.text("Configure worlds in config.yml under pregen.worlds")
+            sender.sendMessage(Component.text("Add pregen_size to world configs in config.yml")
                     .color(NamedTextColor.DARK_GRAY));
         } else {
             for (var entry : progress.entrySet()) {

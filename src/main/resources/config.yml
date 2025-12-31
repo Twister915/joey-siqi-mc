@@ -39,14 +39,10 @@ rtp:
 
 # Chunk pre-generation (runs when server is empty)
 # Generates chunks in a spiral pattern from world spawn outward
+# Per-world pregen sizes are configured in the 'worlds' section below using pregen_size
 pregen:
   # Enable/disable the pre-generation system
   enabled: false
-  # Worlds to pre-generate (in order)
-  worlds:
-    - world
-  # Size of area to generate (blocks per side, centered on spawn)
-  side-length: 12500
   # Generation speed: SLOW (1-2/tick), FAST (5-10/tick), FASTEST (20-30/tick)
   rate: FAST
   # How often to log progress (seconds)
@@ -99,19 +95,27 @@ steve:
 # See doc/multiworld.md for full documentation
 worlds:
   # Add default worlds to enable gamemode switching when returning:
+  # Overworld with pre-generation (30,000 blocks = 15km radius from spawn)
   # world:
   #   gamemode: SURVIVAL
   #   inventory_group: default
+  #   pregen_size: 30000
+  #
+  # Nether with smaller pre-generation (5,000 blocks = 2.5km radius)
   # world_nether:
   #   gamemode: SURVIVAL
   #   inventory_group: default
   #   hidden: true
+  #   pregen_size: 5000
+  #
+  # End with smaller pre-generation (5,000 blocks = 2.5km radius)
   # world_the_end:
   #   gamemode: SURVIVAL
   #   inventory_group: default
   #   hidden: true
+  #   pregen_size: 5000
   #
-  # Example creative superflat world with no mobs:
+  # Example creative superflat world with no mobs (no pregen needed):
   # creative:
   #   dimension: overworld
   #   gamemode: CREATIVE
@@ -124,7 +128,7 @@ worlds:
   #     doDaylightCycle: false
   #   inventory_group: creative
   #
-  # Example survival world with custom seed:
+  # Example survival world with custom seed (no pregen - world is new):
   # survival2:
   #   seed: 12345
   #   dimension: overworld

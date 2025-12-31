@@ -13,6 +13,7 @@ import org.bukkit.entity.Player;
 import sh.joey.mc.SiqiJoeyPlugin;
 import sh.joey.mc.permissions.DisplayManager;
 import sh.joey.mc.steve.SteveAnswer.Citation;
+import sh.joey.mc.steve.provider.RateLimitException;
 import sh.joey.mc.util.DurationFormat;
 
 import java.time.Duration;
@@ -121,16 +122,27 @@ public final class SteveManager implements Disposable {
         // Set cooldown
         startCooldown(playerId);
 
+        // Track whether API call has completed (to avoid showing "thinking..." after error/success)
+        var completed = new java.util.concurrent.atomic.AtomicBoolean(false);
+
         // Send private thinking message after a short delay (so it appears after the chat message)
+        // Only show if the API call hasn't already completed
         plugin.timer(500, TimeUnit.MILLISECONDS)
-                .subscribe(tick -> sendThinking(player));
+                .subscribe(tick -> {
+                    if (!completed.get()) {
+                        sendThinking(player);
+                    }
+                });
 
         // Call API and track response time
         long startTime = System.currentTimeMillis();
         SteveModel currentModel = model; // Capture for lambda
         currentModel.ask(question)
                 .observeOn(plugin.mainScheduler())
-                .doFinally(() -> pendingQuestions.remove(playerId))
+                .doFinally(() -> {
+                    completed.set(true);
+                    pendingQuestions.remove(playerId);
+                })
                 .subscribe(
                         response -> {
                             long elapsedMs = System.currentTimeMillis() - startTime;
@@ -144,9 +156,16 @@ public final class SteveManager implements Disposable {
                                     );
                         },
                         error -> {
-                            plugin.getLogger().warning("Steve API error: " + error.getMessage());
-                            error.printStackTrace();
-                            Messages.error(player, "Sorry, I couldn't find an answer. Try again later!");
+                            // Check for rate limit or wrapped rate limit exception
+                            Throwable cause = error.getCause() != null ? error.getCause() : error;
+                            if (cause instanceof RateLimitException rle) {
+                                plugin.getLogger().info("Steve rate limited: " + rle.getMessage());
+                                Messages.error(player, rle.getMessage());
+                            } else {
+                                plugin.getLogger().warning("Steve API error: " + error.getMessage());
+                                error.printStackTrace();
+                                Messages.error(player, "Sorry, I couldn't find an answer. Try again later!");
+                            }
                         }
                 );
     }
