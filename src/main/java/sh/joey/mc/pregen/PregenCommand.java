@@ -16,7 +16,7 @@ import static sh.joey.mc.pregen.Messages.formatBytes;
 
 /**
  * Admin command for controlling chunk pre-generation.
- * Usage: /pregen [status|start|stop|pause]
+ * Usage: /pregen [status|start|stop|pause|force <speed>|monitor]
  */
 public final class PregenCommand implements Command {
 
@@ -60,11 +60,23 @@ public final class PregenCommand implements Command {
                     Messages.success(sender, "Pre-generation paused.");
                 }
                 case "force" -> {
-                    manager.toggleForce();
-                    if (manager.isForced()) {
-                        Messages.success(sender, "Forced mode enabled - running at SLOW speed.");
-                    } else {
-                        Messages.info(sender, "Forced mode disabled.");
+                    if (args.length < 2) {
+                        if (manager.isForced()) {
+                            // No arg while forced = disable
+                            manager.setForcedRate(null);
+                            Messages.info(sender, "Forced mode disabled.");
+                        } else {
+                            Messages.error(sender, "Usage: /pregen force <slow|fast|fastest>");
+                        }
+                        return;
+                    }
+                    String rateName = args[1].toUpperCase();
+                    try {
+                        PregenRate rate = PregenRate.valueOf(rateName);
+                        manager.setForcedRate(rate);
+                        Messages.success(sender, "Forced mode enabled - running at " + rate + " speed.");
+                    } catch (IllegalArgumentException e) {
+                        Messages.error(sender, "Invalid rate. Use: slow, fast, or fastest");
                     }
                 }
                 case "monitor" -> {
@@ -79,7 +91,7 @@ public final class PregenCommand implements Command {
                         Messages.info(sender, "Boss bar monitoring disabled.");
                     }
                 }
-                default -> Messages.error(sender, "Usage: /pregen [status|start|stop|pause|force|monitor]");
+                default -> Messages.error(sender, "Usage: /pregen [status|start|stop|pause|force <speed>|monitor]");
             }
         });
     }
@@ -106,14 +118,14 @@ public final class PregenCommand implements Command {
         sender.sendMessage(Component.text("State: ").color(NamedTextColor.GRAY)
                 .append(stateComponent));
 
-        // Rate (show effective rate, which is SLOW in forced mode)
-        PregenRate effectiveRate = manager.isForced() ? PregenRate.SLOW : config.rate();
+        // Rate (show effective rate, which is the forced rate if in forced mode)
+        PregenRate effectiveRate = manager.isForced() ? manager.getForcedRate() : config.rate();
         Component rateComponent = Component.text("Rate: ").color(NamedTextColor.GRAY)
                 .append(Component.text(effectiveRate.name()).color(NamedTextColor.AQUA))
                 .append(Component.text(" (" + effectiveRate.getMinChunksPerTick() +
                                 "-" + effectiveRate.getMaxChunksPerTick() + " chunks/tick)")
                         .color(NamedTextColor.DARK_GRAY));
-        if (manager.isForced() && config.rate() != PregenRate.SLOW) {
+        if (manager.isForced() && config.rate() != manager.getForcedRate()) {
             rateComponent = rateComponent.append(
                     Component.text(" [forced from " + config.rate().name() + "]")
                             .color(NamedTextColor.DARK_GRAY));
@@ -189,7 +201,7 @@ public final class PregenCommand implements Command {
         }
 
         sender.sendMessage(Component.empty());
-        sender.sendMessage(Component.text("Commands: /pregen start|stop|pause|force|monitor")
+        sender.sendMessage(Component.text("Commands: /pregen start|stop|pause|force <speed>|monitor")
                 .color(NamedTextColor.DARK_GRAY));
     }
 
@@ -211,6 +223,13 @@ public final class PregenCommand implements Command {
             if (args.length == 1) {
                 String prefix = args[0].toLowerCase();
                 return List.of("status", "start", "stop", "pause", "force", "monitor").stream()
+                        .filter(s -> s.startsWith(prefix))
+                        .map(Completion::completion)
+                        .toList();
+            }
+            if (args.length == 2 && args[0].equalsIgnoreCase("force")) {
+                String prefix = args[1].toLowerCase();
+                return List.of("slow", "fast", "fastest").stream()
                         .filter(s -> s.startsWith(prefix))
                         .map(Completion::completion)
                         .toList();

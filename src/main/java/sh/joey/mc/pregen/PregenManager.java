@@ -84,8 +84,8 @@ public final class PregenManager implements Disposable {
     private Disposable tickSubscription = null;
     private Disposable progressLogSubscription = null;
 
-    // Forced mode: runs at SLOW speed even with players online (for testing)
-    private boolean forcedMode = false;
+    // Forced mode: runs at specified speed even with players online (for testing)
+    private PregenRate forcedRate = null;  // null = not forced
 
     // Progress file name stored in world folder
     private static final String PROGRESS_FILE_NAME = "pregen-progress.txt";
@@ -115,7 +115,7 @@ public final class PregenManager implements Disposable {
         // Watch for player joins - pause generation (unless in forced mode)
         disposables.add(plugin.watchEvent(PlayerJoinEvent.class)
                 .subscribe(event -> {
-                    if (state == State.RUNNING && !forcedMode) {
+                    if (state == State.RUNNING && forcedRate == null) {
                         logger.info("[Pregen] Player joined, pausing generation");
                         state = State.WAITING;
                         stopTicking();
@@ -133,10 +133,10 @@ public final class PregenManager implements Disposable {
                                         logger.info("[Pregen] Server empty, resuming generation");
                                         state = State.RUNNING;
                                         startTicking();
-                                    } else if (state == State.RUNNING && forcedMode) {
+                                    } else if (state == State.RUNNING && forcedRate != null) {
                                         // Server empty while in forced mode - switch back to normal speed
-                                        forcedMode = false;
-                                        logger.info("[Pregen] Server empty, switching from SLOW to " + config.rate() + " speed");
+                                        logger.info("[Pregen] Server empty, switching from " + forcedRate + " to " + config.rate() + " speed");
+                                        forcedRate = null;
                                     }
                                 }
                             }));
@@ -248,8 +248,8 @@ public final class PregenManager implements Disposable {
         }
 
         // Rate limiting: only limit actual chunk generation, not existence checks
-        // Use SLOW rate when in forced mode (players online) to minimize impact
-        PregenRate effectiveRate = forcedMode ? PregenRate.SLOW : config.rate();
+        // Use forced rate when in forced mode (players online)
+        PregenRate effectiveRate = forcedRate != null ? forcedRate : config.rate();
         int maxConcurrent = effectiveRate.getMaxChunksPerTick();
         int canRequest = maxConcurrent - inFlightRequests.get();
 
@@ -449,7 +449,7 @@ public final class PregenManager implements Disposable {
         worldProgress.clear();
         currentWorld = null;
         currentWorldIndex = 0;
-        forcedMode = false;  // Exit forced mode on stop
+        forcedRate = null;  // Exit forced mode on stop
         logger.info("[Pregen] Stopped (progress saved)");
     }
 
@@ -457,7 +457,7 @@ public final class PregenManager implements Disposable {
         if (state == State.RUNNING) {
             state = State.PAUSED;
             stopTicking();
-            forcedMode = false;  // Exit forced mode on pause
+            forcedRate = null;  // Exit forced mode on pause
             // Save progress for all worlds
             for (String worldName : worldIterators.keySet()) {
                 saveProgress(worldName);
@@ -467,13 +467,13 @@ public final class PregenManager implements Disposable {
     }
 
     /**
-     * Toggle forced mode - runs at SLOW speed even with players online.
-     * Useful for testing the system while playing.
+     * Set forced mode with a specific rate.
+     * Pass null to disable forced mode.
      */
-    public void toggleForce() {
-        if (forcedMode) {
+    public void setForcedRate(PregenRate rate) {
+        if (rate == null) {
             // Disable forced mode
-            forcedMode = false;
+            forcedRate = null;
             if (state == State.RUNNING && !Bukkit.getOnlinePlayers().isEmpty()) {
                 state = State.WAITING;
                 stopTicking();
@@ -482,13 +482,13 @@ public final class PregenManager implements Disposable {
                 logger.info("[Pregen] Forced mode disabled");
             }
         } else {
-            // Enable forced mode
-            forcedMode = true;
+            // Enable forced mode with specified rate
+            forcedRate = rate;
             if (worldIterators.isEmpty()) {
                 initializeWorlds();
             }
             if (worldIterators.isEmpty()) {
-                forcedMode = false;
+                forcedRate = null;
                 logger.warning("[Pregen] Cannot force: no valid worlds configured");
                 return;
             }
@@ -496,12 +496,16 @@ public final class PregenManager implements Disposable {
                 state = State.RUNNING;
                 startTicking();
             }
-            logger.info("[Pregen] Forced mode enabled (running at SLOW speed)");
+            logger.info("[Pregen] Forced mode enabled (running at " + rate + " speed)");
         }
     }
 
     public boolean isForced() {
-        return forcedMode;
+        return forcedRate != null;
+    }
+
+    public PregenRate getForcedRate() {
+        return forcedRate;
     }
 
     public State getState() {
