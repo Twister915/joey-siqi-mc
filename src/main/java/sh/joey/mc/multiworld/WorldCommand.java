@@ -78,7 +78,8 @@ public final class WorldCommand implements Command {
     }
 
     private void showWorldList(Player player) {
-        if (worldManager.getWorldNames().isEmpty()) {
+        var accessibleWorlds = worldManager.getWorldNames(player);
+        if (accessibleWorlds.isEmpty()) {
             player.sendMessage(PREFIX.append(
                     Component.text("No custom worlds are configured.").color(NamedTextColor.GRAY)));
             return;
@@ -87,7 +88,7 @@ public final class WorldCommand implements Command {
         player.sendMessage(PREFIX.append(
                 Component.text("Available Worlds:").color(NamedTextColor.WHITE)));
 
-        for (String name : worldManager.getWorldNames()) {
+        for (String name : accessibleWorlds) {
             Optional<WorldConfig> configOpt = worldManager.getConfig(name);
             if (configOpt.isEmpty()) continue;
 
@@ -120,7 +121,7 @@ public final class WorldCommand implements Command {
         return Completable.defer(() -> {
             Optional<World> worldOpt = worldManager.getWorld(worldName);
 
-            if (worldOpt.isEmpty() || worldManager.isHidden(worldName)) {
+            if (worldOpt.isEmpty() || !worldManager.canAccess(worldName, player)) {
                 player.sendMessage(PREFIX.append(
                         Component.text("World '").color(NamedTextColor.RED)
                                 .append(Component.text(worldName).color(NamedTextColor.WHITE))
@@ -166,18 +167,16 @@ public final class WorldCommand implements Command {
 
     @Override
     public Maybe<List<Completion>> tabComplete(SiqiJoeyPlugin plugin, CommandSender sender, String[] args) {
-        return Maybe.fromCallable(() -> {
-            if (args.length != 1) {
-                return null;
-            }
+        if (args.length != 1 || !(sender instanceof Player player)) {
+            return Maybe.empty();
+        }
 
-            String prefix = args[0].toLowerCase();
-            List<Completion> completions = worldManager.getWorldNames().stream()
-                    .filter(name -> name.startsWith(prefix))
-                    .map(Completion::completion)
-                    .toList();
+        String prefix = args[0].toLowerCase();
+        List<Completion> completions = worldManager.getWorldNames(player).stream()
+                .filter(name -> name.startsWith(prefix))
+                .map(Completion::completion)
+                .toList();
 
-            return completions.isEmpty() ? null : completions;
-        });
+        return completions.isEmpty() ? Maybe.empty() : Maybe.just(completions);
     }
 }

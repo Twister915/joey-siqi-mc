@@ -68,8 +68,9 @@ public record WorldsConfig(Map<String, WorldConfig> worlds) {
             // Parse structures (default true)
             boolean structures = worldSection.getBoolean("structures", true);
 
-            // Parse hidden (default false)
-            boolean hidden = worldSection.getBoolean("hidden", false);
+            // Parse access control (default ALL - everyone with smp.world can access)
+            WorldConfig.WorldAccess access = WorldConfig.WorldAccess.fromString(
+                    worldSection.getString("access"));
 
             // Parse difficulty
             Optional<Difficulty> difficulty = Optional.ofNullable(
@@ -122,7 +123,7 @@ public record WorldsConfig(Map<String, WorldConfig> worlds) {
                     superflat,
                     generatorSettings,
                     structures,
-                    hidden,
+                    access,
                     difficulty,
                     Collections.unmodifiableMap(gameRules),
                     inventoryGroup.toLowerCase(),

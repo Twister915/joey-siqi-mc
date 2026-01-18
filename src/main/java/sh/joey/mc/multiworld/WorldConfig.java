@@ -19,7 +19,7 @@ import java.util.OptionalLong;
  * @param superflat         If true, use a superflat world type (only for new worlds)
  * @param generatorSettings Optional superflat JSON config (only for new superflat worlds)
  * @param structures        Whether to generate structures (villages, etc.) - only for new worlds
- * @param hidden            If true, world is not shown in /world list and cannot be teleported to directly
+ * @param access            Access control for this world (all, permission, hidden)
  * @param difficulty        Optional difficulty setting for this world
  * @param gameRules         Game rule overrides (e.g., spawn_mobs=false)
  * @param inventoryGroup    The inventory group this world belongs to
@@ -38,7 +38,7 @@ public record WorldConfig(
         boolean superflat,
         Optional<String> generatorSettings,
         boolean structures,
-        boolean hidden,
+        WorldAccess access,
         Optional<Difficulty> difficulty,
         Map<String, String> gameRules,
         String inventoryGroup,
@@ -108,6 +108,29 @@ public record WorldConfig(
                 case "nether" -> NETHER;
                 case "end", "the_end" -> THE_END;
                 default -> OVERWORLD;
+            };
+        }
+    }
+
+    /**
+     * World access control modes.
+     */
+    public enum WorldAccess {
+        /** Everyone with smp.world can access */
+        ALL,
+        /** Requires smp.world.&lt;worldname&gt; permission */
+        PERMISSION,
+        /** No one can access via /world commands */
+        HIDDEN;
+
+        public static WorldAccess fromString(String value) {
+            if (value == null) {
+                return ALL;
+            }
+            return switch (value.toLowerCase()) {
+                case "permission" -> PERMISSION;
+                case "hidden" -> HIDDEN;
+                default -> ALL;
             };
         }
     }

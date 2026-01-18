@@ -7,6 +7,7 @@ import org.bukkit.Registry;
 import org.bukkit.World;
 import org.bukkit.WorldCreator;
 import org.bukkit.WorldType;
+import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.util.HashMap;
@@ -14,6 +15,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.logging.Logger;
+import java.util.stream.Collectors;
 
 /**
  * Manages custom worlds: loading, creation, and inventory group mapping.
@@ -184,24 +186,32 @@ public final class WorldManager {
     }
 
     /**
-     * Gets all configured world names that are not hidden.
+     * Gets all configured world names that the player can access.
      *
-     * @return an unmodifiable set of world names
+     * @param player the player to check access for
+     * @return an unmodifiable set of accessible world names
      */
-    public Set<String> getWorldNames() {
+    public Set<String> getWorldNames(Player player) {
         return loadedWorlds.keySet().stream()
-                .filter(name -> !isHidden(name))
-                .collect(java.util.stream.Collectors.toUnmodifiableSet());
+                .filter(name -> canAccess(name, player))
+                .collect(Collectors.toUnmodifiableSet());
     }
 
     /**
-     * Checks if a world is hidden from the /world command.
+     * Checks if a player can access a world via /world commands.
      *
      * @param worldName the world name
-     * @return true if hidden
+     * @param player the player to check
+     * @return true if the player can access the world
      */
-    public boolean isHidden(String worldName) {
-        return getConfig(worldName).map(WorldConfig::hidden).orElse(false);
+    public boolean canAccess(String worldName, Player player) {
+        return getConfig(worldName)
+                .map(config -> switch (config.access()) {
+                    case ALL -> true;
+                    case PERMISSION -> player.hasPermission("smp.world." + worldName.toLowerCase());
+                    case HIDDEN -> false;
+                })
+                .orElse(true); // Unconfigured worlds are accessible
     }
 
     /**
