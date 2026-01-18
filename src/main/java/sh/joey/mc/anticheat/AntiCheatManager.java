@@ -55,7 +55,7 @@ public final class AntiCheatManager implements Disposable {
         disposables.add(violationTracker);
 
         // Create checks
-        checks.add(new SpeedCheck(plugin));
+        // checks.add(new SpeedCheck(plugin));
         checks.add(new FlyCheck(plugin, stateTracker));
         checks.add(new NoFallCheck(plugin, stateTracker));
         checks.add(new ReachCheck(plugin, stateTracker));
