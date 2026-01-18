@@ -119,7 +119,7 @@ public final class AnthropicSteveProvider implements SteveModelProvider {
                     .header("Content-Type", "application/json")
                     .header("x-api-key", apiKey)
                     .header("anthropic-version", API_VERSION)
-                    .header("anthropic-beta", "prompt-caching-2024-07-31")
+                    .header("anthropic-beta", "prompt-caching-2024-07-31,web-search-2025-03-05")
                     .POST(HttpRequest.BodyPublishers.ofString(requestBody.toString()))
                     .build();
 
@@ -291,11 +291,25 @@ public final class AnthropicSteveProvider implements SteveModelProvider {
         }
 
         /**
-         * Strips &lt;web_search&gt;...&lt;/web_search&gt; tags from text.
-         * These can appear in model output when web search is used.
+         * Strips XML-like tags that can leak into model output.
+         * Haiku sometimes outputs internal tool-use markup like:
+         * - &lt;web_search&gt;...&lt;/web_search&gt;
+         * - &lt;web_search_calls&gt;...&lt;/web_search_calls&gt;
+         * - &lt;invoke&gt;...&lt;/invoke&gt;
+         * - &lt;parameter&gt;...&lt;/parameter&gt;
          */
         private static String stripWebSearchTags(String text) {
-            return text.replaceAll("(?s)<web_search>.*?</web_search>", "").trim();
+            // Strip common XML tags that leak from tool use
+            String result = text;
+            result = result.replaceAll("(?s)<web_search>.*?</web_search>", "");
+            result = result.replaceAll("(?s)<web_search_calls>.*?</web_search_calls>", "");
+            result = result.replaceAll("(?s)<invoke[^>]*>.*?</invoke>", "");
+            result = result.replaceAll("(?s)<parameter[^>]*>.*?</parameter>", "");
+            // Catch any remaining self-closing or orphaned tags
+            result = result.replaceAll("<[^>]*web_search[^>]*>", "");
+            result = result.replaceAll("</?invoke[^>]*>", "");
+            result = result.replaceAll("</?parameter[^>]*>", "");
+            return result.trim();
         }
 
         private static String truncate(String text, int maxLength) {
