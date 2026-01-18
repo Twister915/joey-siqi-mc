@@ -74,10 +74,14 @@ import sh.joey.mc.settings.SettingsStorage;
 import sh.joey.mc.utility.ClearCommand;
 import sh.joey.mc.utility.GiveCommand;
 import sh.joey.mc.utility.ItemCommand;
+import sh.joey.mc.utility.LastCommand;
 import sh.joey.mc.utility.ListCommand;
 import sh.joey.mc.utility.MapCommand;
 import sh.joey.mc.utility.MapConfig;
+import sh.joey.mc.utility.OpMeManager;
+import sh.joey.mc.utility.PingCommand;
 import sh.joey.mc.utility.RemoveCommand;
+import sh.joey.mc.utility.SeenCommand;
 import sh.joey.mc.utility.SeedCommand;
 import sh.joey.mc.utility.SetSpawnCommand;
 import sh.joey.mc.utility.SpawnCommand;
@@ -391,6 +395,16 @@ public final class SiqiJoeyPlugin extends JavaPlugin {
         components.add(CmdExecutor.register(this, new RemoveCommand()));
         components.add(CmdExecutor.register(this, new SeedCommand()));
         components.add(CmdExecutor.register(this, new UptimeCommand()));
+
+        // Ping, Last, Seen commands
+        components.add(CmdExecutor.register(this, new PingCommand(playerResolver)));
+        components.add(CmdExecutor.register(this, new LastCommand(this, playerSessionStorage)));
+        components.add(CmdExecutor.register(this, new SeenCommand(this, playerSessionStorage, playerResolver)));
+
+        // OpMe system (component with lifecycle management)
+        var opMeManager = new OpMeManager(this);
+        components.add(opMeManager);
+        components.add(CmdExecutor.register(this, opMeManager));
 
         // Warp system
         var warpStorage = new WarpStorage(storageService);

@@ -176,6 +176,18 @@ commands:
   steve:
     description: View Steve AI status
     usage: /steve
+  ping:
+    description: Check player connection latency
+    usage: /ping [player]
+  last:
+    description: List recently joined players
+    usage: /last
+  seen:
+    description: Check when a player was last online
+    usage: /seen <player>
+  opme:
+    description: Temporarily grant yourself operator status
+    usage: /opme
 
 permissions:
   smp.*:
@@ -231,6 +243,11 @@ permissions:
       smp.settings.easymode: true
       smp.steve: true
       smp.steve.admin: true
+      smp.ping: true
+      smp.ping.others: true
+      smp.last: true
+      smp.seen: true
+      smp.opme: true
 
   smp.tp:
     description: Send teleport requests to other players
@@ -463,4 +480,21 @@ permissions:
     default: false
   smp.steve.admin:
     description: View Steve AI status (/steve)
+    default: op
+
+  smp.ping:
+    description: Check your own connection latency
+
+  smp.ping.others:
+    description: Check other players' connection latency
+    default: op
+
+  smp.last:
+    description: View recently joined players
+
+  smp.seen:
+    description: Check when a player was last online
+
+  smp.opme:
+    description: Temporarily grant yourself operator status
     default: op

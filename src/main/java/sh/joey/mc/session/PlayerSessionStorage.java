@@ -511,4 +511,66 @@ public final class PlayerSessionStorage {
      * @param seconds online time in seconds within the queried range
      */
     public record TopOnlineTimeEntry(UUID playerId, @Nullable String username, long seconds) {}
+
+    /**
+     * Entry for recent session listing.
+     *
+     * @param playerId the player's UUID
+     * @param username the player's username (may be null if no player_names entry)
+     * @param connectedAt when the session started
+     * @param disconnectedAt when the session ended, or null if still online
+     * @param lastSeenAt the last heartbeat time (useful for calculating duration)
+     */
+    public record RecentSessionEntry(
+            UUID playerId,
+            @Nullable String username,
+            Instant connectedAt,
+            @Nullable Instant disconnectedAt,
+            Instant lastSeenAt
+    ) {
+        /**
+         * @return true if the player is currently online (no disconnect time)
+         */
+        public boolean isOnline() {
+            return disconnectedAt == null;
+        }
+    }
+
+    /**
+     * Get the most recent player sessions, ordered by connection time descending.
+     * Joins with player_names to get the current username.
+     *
+     * @param limit maximum number of sessions to return
+     * @return Flowable of recent session entries
+     */
+    public Flowable<RecentSessionEntry> getRecentSessions(int limit) {
+        return storage.queryFlowable(conn -> {
+            String sql = """
+                SELECT ps.player_id, pn.username, ps.connected_at, ps.disconnected_at, ps.last_seen_at
+                FROM player_sessions ps
+                LEFT JOIN player_names pn ON ps.player_id = pn.player_id
+                ORDER BY ps.connected_at DESC
+                LIMIT ?
+                """;
+
+            List<RecentSessionEntry> entries = new ArrayList<>();
+            try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+                stmt.setInt(1, limit);
+
+                try (ResultSet rs = stmt.executeQuery()) {
+                    while (rs.next()) {
+                        var disconnectedTs = rs.getTimestamp("disconnected_at");
+                        entries.add(new RecentSessionEntry(
+                                rs.getObject("player_id", UUID.class),
+                                rs.getString("username"),
+                                rs.getTimestamp("connected_at").toInstant(),
+                                disconnectedTs != null ? disconnectedTs.toInstant() : null,
+                                rs.getTimestamp("last_seen_at").toInstant()
+                        ));
+                    }
+                }
+            }
+            return entries;
+        });
+    }
 }
