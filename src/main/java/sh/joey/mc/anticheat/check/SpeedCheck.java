@@ -22,9 +22,9 @@ public final class SpeedCheck implements Check {
     private static final String NAME = "Speed";
     private static final double BASE_WALK_SPEED = 4.317;
     private static final double BASE_SPRINT_SPEED = 5.612;
-    // Tolerance for speed above calculated max (accounts for edge cases)
-    private static final double GROUND_TOLERANCE = 1.35;
-    private static final double AIR_TOLERANCE = 1.50;
+    // High tolerance to account for b-hopping, momentum, and edge cases
+    private static final double GROUND_TOLERANCE = 2.70;
+    private static final double AIR_TOLERANCE = 3.00;
 
     // Track last movement time per player to calculate actual speed
     private final Map<UUID, Long> lastMoveTime = new ConcurrentHashMap<>();
@@ -128,7 +128,9 @@ public final class SpeedCheck implements Check {
     }
 
     private double calculateMaxSpeed(Player player) {
-        double baseSpeed = player.isSprinting() ? BASE_SPRINT_SPEED : BASE_WALK_SPEED;
+        // Always use sprint speed as baseline - isSprinting() can flicker on landing
+        // Players walking slowly won't trigger anyway since their speed is well below threshold
+        double baseSpeed = BASE_SPRINT_SPEED;
 
         var speedEffect = player.getPotionEffect(PotionEffectType.SPEED);
         if (speedEffect != null) {
