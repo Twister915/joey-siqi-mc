@@ -77,3 +77,10 @@ tasks.register('integrationTest', Test) {
     description = 'Runs PostgreSQL integration tests (requires Docker)'
     group = 'verification'
 }
+
+// Run all tests (unit + integration, requires Docker)
+tasks.register('allTests', Test) {
+    useJUnitPlatform()
+    description = 'Runs all tests including integration tests (requires Docker)'
+    group = 'verification'
+}
