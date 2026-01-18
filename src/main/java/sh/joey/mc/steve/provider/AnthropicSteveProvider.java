@@ -280,11 +280,22 @@ public final class AnthropicSteveProvider implements SteveModelProvider {
                     .toList();
 
             String responseText = text.toString().trim();
+            // Strip <web_search>...</web_search> tags that may appear in output
+            responseText = stripWebSearchTags(responseText);
+
             if (responseText.isEmpty()) {
                 responseText = "I found some information but couldn't summarize it properly. Check the sources below!";
             }
 
             return new SteveAnswer(responseText, limitedCitations, costCents);
+        }
+
+        /**
+         * Strips &lt;web_search&gt;...&lt;/web_search&gt; tags from text.
+         * These can appear in model output when web search is used.
+         */
+        private static String stripWebSearchTags(String text) {
+            return text.replaceAll("(?s)<web_search>.*?</web_search>", "").trim();
         }
 
         private static String truncate(String text, int maxLength) {
