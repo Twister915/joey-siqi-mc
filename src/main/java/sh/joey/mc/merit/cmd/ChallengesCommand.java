@@ -80,38 +80,35 @@ public final class ChallengesCommand implements Command {
         int weekNumber = assigner.getCurrentWeekNumber();
         List<Challenge> challenges = assigner.getWeeklyChallenges(playerId);
 
-        storage.getWeeklyChallengeProgress(playerId, weekNumber)
-                .zipWith(storage.getWeeklyOnlineTime(playerId, weekNumber), (progress, onlineTime) ->
-                        new ProgressData(progress, onlineTime))
+        // Get in-memory progress (real-time)
+        Map<String, Long> inMemoryProgress = meritManager.getProgressTracker().getAllChallengeProgress(playerId);
+
+        // Get online time from database (needed for merit claimed tracking)
+        storage.getWeeklyOnlineTime(playerId, weekNumber)
                 .observeOn(plugin.mainScheduler())
                 .subscribe(
-                        data -> displayChallenges(player, challenges, data, weekNumber),
+                        onlineTime -> displayChallenges(player, challenges, inMemoryProgress, onlineTime, weekNumber),
                         err -> Messages.error(player, "Failed to load progress: " + err.getMessage())
                 );
     }
 
-    private record ProgressData(
-            Map<String, MeritStorage.WeeklyChallengeProgress> challengeProgress,
-            MeritStorage.WeeklyOnlineTime onlineTime
-    ) {}
-
-    private void displayChallenges(Player player, List<Challenge> challenges, ProgressData data, int weekNumber) {
+    private void displayChallenges(Player player, List<Challenge> challenges, Map<String, Long> progressMap,
+                                   MeritStorage.WeeklyOnlineTime onlineTime, int weekNumber) {
         player.sendMessage(Component.empty());
         player.sendMessage(Messages.PREFIX.append(
                 Component.text("Weekly Challenges (Week " + weekNumber + ")").color(NamedTextColor.GOLD)));
         player.sendMessage(Component.empty());
 
         for (Challenge challenge : challenges) {
-            MeritStorage.WeeklyChallengeProgress progress = data.challengeProgress.get(challenge.id());
-            long currentProgress = progress != null ? progress.progress() : 0;
-            boolean completed = progress != null && progress.completed();
+            long currentProgress = progressMap.getOrDefault(challenge.id(), 0L);
+            boolean completed = meritManager.getProgressTracker().isChallengeCompleted(player.getUniqueId(), challenge.id());
 
             displayChallenge(player, challenge, currentProgress, completed);
         }
 
         // Online time bonus
         player.sendMessage(Component.empty());
-        displayOnlineTimeBonus(player, data.onlineTime);
+        displayOnlineTimeBonus(player, onlineTime);
 
         // Summary
         player.sendMessage(Component.empty());
@@ -167,7 +164,11 @@ public final class ChallengesCommand implements Command {
         int reward = config.onlineTimeReward();
         int cap = config.onlineTimeWeeklyCap();
 
-        long totalMinutes = onlineTime.secondsOnline() / 60;
+        // Add current session time (not yet flushed to DB) to the database total
+        long currentSessionSeconds = meritManager.getCurrentSessionSeconds(player.getUniqueId());
+        long totalSeconds = onlineTime.secondsOnline() + currentSessionSeconds;
+
+        long totalMinutes = totalSeconds / 60;
         long totalHours = totalMinutes / 60;
         long remainingMinutes = totalMinutes % 60;
         int earned = onlineTime.meritClaimed();

@@ -142,6 +142,20 @@ public final class OnlineTimeTracker implements Disposable {
     }
 
     /**
+     * Get the current unflushed session time for a player in seconds.
+     * This is time accumulated since the last flush.
+     */
+    public long getCurrentSessionSeconds(UUID playerId) {
+        Long joinTime = joinTimes.get(playerId);
+        if (joinTime == null) {
+            return 0;
+        }
+        long accumulated = sessionSeconds.getOrDefault(playerId, 0L);
+        long sinceJoin = (System.currentTimeMillis() - joinTime) / 1000;
+        return accumulated + sinceJoin;
+    }
+
+    /**
      * Flush a player's accumulated session time to the database.
      */
     private void flushPlayerTime(UUID playerId) {

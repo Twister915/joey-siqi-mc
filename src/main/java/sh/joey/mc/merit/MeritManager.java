@@ -27,6 +27,7 @@ public final class MeritManager implements Disposable {
     private final ChallengeAssigner assigner;
     private final MeritBossBarProvider bossBarProvider;
     private final ProgressTracker progressTracker;
+    private final OnlineTimeTracker onlineTimeTracker;
 
     public MeritManager(SiqiJoeyPlugin plugin, StorageService storageService, MeritConfig config) {
         this.plugin = plugin;
@@ -50,7 +51,8 @@ public final class MeritManager implements Disposable {
         disposables.add(new SmeltingTracker(plugin, progressTracker));
         disposables.add(new ExplorationTracker(plugin, progressTracker));
         disposables.add(new ProgressionTracker(plugin, progressTracker));
-        disposables.add(new OnlineTimeTracker(plugin, storage, progressTracker, assigner, config));
+        this.onlineTimeTracker = new OnlineTimeTracker(plugin, storage, progressTracker, assigner, config);
+        disposables.add(onlineTimeTracker);
         disposables.add(new TimeTracker(plugin, progressTracker));
 
         // Load data for players on join
@@ -129,6 +131,13 @@ public final class MeritManager implements Disposable {
      */
     public MeritConfig getConfig() {
         return config;
+    }
+
+    /**
+     * Get the current session seconds for a player (not yet flushed to DB).
+     */
+    public long getCurrentSessionSeconds(java.util.UUID playerId) {
+        return onlineTimeTracker.getCurrentSessionSeconds(playerId);
     }
 
     @Override

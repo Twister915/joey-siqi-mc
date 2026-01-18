@@ -82,6 +82,9 @@ public final class ProgressTracker implements Disposable {
               .merge(key, amount, Long::sum);
         dirty.add(playerId);
 
+        long newValue = deltas.get(playerId).get(key);
+        logger.info("[Merit] Increment: " + key + " = " + newValue + " for " + playerId);
+
         // Check challenge progress on main thread
         plugin.getServer().getScheduler().runTask(plugin, () -> checkChallengeProgress(playerId, key, amount));
     }
@@ -137,6 +140,42 @@ public final class ProgressTracker implements Disposable {
      */
     public int getCachedLevel(UUID playerId) {
         return playerLevels.getOrDefault(playerId, 1);
+    }
+
+    /**
+     * Get current progress for a challenge (from in-memory tracking).
+     */
+    public long getChallengeProgress(UUID playerId, Challenge challenge) {
+        return calculateChallengeProgress(playerId, challenge);
+    }
+
+    /**
+     * Get all in-memory challenge progress for a player's weekly challenges.
+     */
+    public Map<String, Long> getAllChallengeProgress(UUID playerId) {
+        List<Challenge> challenges = assigner.getWeeklyChallenges(playerId);
+        Map<String, Long> progress = new HashMap<>();
+        logger.info("[Merit] getAllChallengeProgress for " + playerId + ", deltas size: " +
+            (deltas.containsKey(playerId) ? deltas.get(playerId).size() : 0));
+        for (Challenge challenge : challenges) {
+            long p = calculateChallengeProgress(playerId, challenge);
+            progress.put(challenge.id(), p);
+            if (p > 0) {
+                logger.info("[Merit] Challenge " + challenge.id() + " progress: " + p);
+            }
+        }
+        return progress;
+    }
+
+    /**
+     * Check if a challenge has been completed this week.
+     */
+    public boolean isChallengeCompleted(UUID playerId, String challengeId) {
+        Map<String, Long> playerProgress = weeklyProgress.get(playerId);
+        if (playerProgress == null) return false;
+        // Check if we recorded completion (milestone reached 100)
+        Map<String, Integer> milestones = lastNotifiedMilestone.get(playerId);
+        return milestones != null && milestones.getOrDefault(challengeId, 0) >= 100;
     }
 
     /**
