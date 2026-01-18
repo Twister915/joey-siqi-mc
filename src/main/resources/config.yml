@@ -1,3 +1,12 @@
+# Server branding - customize for your server
+branding:
+  # Server name shown in MOTD and other places
+  server-name: "Siqi & Joey's Minecraft"
+  # Server IP/domain shown in the tab list header
+  server-ip: "joey.sh"
+  # Tagline shown in the tab list header
+  tagline: "Welcome to the server!"
+
 database:
   host: localhost
   port: 5432

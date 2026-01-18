@@ -9,6 +9,7 @@ import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.event.player.PlayerJoinEvent;
 import sh.joey.mc.SiqiJoeyPlugin;
+import sh.joey.mc.branding.BrandingConfig;
 
 import java.util.concurrent.TimeUnit;
 
@@ -18,13 +19,13 @@ import java.util.concurrent.TimeUnit;
  */
 public final class TablistProvider implements Disposable {
 
-    private static final String SERVER_IP = "joey.sh";
-
     private final CompositeDisposable disposables = new CompositeDisposable();
     private final SiqiJoeyPlugin plugin;
+    private final BrandingConfig brandingConfig;
 
-    public TablistProvider(SiqiJoeyPlugin plugin) {
+    public TablistProvider(SiqiJoeyPlugin plugin, BrandingConfig brandingConfig) {
         this.plugin = plugin;
+        this.brandingConfig = brandingConfig;
 
         // Update for already-online players
         plugin.getServer().getOnlinePlayers().forEach(this::updateTablist);
@@ -54,10 +55,10 @@ public final class TablistProvider implements Disposable {
         return Component.empty()
                 .append(Component.newline())
                 .append(Component.text("✦ ", NamedTextColor.GOLD))
-                .append(Component.text(SERVER_IP, NamedTextColor.WHITE).decorate(TextDecoration.BOLD))
+                .append(Component.text(brandingConfig.serverIp(), NamedTextColor.WHITE).decorate(TextDecoration.BOLD))
                 .append(Component.text(" ✦", NamedTextColor.GOLD))
                 .append(Component.newline())
-                .append(Component.text("Welcome to the server!", NamedTextColor.GRAY))
+                .append(Component.text(brandingConfig.tagline(), NamedTextColor.GRAY))
                 .append(Component.newline());
     }
 

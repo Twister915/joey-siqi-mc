@@ -11,6 +11,7 @@ import sh.joey.mc.rx.EventObservable;
 
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
+import sh.joey.mc.branding.BrandingConfig;
 import sh.joey.mc.bossbar.BiomeChangeProvider;
 import sh.joey.mc.bossbar.BossBarManager;
 import sh.joey.mc.bossbar.LodestoneCompassProvider;
@@ -307,6 +308,9 @@ public final class SiqiJoeyPlugin extends JavaPlugin {
         components.add(dayMessageProvider);
         components.add(CmdExecutor.register(this, new DayMessageDebugCommand()));
 
+        // Load branding config
+        var brandingConfig = BrandingConfig.load(this);
+
         // Welcome message systems
         var connectionMessageProvider = new ConnectionMessageProvider(this, nicknameManager);
         components.add(connectionMessageProvider);
@@ -314,7 +318,7 @@ public final class SiqiJoeyPlugin extends JavaPlugin {
         var joinMessageProvider = new JoinMessageProvider(this, nicknameManager);
         components.add(joinMessageProvider);
 
-        var serverPingProvider = new ServerPingProvider(this);
+        var serverPingProvider = new ServerPingProvider(this, brandingConfig);
         components.add(serverPingProvider);
 
         var chatMessageProvider = new ChatMessageProvider(this, displayManager, nicknameManager);
@@ -368,7 +372,7 @@ public final class SiqiJoeyPlugin extends JavaPlugin {
         components.add(tipsProvider);
 
         // Tablist header/footer
-        var tablistProvider = new TablistProvider(this);
+        var tablistProvider = new TablistProvider(this, brandingConfig);
         components.add(tablistProvider);
 
         // Utility commands

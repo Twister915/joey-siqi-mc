@@ -8,6 +8,7 @@ import net.kyori.adventure.text.format.TextDecoration;
 import org.bukkit.World;
 import org.bukkit.event.server.ServerListPingEvent;
 import sh.joey.mc.SiqiJoeyPlugin;
+import sh.joey.mc.branding.BrandingConfig;
 import sh.joey.mc.messages.MessageGenerator;
 
 /**
@@ -18,9 +19,11 @@ public final class ServerPingProvider implements Disposable {
 
     private final CompositeDisposable disposables = new CompositeDisposable();
     private final SiqiJoeyPlugin plugin;
+    private final BrandingConfig brandingConfig;
 
-    public ServerPingProvider(SiqiJoeyPlugin plugin) {
+    public ServerPingProvider(SiqiJoeyPlugin plugin, BrandingConfig brandingConfig) {
         this.plugin = plugin;
+        this.brandingConfig = brandingConfig;
 
         disposables.add(plugin.watchEvent(ServerListPingEvent.class)
                 .subscribe(event -> event.motd(generateMotd())));
@@ -38,7 +41,7 @@ public final class ServerPingProvider implements Disposable {
 
     private Component generateMotd() {
         // First line: Server name/branding
-        Component line1 = Component.text("Siqi & Joey's Minecraft")
+        Component line1 = Component.text(brandingConfig.serverName())
                 .color(NamedTextColor.LIGHT_PURPLE)
                 .decorate(TextDecoration.BOLD);
 
