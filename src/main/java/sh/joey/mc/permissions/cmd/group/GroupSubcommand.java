@@ -240,9 +240,9 @@ public final class GroupSubcommand {
     }
 
     private Completable handleSet(CommandSender sender, String groupName, String[] args) {
-        // /perm group <name> set <permission> [world] true/false
-        if (args.length < 2) {
-            error(sender, "Usage: /perm group " + groupName + " set <permission> [world] true/false");
+        // /perm group <name> set <permission> [world] [allow|deny]
+        if (args.length < 1) {
+            error(sender, "Usage: /perm group " + groupName + " set <permission> [world] [allow|deny]");
             return Completable.complete();
         }
 
@@ -256,46 +256,49 @@ public final class GroupSubcommand {
 
         // Parse state and optional world
         UUID worldId = null;
-        boolean state;
+        boolean state = true; // Default to allow
 
-        if (args.length >= 3) {
-            // Check if second arg is a world name or a boolean
+        if (args.length == 1) {
+            // Just permission, default state
+        } else if (args.length == 2) {
+            // Could be: <perm> <state> OR <perm> <world>
             Boolean maybeState = parseBoolean(args[1]);
             if (maybeState != null) {
-                // No world, args[1] is the state
                 state = maybeState;
             } else {
-                // args[1] is a world name
+                // It's a world name
                 var world = plugin.getServer().getWorld(args[1]);
                 if (world == null) {
                     error(sender, "Unknown world: " + args[1]);
                     return Completable.complete();
                 }
                 worldId = world.getUID();
-
-                Boolean stateArg = parseBoolean(args[2]);
-                if (stateArg == null) {
-                    error(sender, "Invalid boolean: " + args[2]);
-                    return Completable.complete();
-                }
-                state = stateArg;
+                // state remains true (default)
             }
-        } else {
-            Boolean stateArg = parseBoolean(args[1]);
+        } else { // args.length >= 3
+            // <perm> <world> <state>
+            var world = plugin.getServer().getWorld(args[1]);
+            if (world == null) {
+                error(sender, "Unknown world: " + args[1]);
+                return Completable.complete();
+            }
+            worldId = world.getUID();
+
+            Boolean stateArg = parseBoolean(args[2]);
             if (stateArg == null) {
-                error(sender, "Invalid boolean: " + args[1]);
+                error(sender, "Invalid state (use allow or deny): " + args[2]);
                 return Completable.complete();
             }
             state = stateArg;
         }
 
-        UUID finalWorldId = worldId;
         String worldStr = worldId == null ? "globally" : "in " + args[1];
+        String stateStr = state ? "allow" : "deny";
 
         return storage.addGroupPermission(groupName, permission, worldId, state)
                 .andThen(effects.onGroupChanged(Group.normalize(groupName)))
                 .observeOn(plugin.mainScheduler())
-                .doOnComplete(() -> success(sender, "Set " + permission + "=" + state + " " + worldStr))
+                .doOnComplete(() -> success(sender, "Set " + permission + "=" + stateStr + " " + worldStr))
                 .doOnError(err -> logAndError(sender, "Failed to set permission", err))
                 .onErrorComplete();
     }
@@ -696,7 +699,7 @@ public final class GroupSubcommand {
         if (args.length != 1) return Maybe.empty();
         String partial = args[0].toLowerCase();
         List<Completion> completions = new ArrayList<>();
-        for (String val : List.of("true", "false")) {
+        for (String val : List.of("allow", "deny")) {
             if (val.startsWith(partial)) {
                 completions.add(Completion.completion(val));
             }
