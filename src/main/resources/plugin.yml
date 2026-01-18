@@ -194,6 +194,13 @@ commands:
   alerts:
     description: Toggle anti-cheat real-time alerts
     usage: /alerts
+  challenges:
+    description: View weekly challenges and merit progress
+    usage: /challenges [leaderboard|stats|history|info]
+    aliases: [level, merit]
+  meritadmin:
+    description: Admin commands for managing player merit
+    usage: /meritadmin <grant|set|reset> <player> [amount]
 
 permissions:
   smp.*:
@@ -256,6 +263,7 @@ permissions:
       smp.opme: true
       smp.anticheat.violations: true
       smp.anticheat.alerts: true
+      smp.merit.admin: true
 
   smp.tp:
     description: Send teleport requests to other players
@@ -511,4 +519,8 @@ permissions:
 
   smp.anticheat.alerts:
     description: Receive real-time anti-cheat alerts
+    default: op
+
+  smp.merit.admin:
+    description: Admin commands for managing player merit
     default: op
