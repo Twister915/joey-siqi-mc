@@ -55,8 +55,10 @@ public final class TimeTracker implements Disposable {
                             progressTracker.increment(playerId, "sunrises_witnessed");
                         }
 
-                        // Detect surviving a full day (transitioned from day to night)
-                        if (previousState == TimeState.DAY && currentState == TimeState.NIGHT) {
+                        // Detect surviving a full day (transitioned from day to sunset/night)
+                        // Use UNKNOWN as intermediate since there's a gap between DAY_END and NIGHT_START
+                        if (previousState == TimeState.DAY &&
+                            (currentState == TimeState.UNKNOWN || currentState == TimeState.NIGHT)) {
                             progressTracker.increment(playerId, "days_survived");
                         }
 

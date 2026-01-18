@@ -138,28 +138,29 @@ public final class MeritStorage {
         });
     }
 
-    // ===== PLAYER PROGRESS =====
+    // ===== PLAYER PROGRESS (per week) =====
 
     /**
-     * Batch update progress stats for a player.
+     * Batch update progress stats for a player for a specific week.
      */
-    public Completable updateProgress(UUID playerId, Map<String, Long> deltas) {
+    public Completable updateProgress(UUID playerId, int weekNumber, Map<String, Long> deltas) {
         if (deltas.isEmpty()) {
             return Completable.complete();
         }
 
         return storage.execute(conn -> {
             try (var stmt = conn.prepareStatement("""
-                    INSERT INTO player_progress (player_id, stat_key, value, updated_at)
-                    VALUES (?, ?, ?, NOW())
-                    ON CONFLICT (player_id, stat_key) DO UPDATE SET
+                    INSERT INTO player_progress (player_id, week_number, stat_key, value, updated_at)
+                    VALUES (?, ?, ?, ?, NOW())
+                    ON CONFLICT (player_id, week_number, stat_key) DO UPDATE SET
                         value = player_progress.value + EXCLUDED.value,
                         updated_at = NOW()
                     """)) {
                 for (var entry : deltas.entrySet()) {
                     stmt.setObject(1, playerId);
-                    stmt.setString(2, entry.getKey());
-                    stmt.setLong(3, entry.getValue());
+                    stmt.setInt(2, weekNumber);
+                    stmt.setString(3, entry.getKey());
+                    stmt.setLong(4, entry.getValue());
                     stmt.addBatch();
                 }
                 stmt.executeBatch();
@@ -168,14 +169,15 @@ public final class MeritStorage {
     }
 
     /**
-     * Get all progress stats for a player.
+     * Get all progress stats for a player for a specific week.
      */
-    public Single<Map<String, Long>> getProgress(UUID playerId) {
+    public Single<Map<String, Long>> getProgress(UUID playerId, int weekNumber) {
         return storage.query(conn -> {
             Map<String, Long> progress = new HashMap<>();
             try (var stmt = conn.prepareStatement(
-                    "SELECT stat_key, value FROM player_progress WHERE player_id = ?")) {
+                    "SELECT stat_key, value FROM player_progress WHERE player_id = ? AND week_number = ?")) {
                 stmt.setObject(1, playerId);
+                stmt.setInt(2, weekNumber);
                 try (var rs = stmt.executeQuery()) {
                     while (rs.next()) {
                         progress.put(rs.getString("stat_key"), rs.getLong("value"));
@@ -183,25 +185,6 @@ public final class MeritStorage {
                 }
             }
             return progress;
-        });
-    }
-
-    /**
-     * Get a specific progress stat for a player.
-     */
-    public Single<Long> getProgressStat(UUID playerId, String statKey) {
-        return storage.query(conn -> {
-            try (var stmt = conn.prepareStatement(
-                    "SELECT value FROM player_progress WHERE player_id = ? AND stat_key = ?")) {
-                stmt.setObject(1, playerId);
-                stmt.setString(2, statKey);
-                try (var rs = stmt.executeQuery()) {
-                    if (rs.next()) {
-                        return rs.getLong("value");
-                    }
-                    return 0L;
-                }
-            }
         });
     }
 

@@ -361,6 +361,17 @@ public final class SiqiJoeyPlugin extends JavaPlugin {
         components.add(majoritySleepManager);
         bossBarManager.registerProvider(new SleepCountdownProvider(majoritySleepManager));
 
+        // Wire up sleep -> merit integration (credit day survival when night is skipped)
+        if (meritManager != null) {
+            final var progressTracker = meritManager.getProgressTracker();
+            majoritySleepManager.addNightSkippedListener(world -> {
+                // Credit all players in the world with days_survived when sleep skips night
+                for (var player : world.getPlayers()) {
+                    progressTracker.increment(player.getUniqueId(), "days_survived");
+                }
+            });
+        }
+
         // Multi-world inventory and gamemode management
         var inventoryGroupStorage = new InventoryGroupStorage(storageService);
         var playerLastWorldStorage = new PlayerLastWorldStorage(storageService);

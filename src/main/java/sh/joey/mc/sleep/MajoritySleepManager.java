@@ -14,6 +14,7 @@ import org.bukkit.event.world.WorldUnloadEvent;
 import org.jetbrains.annotations.Nullable;
 import sh.joey.mc.SiqiJoeyPlugin;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -21,6 +22,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 
 /**
  * Implements majority sleep: when 50% or more of eligible players in an overworld
@@ -41,6 +43,7 @@ public final class MajoritySleepManager implements Disposable {
     private final Map<UUID, Set<UUID>> sleepingByWorld = new HashMap<>();
     private final Map<UUID, Disposable> pendingSkips = new HashMap<>();
     private final Map<UUID, Long> countdownStartTime = new HashMap<>();
+    private final List<Consumer<World>> nightSkippedListeners = new ArrayList<>();
 
     public MajoritySleepManager(SiqiJoeyPlugin plugin) {
         this.plugin = plugin;
@@ -77,6 +80,14 @@ public final class MajoritySleepManager implements Disposable {
     @Override
     public boolean isDisposed() {
         return disposables.isDisposed();
+    }
+
+    /**
+     * Register a listener to be called when night is skipped via majority sleep.
+     * The listener receives the world where night was skipped.
+     */
+    public void addNightSkippedListener(Consumer<World> listener) {
+        nightSkippedListeners.add(listener);
     }
 
     /**
@@ -228,6 +239,15 @@ public final class MajoritySleepManager implements Disposable {
         // Clear state
         sleepingByWorld.remove(worldId);
         cancelPendingSkip(worldId);
+
+        // Notify listeners before skipping (so they can credit players based on current time state)
+        for (Consumer<World> listener : nightSkippedListeners) {
+            try {
+                listener.accept(world);
+            } catch (Exception e) {
+                plugin.getLogger().warning("Night skipped listener error: " + e.getMessage());
+            }
+        }
 
         // Skip to morning
         world.setTime(0);

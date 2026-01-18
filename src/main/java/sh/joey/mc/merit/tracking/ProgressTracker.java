@@ -58,6 +58,9 @@ public final class ProgressTracker implements Disposable {
     // Track last notified milestone per player per challenge
     private final Map<UUID, Map<String, Integer>> lastNotifiedMilestone = new ConcurrentHashMap<>();
 
+    // Track current week number to detect week transitions
+    private volatile int currentWeekNumber;
+
     public ProgressTracker(SiqiJoeyPlugin plugin, MeritStorage storage, MeritBossBarProvider bossBarProvider,
                            ChallengeAssigner assigner, LevelCalculator levelCalculator, MeritConfig config) {
         this.plugin = plugin;
@@ -67,14 +70,69 @@ public final class ProgressTracker implements Disposable {
         this.levelCalculator = levelCalculator;
         this.config = config;
         this.logger = plugin.getLogger();
+        this.currentWeekNumber = assigner.getCurrentWeekNumber();
 
         // Periodic flush
         disposables.add(plugin.interval(config.flushIntervalSeconds(), TimeUnit.SECONDS)
                 .subscribe(tick -> flushDirty()));
 
+        // Check for week transition every minute
+        disposables.add(plugin.interval(1, TimeUnit.MINUTES)
+                .subscribe(tick -> checkWeekTransition()));
+
         // Flush on player quit
         disposables.add(plugin.watchEvent(PlayerQuitEvent.class)
                 .subscribe(event -> flushPlayer(event.getPlayer().getUniqueId())));
+    }
+
+    /**
+     * Check if the week has changed and handle the transition.
+     */
+    private void checkWeekTransition() {
+        int newWeekNumber = assigner.getCurrentWeekNumber();
+        if (newWeekNumber == currentWeekNumber) {
+            return;
+        }
+
+        logger.info("[Merit] Week transition detected: " + currentWeekNumber + " -> " + newWeekNumber);
+        currentWeekNumber = newWeekNumber;
+
+        // Flush all pending data to the OLD week before transitioning
+        flushAll();
+
+        // Broadcast to all online players
+        Component message = Messages.PREFIX.append(
+                Component.text("A new week has begun! Your weekly challenges have been reset.", NamedTextColor.GOLD));
+
+        for (Player player : plugin.getServer().getOnlinePlayers()) {
+            // Send message and play sound
+            player.sendMessage(Component.empty());
+            player.sendMessage(message);
+            player.sendMessage(Messages.PREFIX.append(
+                    Component.text("Use ", NamedTextColor.GRAY)
+                            .append(Component.text("/challenges", NamedTextColor.AQUA))
+                            .append(Component.text(" to see your new challenges!", NamedTextColor.GRAY))));
+            player.sendMessage(Component.empty());
+            player.playSound(player.getLocation(), Sound.UI_TOAST_CHALLENGE_COMPLETE, 1.0f, 1.0f);
+
+            // Reload player data for the new week
+            reloadPlayerForNewWeek(player.getUniqueId());
+        }
+    }
+
+    /**
+     * Reload a player's data for a new week.
+     */
+    private void reloadPlayerForNewWeek(UUID playerId) {
+        // Clear old caches
+        progressCache.remove(playerId);
+        weeklyProgress.remove(playerId);
+        lastNotifiedMilestone.remove(playerId);
+        deltas.remove(playerId);
+        dirty.remove(playerId);
+
+        // Reload from database (will be empty for new week)
+        loadPlayer(playerId);
     }
 
     /**
@@ -118,31 +176,65 @@ public final class ProgressTracker implements Disposable {
                         err -> logger.warning("Failed to load merit for " + playerId + ": " + err.getMessage())
                 ));
 
-        // Load cumulative progress from database
-        disposables.add(storage.getProgress(playerId)
+        // Load weekly progress from database (stats reset each week)
+        disposables.add(storage.getProgress(playerId, weekNumber)
                 .observeOn(plugin.mainScheduler())
                 .subscribe(
                         progress -> {
                             Map<String, Long> cache = new ConcurrentHashMap<>(progress);
                             progressCache.put(playerId, cache);
-                            logger.info("[Merit] Loaded " + cache.size() + " progress entries for " + playerId);
+                            logger.info("[Merit] Loaded " + cache.size() + " weekly progress entries for " + playerId);
+
+                            // Initialize weeklyProgress from loaded data to prevent duplicate notifications
+                            initializeWeeklyProgress(playerId);
                         },
-                        err -> logger.warning("Failed to load progress for " + playerId + ": " + err.getMessage())
+                        err -> logger.warning("Failed to load weekly progress for " + playerId + ": " + err.getMessage())
                 ));
 
-        // Load weekly challenge progress (for completion tracking)
+        // Load weekly challenge completion status (for completion tracking)
         disposables.add(storage.getWeeklyChallengeProgress(playerId, weekNumber)
                 .observeOn(plugin.mainScheduler())
                 .subscribe(
                         progress -> {
-                            Map<String, Long> progressMap = new HashMap<>();
+                            // Track which challenges are already completed
+                            Map<String, Integer> milestones = lastNotifiedMilestone.computeIfAbsent(playerId, k -> new HashMap<>());
                             for (var entry : progress.entrySet()) {
-                                progressMap.put(entry.getKey(), entry.getValue().progress());
+                                if (entry.getValue().completed()) {
+                                    milestones.put(entry.getKey(), 100);
+                                }
                             }
-                            weeklyProgress.put(playerId, progressMap);
                         },
-                        err -> logger.warning("Failed to load weekly progress for " + playerId + ": " + err.getMessage())
+                        err -> logger.warning("Failed to load challenge completion status for " + playerId + ": " + err.getMessage())
                 ));
+    }
+
+    /**
+     * Initialize weeklyProgress from progressCache to prevent duplicate milestone notifications.
+     * Called after loading progress from database.
+     */
+    private void initializeWeeklyProgress(UUID playerId) {
+        List<Challenge> challenges = assigner.getWeeklyChallenges(playerId);
+        Map<String, Long> challengeProgress = new HashMap<>();
+
+        for (Challenge challenge : challenges) {
+            long progress = calculateChallengeProgress(playerId, challenge);
+            challengeProgress.put(challenge.id(), progress);
+
+            // Also initialize lastNotifiedMilestone based on current progress
+            int percent = (int) (progress * 100 / challenge.target());
+            int milestone = 0;
+            if (percent >= 100) milestone = 100;
+            else if (percent >= 50) milestone = 50;
+            else if (percent >= 25) milestone = 25;
+            else if (percent >= 10) milestone = 10;
+
+            if (milestone > 0) {
+                lastNotifiedMilestone.computeIfAbsent(playerId, k -> new HashMap<>())
+                        .put(challenge.id(), milestone);
+            }
+        }
+
+        weeklyProgress.put(playerId, challengeProgress);
     }
 
     /**
@@ -390,8 +482,10 @@ public final class ProgressTracker implements Disposable {
             return;
         }
 
+        int weekNumber = assigner.getCurrentWeekNumber();
+
         // Write to database (fire and forget)
-        disposables.add(storage.updateProgress(playerId, playerDeltas)
+        disposables.add(storage.updateProgress(playerId, weekNumber, playerDeltas)
                 .subscribe(
                         () -> {},
                         err -> logger.warning("Failed to flush progress for " + playerId + ": " + err.getMessage())
