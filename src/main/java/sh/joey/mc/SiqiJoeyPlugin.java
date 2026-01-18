@@ -147,6 +147,7 @@ import sh.joey.mc.rtp.RtpCommand;
 import sh.joey.mc.rtp.RtpConfig;
 import sh.joey.mc.rtp.RtpManager;
 import sh.joey.mc.rtp.RtpStorage;
+import sh.joey.mc.anticheat.AntiCheatManager;
 import sh.joey.mc.restart.AutoRestartManager;
 import sh.joey.mc.pregen.PregenBossBarProvider;
 import sh.joey.mc.pregen.PregenCommand;
@@ -463,6 +464,10 @@ public final class SiqiJoeyPlugin extends JavaPlugin {
 
         // Anti-troll restrictions
         components.add(new AntiTrollManager(this));
+
+        // Anti-cheat system
+        components.add(new AntiCheatManager(this, storageService,
+                playerResolver, playerSessionTracker.getServerSessionId()));
 
         // Punishment system
         var punishmentStorage = new PunishmentStorage(storageService);

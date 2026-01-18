@@ -5,7 +5,7 @@ description: Joey's custom mods for playing with Siqi
 api-version: '1.21'
 load: POSTWORLD
 author: Joey
-softdepend: [BlueMap, FastAsyncWorldEdit, WorldEdit]
+softdepend: [BlueMap, FastAsyncWorldEdit, WorldEdit, GrimAC]
 
 commands:
   back:
@@ -188,6 +188,12 @@ commands:
   opme:
     description: Temporarily grant yourself operator status
     usage: /opme
+  violations:
+    description: View anti-cheat violation history
+    usage: /violations [player]
+  alerts:
+    description: Toggle anti-cheat real-time alerts
+    usage: /alerts
 
 permissions:
   smp.*:
@@ -248,6 +254,8 @@ permissions:
       smp.last: true
       smp.seen: true
       smp.opme: true
+      smp.anticheat.violations: true
+      smp.anticheat.alerts: true
 
   smp.tp:
     description: Send teleport requests to other players
@@ -487,7 +495,6 @@ permissions:
 
   smp.ping.others:
     description: Check other players' connection latency
-    default: op
 
   smp.last:
     description: View recently joined players
@@ -497,4 +504,11 @@ permissions:
 
   smp.opme:
     description: Temporarily grant yourself operator status
+
+  smp.anticheat.violations:
+    description: View anti-cheat violation history
+    default: op
+
+  smp.anticheat.alerts:
+    description: Receive real-time anti-cheat alerts
     default: op

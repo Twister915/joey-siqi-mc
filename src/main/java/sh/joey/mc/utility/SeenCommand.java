@@ -75,19 +75,13 @@ public final class SeenCommand implements Command {
 
         // Player not online, look up in database
         return playerResolver.resolvePlayerId(targetName)
-                .observeOn(plugin.mainScheduler())
                 .flatMap(playerId -> sessionStorage.getLastSeenDate(playerId)
-                        .observeOn(plugin.mainScheduler())
                         .map(lastSeen -> new LastSeenResult(playerId, lastSeen)))
-                .doOnSuccess(result -> {
-                    playerResolver.getUsername(result.playerId)
-                            .observeOn(plugin.mainScheduler())
-                            .subscribe(
-                                    username -> showLastSeen(sender, username, result.lastSeen),
-                                    err -> showError(sender, targetName),
-                                    () -> showLastSeen(sender, targetName, result.lastSeen)
-                            );
-                })
+                .flatMap(result -> playerResolver.getUsername(result.playerId)
+                        .map(username -> new LastSeenDisplay(username, result.lastSeen))
+                        .switchIfEmpty(Maybe.just(new LastSeenDisplay(targetName, result.lastSeen))))
+                .observeOn(plugin.mainScheduler())
+                .doOnSuccess(display -> showLastSeen(sender, display.username, display.lastSeen))
                 .doOnComplete(() -> sender.sendMessage(PREFIX.append(
                         Component.text("Player '" + targetName + "' not found.").color(NamedTextColor.RED))))
                 .doOnError(err -> {
@@ -99,6 +93,7 @@ public final class SeenCommand implements Command {
     }
 
     private record LastSeenResult(java.util.UUID playerId, Instant lastSeen) {}
+    private record LastSeenDisplay(String username, Instant lastSeen) {}
 
     private void showLastSeen(CommandSender sender, String playerName, Instant lastSeen) {
         Duration ago = Duration.between(lastSeen, Instant.now());
