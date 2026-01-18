@@ -48,6 +48,9 @@ dependencies {
 
     // AssertJ for fluent assertions
     testImplementation 'org.assertj:assertj-core:3.26.3'
+
+    // Mockito for mocking
+    testImplementation 'org.mockito:mockito-core:5.14.2'
 }
 
 tasks.named('build') {

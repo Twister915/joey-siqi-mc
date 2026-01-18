@@ -412,6 +412,82 @@ class HomeStorageIntegrationTest extends PostgresIntegrationTest {
         }
     }
 
+    @Nested
+    @DisplayName("Count Owned Homes")
+    class CountOwnedHomesTests {
+
+        @Test
+        @DisplayName("returns 0 when no homes")
+        void countOwnedHomes_noHomes_returnsZero() {
+            UUID playerId = UUID.randomUUID();
+
+            int count = blockingGet(homeStorage.countOwnedHomes(playerId));
+
+            assertThat(count).isEqualTo(0);
+        }
+
+        @Test
+        @DisplayName("returns correct count after adding homes")
+        void countOwnedHomes_afterAddingHomes_returnsCorrectCount() {
+            UUID playerId = UUID.randomUUID();
+
+            Home home1 = createHome(playerId, "home", UUID.randomUUID(), 0, 0, 0);
+            Home home2 = createHome(playerId, "base", UUID.randomUUID(), 100, 100, 100);
+            Home home3 = createHome(playerId, "farm", UUID.randomUUID(), 200, 200, 200);
+            blockingAwait(homeStorage.setHome(playerId, home1));
+            blockingAwait(homeStorage.setHome(playerId, home2));
+            blockingAwait(homeStorage.setHome(playerId, home3));
+
+            int count = blockingGet(homeStorage.countOwnedHomes(playerId));
+
+            assertThat(count).isEqualTo(3);
+        }
+
+        @Test
+        @DisplayName("excludes soft-deleted homes")
+        void countOwnedHomes_excludesSoftDeleted() {
+            UUID playerId = UUID.randomUUID();
+
+            Home home1 = createHome(playerId, "home", UUID.randomUUID(), 0, 0, 0);
+            Home home2 = createHome(playerId, "base", UUID.randomUUID(), 100, 100, 100);
+            blockingAwait(homeStorage.setHome(playerId, home1));
+            blockingAwait(homeStorage.setHome(playerId, home2));
+            blockingGet(homeStorage.deleteHome(playerId, "home"));
+
+            int count = blockingGet(homeStorage.countOwnedHomes(playerId));
+
+            assertThat(count).isEqualTo(1);
+        }
+
+        @Test
+        @DisplayName("only counts owned homes, not shared")
+        void countOwnedHomes_onlyCountsOwned_notShared() {
+            UUID owner = UUID.randomUUID();
+            UUID receiver = UUID.randomUUID();
+
+            // Owner has 2 homes
+            Home ownerHome1 = createHome(owner, "home", UUID.randomUUID(), 0, 0, 0);
+            Home ownerHome2 = createHome(owner, "base", UUID.randomUUID(), 100, 100, 100);
+            blockingAwait(homeStorage.setHome(owner, ownerHome1));
+            blockingAwait(homeStorage.setHome(owner, ownerHome2));
+
+            // Owner shares one home with receiver
+            blockingGet(homeStorage.shareHome(owner, "base", receiver));
+
+            // Receiver has 1 own home
+            Home receiverHome = createHome(receiver, "my-home", UUID.randomUUID(), 200, 200, 200);
+            blockingAwait(homeStorage.setHome(receiver, receiverHome));
+
+            // Receiver should only count their owned home, not the shared one
+            int receiverCount = blockingGet(homeStorage.countOwnedHomes(receiver));
+            assertThat(receiverCount).isEqualTo(1);
+
+            // Owner count should be 2
+            int ownerCount = blockingGet(homeStorage.countOwnedHomes(owner));
+            assertThat(ownerCount).isEqualTo(2);
+        }
+    }
+
     @Test
     @DisplayName("Different players have separate homes")
     void differentPlayers_separateHomes() {

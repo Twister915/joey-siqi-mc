@@ -130,6 +130,25 @@ public final class HomeStorage {
     }
 
     /**
+     * Count the number of homes owned by a player.
+     * Does not include homes shared with the player.
+     */
+    public Single<Integer> countOwnedHomes(UUID playerId) {
+        return storage.query(conn -> {
+            String sql = "SELECT COUNT(*) FROM homes WHERE player_id = ? AND deleted_at IS NULL";
+
+            try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+                stmt.setObject(1, playerId);
+
+                try (ResultSet rs = stmt.executeQuery()) {
+                    rs.next();
+                    return rs.getInt(1);
+                }
+            }
+        });
+    }
+
+    /**
      * Save a home. If a home with the same name exists, it is soft-deleted first.
      * This runs in a transaction to ensure atomicity.
      */

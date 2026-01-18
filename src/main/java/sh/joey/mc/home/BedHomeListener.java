@@ -29,10 +29,12 @@ public final class BedHomeListener implements Disposable {
     private final CompositeDisposable disposables = new CompositeDisposable();
     private final SiqiJoeyPlugin plugin;
     private final HomeStorage storage;
+    private final HomeLimitConfig limitConfig;
 
-    public BedHomeListener(SiqiJoeyPlugin plugin, HomeStorage storage) {
+    public BedHomeListener(SiqiJoeyPlugin plugin, HomeStorage storage, HomeLimitConfig limitConfig) {
         this.plugin = plugin;
         this.storage = storage;
+        this.limitConfig = limitConfig;
 
         disposables.add(plugin.watchEvent(EventPriority.MONITOR, PlayerInteractEvent.class)
                 .filter(event -> event.getAction().isRightClick())
@@ -43,8 +45,10 @@ public final class BedHomeListener implements Disposable {
     }
 
     Completable saveFirstHomeIfNeeded(PlayerInteractEvent event) {
-        return storage.hasAnyHomes(event.getPlayer().getUniqueId())
+        Player player = event.getPlayer();
+        return storage.hasAnyHomes(player.getUniqueId())
                 .filter(hasHomes -> !hasHomes)
+                .filter(ignored -> HomeLimitResolver.canCreateHome(player, limitConfig, 0))
                 .flatMapCompletable(ignored -> saveFirstHome(event));
     }
 

@@ -28,6 +28,7 @@ import sh.joey.mc.welcome.ServerPingProvider;
 import sh.joey.mc.cmd.CmdExecutor;
 import sh.joey.mc.home.BedHomeListener;
 import sh.joey.mc.home.HomeCommand;
+import sh.joey.mc.home.HomeLimitConfig;
 import sh.joey.mc.home.HomeStorage;
 import sh.joey.mc.session.OnTimeCommand;
 import sh.joey.mc.session.PlayerSessionStorage;
@@ -296,11 +297,12 @@ public final class SiqiJoeyPlugin extends JavaPlugin {
 
         // Home system (uses PostgreSQL)
         var homeStorage = new HomeStorage(storageService);
+        var homeLimitConfig = HomeLimitConfig.load(this);
         components.add(CmdExecutor.register(this,
                 new HomeCommand(this, homeStorage, playerSessionStorage, playerResolver,
-                        safeTeleporter, confirmationManager)));
+                        safeTeleporter, confirmationManager, homeLimitConfig)));
 
-        var bedHomeListener = new BedHomeListener(this, homeStorage);
+        var bedHomeListener = new BedHomeListener(this, homeStorage, homeLimitConfig);
         components.add(bedHomeListener);
 
         // Day message system

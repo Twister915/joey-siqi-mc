@@ -24,6 +24,7 @@ import sh.joey.mc.teleport.SafeTeleporter;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.OptionalInt;
 import java.util.Set;
 import java.util.UUID;
 
@@ -52,15 +53,18 @@ public final class HomeCommand implements Command {
     private final PlayerResolver playerResolver;
     private final SafeTeleporter teleporter;
     private final ConfirmationManager confirmationManager;
+    private final HomeLimitConfig limitConfig;
 
     public HomeCommand(SiqiJoeyPlugin plugin, HomeStorage storage, PlayerSessionStorage sessionStorage,
-                       PlayerResolver playerResolver, SafeTeleporter teleporter, ConfirmationManager confirmationManager) {
+                       PlayerResolver playerResolver, SafeTeleporter teleporter, ConfirmationManager confirmationManager,
+                       HomeLimitConfig limitConfig) {
         this.plugin = plugin;
         this.storage = storage;
         this.sessionStorage = sessionStorage;
         this.playerResolver = playerResolver;
         this.teleporter = teleporter;
         this.confirmationManager = confirmationManager;
+        this.limitConfig = limitConfig;
     }
 
     @Override
@@ -200,32 +204,54 @@ public final class HomeCommand implements Command {
             UUID playerId = player.getUniqueId();
             Location location = player.getLocation();
 
-            // Check if home already exists
+            // Check if home already exists and get current count in parallel
             return storage.getHome(playerId, name)
                     .filter(existing -> existing.isOwnedBy(playerId))
+                    .zipWith(storage.countOwnedHomes(playerId).toMaybe(), (home, count) -> new HomeAndCount(home, count))
                     .observeOn(plugin.mainScheduler())
-                    .doOnSuccess(existing -> requestOverwriteConfirmation(player, name, location))
-                    .switchIfEmpty(Maybe.defer(() -> {
-                        // No existing home - set it directly
-                        return setHomeDirectly(player, name, location).toMaybe();
-                    }))
+                    .doOnSuccess(hc -> requestOverwriteConfirmation(player, name, location, hc.count()))
+                    .switchIfEmpty(storage.countOwnedHomes(playerId)
+                            .observeOn(plugin.mainScheduler())
+                            .flatMapCompletable(count -> handleNewHome(player, name, location, count))
+                            .toMaybe())
                     .doOnError(err -> logAndError(player, "Failed to set home", err))
                     .onErrorComplete()
                     .ignoreElement();
         });
     }
 
-    private Completable setHomeDirectly(Player player, String name, Location location) {
+    private record HomeAndCount(Home home, int count) {}
+
+    private Completable handleNewHome(Player player, String name, Location location, int currentCount) {
+        OptionalInt limit = HomeLimitResolver.resolve(player, limitConfig);
+
+        // Check if player is at or over their limit
+        if (limit.isPresent() && currentCount >= limit.getAsInt()) {
+            error(player, "You have reached your home limit (" + currentCount + "/" + limit.getAsInt() + "). Delete a home first.");
+            return Completable.complete();
+        }
+
         Home home = new Home(name, player.getUniqueId(), location);
+        int newCount = currentCount + 1;
+
         return storage.setHome(player.getUniqueId(), home)
                 .observeOn(plugin.mainScheduler())
-                .doOnComplete(() -> success(player, "Home '" + name + "' has been set!"))
+                .doOnComplete(() -> showHomeSetSuccess(player, name, newCount, limit))
                 .doOnError(err -> logAndError(player, "Failed to set home", err))
                 .onErrorComplete();
     }
 
-    private void requestOverwriteConfirmation(Player player, String name, Location newLocation) {
+    private void showHomeSetSuccess(Player player, String name, int count, OptionalInt limit) {
+        if (limit.isPresent()) {
+            success(player, "Home '" + name + "' has been set! (" + count + "/" + limit.getAsInt() + " homes)");
+        } else {
+            success(player, "Home '" + name + "' has been set!");
+        }
+    }
+
+    private void requestOverwriteConfirmation(Player player, String name, Location newLocation, int currentCount) {
         UUID playerId = player.getUniqueId();
+        OptionalInt limit = HomeLimitResolver.resolve(player, limitConfig);
 
         confirmationManager.request(player, new ConfirmationRequest() {
             @Override
@@ -254,7 +280,7 @@ public final class HomeCommand implements Command {
                 storage.setHome(playerId, home)
                         .observeOn(plugin.mainScheduler())
                         .subscribe(
-                                () -> success(player, "Home '" + name + "' has been updated!"),
+                                () -> showHomeUpdateSuccess(player, name, currentCount, limit),
                                 err -> logAndError(player, "Failed to set home", err)
                         );
             }
@@ -274,6 +300,14 @@ public final class HomeCommand implements Command {
                 return CONFIRM_TIMEOUT_SECONDS;
             }
         });
+    }
+
+    private void showHomeUpdateSuccess(Player player, String name, int count, OptionalInt limit) {
+        if (limit.isPresent()) {
+            success(player, "Home '" + name + "' has been updated! (" + count + "/" + limit.getAsInt() + " homes)");
+        } else {
+            success(player, "Home '" + name + "' has been updated!");
+        }
     }
 
     // --- Delete Home ---

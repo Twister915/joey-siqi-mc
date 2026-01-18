@@ -27,6 +27,15 @@ requests:
   # How long a teleport request stays valid (in seconds)
   timeout-seconds: 60
 
+# Home limits per permission class
+# Each entry creates permission smp.home.<name>
+# Players without any limit permission have unlimited homes
+homes:
+  limits:
+    # player: 5       # smp.home.player grants 5 homes
+    # donor: 12       # smp.home.donor grants 12 homes
+    # vip: unlimited  # smp.home.vip grants unlimited homes
+
 # Tips system - sends helpful tips to players every 5 minutes
 tips:
   enabled: true
