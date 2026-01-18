@@ -211,20 +211,20 @@ public final class AnthropicSteveProvider implements SteveModelProvider {
                 }
 
                 // Haiku 3.5 pricing with cache tracking
-                // Note: inputTokens is the total, we subtract cache tokens to avoid double counting
-                int regularInputTokens = inputTokens - cacheCreationTokens - cacheReadTokens;
-                double inputCost = (regularInputTokens / 1_000_000.0) * INPUT_PRICE_PER_MTOK;
+                // Anthropic reports each category separately (not overlapping):
+                // - input_tokens: non-cached input tokens
+                // - cache_creation_input_tokens: tokens written to cache
+                // - cache_read_input_tokens: tokens read from cache
+                double inputCost = (inputTokens / 1_000_000.0) * INPUT_PRICE_PER_MTOK;
                 double outputCost = (outputTokens / 1_000_000.0) * OUTPUT_PRICE_PER_MTOK;
                 double cacheWriteCost = (cacheCreationTokens / 1_000_000.0) * CACHE_WRITE_PRICE_PER_MTOK;
                 double cacheReadCost = (cacheReadTokens / 1_000_000.0) * CACHE_READ_PRICE_PER_MTOK;
                 double searchCost = (webSearches / 1_000.0) * SEARCH_PRICE_PER_KTOK;
                 costCents = (inputCost + outputCost + cacheWriteCost + cacheReadCost + searchCost) * 100.0;
 
-                // Log cache usage for monitoring
-                if (cacheReadTokens > 0 || cacheCreationTokens > 0) {
-                    logger.info(String.format("Steve cache: %d read, %d created, %.2f¢ total",
-                            cacheReadTokens, cacheCreationTokens, costCents));
-                }
+                // Log token usage for monitoring
+                logger.info(String.format("Steve tokens: %d in, %d out, %d cache-read, %d cache-write, %d searches, %.2f¢",
+                        inputTokens, outputTokens, cacheReadTokens, cacheCreationTokens, webSearches, costCents));
             }
 
             JsonArray content = response.getAsJsonArray("content");
