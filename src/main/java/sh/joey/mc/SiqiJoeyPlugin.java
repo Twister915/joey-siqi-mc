@@ -148,6 +148,10 @@ import sh.joey.mc.rtp.RtpConfig;
 import sh.joey.mc.rtp.RtpManager;
 import sh.joey.mc.rtp.RtpStorage;
 import sh.joey.mc.anticheat.AntiCheatManager;
+import sh.joey.mc.merit.MeritConfig;
+import sh.joey.mc.merit.MeritManager;
+import sh.joey.mc.merit.cmd.ChallengesCommand;
+import sh.joey.mc.merit.cmd.MeritAdminCommand;
 import sh.joey.mc.restart.AutoRestartManager;
 import sh.joey.mc.pregen.PregenBossBarProvider;
 import sh.joey.mc.pregen.PregenCommand;
@@ -328,7 +332,20 @@ public final class SiqiJoeyPlugin extends JavaPlugin {
         var serverPingProvider = new ServerPingProvider(this, brandingConfig);
         components.add(serverPingProvider);
 
-        var chatMessageProvider = new ChatMessageProvider(this, displayManager, nicknameManager);
+        // Merit leveling system
+        var meritConfig = MeritConfig.load(this);
+        MeritManager meritManager = null;
+        if (meritConfig.enabled()) {
+            meritManager = new MeritManager(this, storageService, meritConfig);
+            components.add(meritManager);
+            bossBarManager.registerProvider(meritManager.getBossBarProvider());
+            displayManager.setMeritManager(meritManager);
+            components.add(CmdExecutor.register(this, new ChallengesCommand(this, meritManager, playerResolver)));
+            components.add(CmdExecutor.register(this, new MeritAdminCommand(this, meritManager, playerResolver)));
+            getLogger().info("Merit system enabled");
+        }
+
+        var chatMessageProvider = new ChatMessageProvider(this, displayManager, nicknameManager, meritManager);
         components.add(chatMessageProvider);
 
         // Death message system

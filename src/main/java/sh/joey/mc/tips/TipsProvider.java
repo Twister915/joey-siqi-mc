@@ -96,6 +96,19 @@ public final class TipsProvider implements Disposable {
                                 .append(Component.text(" to find a random spot to build your base!", NamedTextColor.GRAY))));
             }
         }));
+
+        // Send merit tip a bit later
+        disposables.add(plugin.timer(15, TimeUnit.SECONDS).subscribe(tick -> {
+            Player player = plugin.getServer().getPlayer(playerId);
+            if (player != null && player.isOnline()) {
+                player.sendMessage(PREFIX.append(
+                        Component.text("Complete challenges to earn ", NamedTextColor.GRAY)
+                                .append(Component.text("Merit", NamedTextColor.LIGHT_PURPLE))
+                                .append(Component.text(" and level up! Check ", NamedTextColor.GRAY))
+                                .append(cmd("/challenges"))
+                                .append(Component.text(" to get started.", NamedTextColor.GRAY))));
+            }
+        }));
     }
 
     private void startTipsForPlayer(Player player) {
@@ -280,6 +293,25 @@ public final class TipsProvider implements Disposable {
         tipList.add(Component.text("Hold a lodestone compass to see the direction and distance to your target.", NamedTextColor.GRAY));
 
         tipList.add(Component.text("Entering a new biome? Watch for the biome name in the boss bar!", NamedTextColor.GRAY));
+
+        // === MERIT TIPS ===
+        tipList.add(Component.text("Earn ", NamedTextColor.GRAY)
+                .append(Component.text("Merit", NamedTextColor.LIGHT_PURPLE))
+                .append(Component.text(" by completing weekly challenges! Use ", NamedTextColor.GRAY))
+                .append(cmd("/challenges"))
+                .append(Component.text(" to see your progress.", NamedTextColor.GRAY)));
+
+        tipList.add(Component.text("Your level shows next to your name - higher levels unlock ", NamedTextColor.GRAY)
+                .append(Component.text("\u2605", NamedTextColor.GOLD))
+                .append(Component.text(" symbols!", NamedTextColor.GRAY)));
+
+        tipList.add(Component.text("New challenges are assigned every week. Complete them to earn Merit!", NamedTextColor.GRAY));
+
+        tipList.add(Component.text("Playing on the server earns Merit over time - 10 Merit every 30 minutes!", NamedTextColor.GRAY));
+
+        tipList.add(Component.text("Use ", NamedTextColor.GRAY)
+                .append(cmd("/challenges leaderboard"))
+                .append(Component.text(" to see who's earning the most Merit this week!", NamedTextColor.GRAY)));
 
         return tipList;
     }

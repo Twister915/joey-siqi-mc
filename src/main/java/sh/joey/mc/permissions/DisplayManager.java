@@ -11,7 +11,9 @@ import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.scoreboard.Scoreboard;
 import org.bukkit.scoreboard.Team;
+import org.jetbrains.annotations.Nullable;
 import sh.joey.mc.SiqiJoeyPlugin;
+import sh.joey.mc.merit.MeritManager;
 
 import java.util.Map;
 import java.util.UUID;
@@ -43,6 +45,10 @@ public final class DisplayManager implements Disposable {
 
     // Cached default name color (resolved from default groups)
     private volatile TextColor defaultNameColor = DEFAULT_NAME_COLOR;
+
+    // Optional merit manager for level display
+    @Nullable
+    private MeritManager meritManager;
 
     public DisplayManager(SiqiJoeyPlugin plugin, PermissionCache cache, PermissionResolver resolver) {
         this.plugin = plugin;
@@ -92,6 +98,16 @@ public final class DisplayManager implements Disposable {
     }
 
     /**
+     * Set the merit manager for level display.
+     * This allows late initialization to avoid circular dependencies.
+     */
+    public void setMeritManager(@Nullable MeritManager meritManager) {
+        this.meritManager = meritManager;
+        // Refresh all displays to include level
+        refreshAll();
+    }
+
+    /**
      * Update the display (scoreboard team) for a player.
      */
     public void updateDisplay(Player player) {
@@ -119,6 +135,11 @@ public final class DisplayManager implements Disposable {
         }
         team = scoreboard.registerNewTeam(teamName);
 
+        // Get level prefix from MeritManager if available
+        Component levelPrefix = meritManager != null
+                ? meritManager.getLevelPrefix(player)
+                : Component.empty();
+
         // Apply prefix/suffix (using nameplate values for both tablist and nameplate)
         Component prefixComponent = attrs.nameplatePrefixComponent();
         Component suffixComponent = attrs.nameplateSuffixComponent();
@@ -129,7 +150,9 @@ public final class DisplayManager implements Disposable {
         if (nameColor == null) {
             nameColor = DEFAULT_NAME_COLOR;
         }
-        Component coloredPrefix = prefixComponent.append(Component.empty().color(nameColor));
+
+        // Combine level prefix + permission prefix + name color
+        Component coloredPrefix = levelPrefix.append(prefixComponent).append(Component.empty().color(nameColor));
 
         team.prefix(coloredPrefix);
         team.suffix(suffixComponent);

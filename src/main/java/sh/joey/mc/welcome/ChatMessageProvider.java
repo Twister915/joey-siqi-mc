@@ -8,18 +8,21 @@ import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextColor;
 import org.jetbrains.annotations.Nullable;
 import sh.joey.mc.SiqiJoeyPlugin;
+import sh.joey.mc.merit.MeritManager;
 import sh.joey.mc.nickname.NicknameManager;
 import sh.joey.mc.permissions.DisplayManager;
 
 /**
  * Customizes chat message format to match the plugin's style.
- * Format: [prefix]DisplayName[suffix]: message
+ * Format: [level] [prefix]DisplayName[suffix]: message
  * <p>
  * When a DisplayManager is provided, prefixes and suffixes from the
  * permissions system are included in chat messages.
  * <p>
  * When a NicknameManager is provided, uses the player's display name
  * (nickname if set, otherwise username).
+ * <p>
+ * When a MeritManager is provided, the player's level is prepended.
  */
 public final class ChatMessageProvider implements Disposable {
 
@@ -28,15 +31,23 @@ public final class ChatMessageProvider implements Disposable {
     private final DisplayManager displayManager;
     @Nullable
     private final NicknameManager nicknameManager;
+    @Nullable
+    private final MeritManager meritManager;
 
     public ChatMessageProvider(SiqiJoeyPlugin plugin) {
-        this(plugin, null, null);
+        this(plugin, null, null, null);
     }
 
     public ChatMessageProvider(SiqiJoeyPlugin plugin, @Nullable DisplayManager displayManager,
                                @Nullable NicknameManager nicknameManager) {
+        this(plugin, displayManager, nicknameManager, null);
+    }
+
+    public ChatMessageProvider(SiqiJoeyPlugin plugin, @Nullable DisplayManager displayManager,
+                               @Nullable NicknameManager nicknameManager, @Nullable MeritManager meritManager) {
         this.displayManager = displayManager;
         this.nicknameManager = nicknameManager;
+        this.meritManager = meritManager;
 
         disposables.add(plugin.watchEvent(AsyncChatEvent.class)
                 .subscribe(event -> {
@@ -45,6 +56,11 @@ public final class ChatMessageProvider implements Disposable {
                             ? nicknameManager.getDisplayName(event.getPlayer())
                             : event.getPlayer().getName();
                     Component message = event.message();
+
+                    // Get level prefix from MeritManager if available
+                    Component levelPrefix = meritManager != null
+                            ? meritManager.getLevelPrefix(event.getPlayer())
+                            : Component.empty();
 
                     // Get prefix/suffix/color from DisplayManager if available
                     Component prefix = displayManager != null
@@ -57,7 +73,8 @@ public final class ChatMessageProvider implements Disposable {
                             ? displayManager.getNameColor(event.getPlayer())
                             : DisplayManager.DEFAULT_NAME_COLOR;
 
-                    Component formatted = prefix
+                    Component formatted = levelPrefix
+                            .append(prefix)
                             .append(Component.text(playerName).color(nameColor))
                             .append(suffix)
                             .append(Component.text(": ").color(NamedTextColor.DARK_GRAY))

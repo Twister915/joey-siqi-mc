@@ -72,6 +72,26 @@ pregen:
 whitelist:
   enabled: true
 
+# Merit leveling system - weekly challenges and progression
+# Players earn Merit by completing challenges and gain levels
+merit:
+  # Enable/disable the merit system
+  enabled: true
+  # Base XP for level calculation: merit_for_level(n) = base * n^exponent
+  level-base-xp: 100
+  # Exponent for level curve (higher = slower progression at high levels)
+  level-exponent: 1.8
+  # Merit earned for online time
+  online-time-reward: 10
+  # Minutes of play time required for each reward
+  online-time-interval-minutes: 30
+  # Maximum merit earnable from online time per week
+  online-time-weekly-cap: 500
+  # How often to flush progress data to database (seconds)
+  flush-interval-seconds: 30
+  # Number of weekly challenges assigned to each player
+  weekly-challenge-count: 8
+
 # Admin mode configuration
 # /adminmode lets admins temporarily enter creative mode while preserving inventory
 adminmode:
