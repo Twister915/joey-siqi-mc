@@ -148,9 +148,6 @@ public final class ProgressTracker implements Disposable {
         progressCache.computeIfAbsent(playerId, k -> new ConcurrentHashMap<>())
               .merge(key, amount, Long::sum);
 
-        long newValue = progressCache.get(playerId).get(key);
-        logger.info("[Merit] Increment: " + key + " = " + newValue + " for " + playerId);
-
         // Check challenge progress on main thread
         plugin.getServer().getScheduler().runTask(plugin, () -> checkChallengeProgress(playerId, key, amount));
     }
@@ -183,7 +180,6 @@ public final class ProgressTracker implements Disposable {
                         progress -> {
                             Map<String, Long> cache = new ConcurrentHashMap<>(progress);
                             progressCache.put(playerId, cache);
-                            logger.info("[Merit] Loaded " + cache.size() + " weekly progress entries for " + playerId);
 
                             // Initialize weeklyProgress from loaded data to prevent duplicate notifications
                             initializeWeeklyProgress(playerId);
@@ -268,14 +264,8 @@ public final class ProgressTracker implements Disposable {
     public Map<String, Long> getAllChallengeProgress(UUID playerId) {
         List<Challenge> challenges = assigner.getWeeklyChallenges(playerId);
         Map<String, Long> progress = new HashMap<>();
-        logger.info("[Merit] getAllChallengeProgress for " + playerId + ", progressCache size: " +
-            (progressCache.containsKey(playerId) ? progressCache.get(playerId).size() : 0));
         for (Challenge challenge : challenges) {
-            long p = calculateChallengeProgress(playerId, challenge);
-            progress.put(challenge.id(), p);
-            if (p > 0) {
-                logger.info("[Merit] Challenge " + challenge.id() + " progress: " + p);
-            }
+            progress.put(challenge.id(), calculateChallengeProgress(playerId, challenge));
         }
         return progress;
     }
