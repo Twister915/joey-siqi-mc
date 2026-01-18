@@ -37,8 +37,8 @@ public final class AnthropicSteveProvider implements SteveModelProvider {
     private static final String ID = "anthropic";
     private static final SteveModelInfo INFO = new SteveModelInfo(
             "Anthropic",
-            "claude-3-5-haiku-20241022",
-            "Claude Haiku 3.5"
+            "claude-sonnet-4-20250514",
+            "Claude Sonnet 4"
     );
 
     private final String apiKey;
@@ -73,14 +73,14 @@ public final class AnthropicSteveProvider implements SteveModelProvider {
 
         private static final String API_URL = "https://api.anthropic.com/v1/messages";
         private static final String API_VERSION = "2023-06-01";
-        private static final String MODEL = "claude-3-5-haiku-20241022";
+        private static final String MODEL = "claude-sonnet-4-20250514";
         private static final Duration TIMEOUT = Duration.ofSeconds(60);
 
-        // Haiku 3.5 pricing (per million tokens)
-        private static final double INPUT_PRICE_PER_MTOK = 0.80;
-        private static final double OUTPUT_PRICE_PER_MTOK = 4.00;
-        private static final double CACHE_WRITE_PRICE_PER_MTOK = 1.00;  // 1.25x input
-        private static final double CACHE_READ_PRICE_PER_MTOK = 0.08;   // 0.1x input
+        // Sonnet 4 pricing (per million tokens)
+        private static final double INPUT_PRICE_PER_MTOK = 3.00;
+        private static final double OUTPUT_PRICE_PER_MTOK = 15.00;
+        private static final double CACHE_WRITE_PRICE_PER_MTOK = 3.75;  // 1.25x input
+        private static final double CACHE_READ_PRICE_PER_MTOK = 0.30;   // 0.1x input
         private static final double SEARCH_PRICE_PER_KTOK = 10.0;
 
         private final HttpClient httpClient;
