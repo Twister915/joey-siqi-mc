@@ -19,7 +19,9 @@ public final class SpeedCheck implements Check {
     private static final String NAME = "Speed";
     private static final double BASE_WALK_SPEED = 4.317;
     private static final double BASE_SPRINT_SPEED = 5.612;
-    private static final double TOLERANCE = 1.15;
+    // Sprint-jumping adds ~30-40% speed, plus lag compensation can cause spikes
+    private static final double GROUND_TOLERANCE = 1.25;
+    private static final double AIR_TOLERANCE = 1.60;
 
     private final Observable<Detection> detections;
 
@@ -65,7 +67,11 @@ public final class SpeedCheck implements Check {
         double speed = horizontalDistance * 20;
         double maxSpeed = calculateMaxSpeed(player);
 
-        if (speed > maxSpeed * TOLERANCE) {
+        // Use higher tolerance when airborne (jumping, falling) since movement is less predictable
+        boolean onGround = player.isOnGround();
+        double tolerance = onGround ? GROUND_TOLERANCE : AIR_TOLERANCE;
+
+        if (speed > maxSpeed * tolerance) {
             double ratio = speed / maxSpeed;
             double weight = Math.min(5.0, (ratio - 1.0) * 10);
 
@@ -77,7 +83,8 @@ public final class SpeedCheck implements Check {
                     Map.of(
                             "speed", speed,
                             "maxSpeed", maxSpeed,
-                            "ratio", ratio
+                            "ratio", ratio,
+                            "onGround", onGround
                     )
             ));
         }
