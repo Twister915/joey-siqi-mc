@@ -42,9 +42,12 @@ public final class ProgressTracker implements Disposable {
     private final MeritConfig config;
     private final Logger logger;
 
-    // In-memory delta tracking
+    // In-memory delta tracking (unflushed changes)
     private final Map<UUID, Map<String, Long>> deltas = new ConcurrentHashMap<>();
     private final Set<UUID> dirty = ConcurrentHashMap.newKeySet();
+
+    // Cumulative progress cache (flushed + unflushed, for online players)
+    private final Map<UUID, Map<String, Long>> progressCache = new ConcurrentHashMap<>();
 
     // Cached weekly challenge progress (to detect milestones)
     private final Map<UUID, Map<String, Long>> weeklyProgress = new ConcurrentHashMap<>();
@@ -78,11 +81,16 @@ public final class ProgressTracker implements Disposable {
      * Increment a stat for a player.
      */
     public void increment(UUID playerId, String key, long amount) {
+        // Track delta for DB flush
         deltas.computeIfAbsent(playerId, k -> new ConcurrentHashMap<>())
               .merge(key, amount, Long::sum);
         dirty.add(playerId);
 
-        long newValue = deltas.get(playerId).get(key);
+        // Update cumulative cache
+        progressCache.computeIfAbsent(playerId, k -> new ConcurrentHashMap<>())
+              .merge(key, amount, Long::sum);
+
+        long newValue = progressCache.get(playerId).get(key);
         logger.info("[Merit] Increment: " + key + " = " + newValue + " for " + playerId);
 
         // Check challenge progress on main thread
@@ -110,7 +118,19 @@ public final class ProgressTracker implements Disposable {
                         err -> logger.warning("Failed to load merit for " + playerId + ": " + err.getMessage())
                 ));
 
-        // Load weekly challenge progress
+        // Load cumulative progress from database
+        disposables.add(storage.getProgress(playerId)
+                .observeOn(plugin.mainScheduler())
+                .subscribe(
+                        progress -> {
+                            Map<String, Long> cache = new ConcurrentHashMap<>(progress);
+                            progressCache.put(playerId, cache);
+                            logger.info("[Merit] Loaded " + cache.size() + " progress entries for " + playerId);
+                        },
+                        err -> logger.warning("Failed to load progress for " + playerId + ": " + err.getMessage())
+                ));
+
+        // Load weekly challenge progress (for completion tracking)
         disposables.add(storage.getWeeklyChallengeProgress(playerId, weekNumber)
                 .observeOn(plugin.mainScheduler())
                 .subscribe(
@@ -130,6 +150,7 @@ public final class ProgressTracker implements Disposable {
      */
     public void unloadPlayer(UUID playerId) {
         flushPlayer(playerId);
+        progressCache.remove(playerId);
         weeklyProgress.remove(playerId);
         playerLevels.remove(playerId);
         lastNotifiedMilestone.remove(playerId);
@@ -155,8 +176,8 @@ public final class ProgressTracker implements Disposable {
     public Map<String, Long> getAllChallengeProgress(UUID playerId) {
         List<Challenge> challenges = assigner.getWeeklyChallenges(playerId);
         Map<String, Long> progress = new HashMap<>();
-        logger.info("[Merit] getAllChallengeProgress for " + playerId + ", deltas size: " +
-            (deltas.containsKey(playerId) ? deltas.get(playerId).size() : 0));
+        logger.info("[Merit] getAllChallengeProgress for " + playerId + ", progressCache size: " +
+            (progressCache.containsKey(playerId) ? progressCache.get(playerId).size() : 0));
         for (Challenge challenge : challenges) {
             long p = calculateChallengeProgress(playerId, challenge);
             progress.put(challenge.id(), p);
@@ -212,22 +233,23 @@ public final class ProgressTracker implements Disposable {
 
     /**
      * Calculate total progress for a challenge across all its tracking keys.
+     * Uses progressCache which contains cumulative data (DB + unflushed).
      */
     private long calculateChallengeProgress(UUID playerId, Challenge challenge) {
-        Map<String, Long> playerDeltas = deltas.getOrDefault(playerId, Map.of());
+        Map<String, Long> playerProgress = progressCache.getOrDefault(playerId, Map.of());
         long total = 0;
 
         for (String trackingKey : challenge.trackingKeys()) {
             // Check for special ANY key
             if (trackingKey.endsWith(":ANY")) {
                 String prefix = trackingKey.substring(0, trackingKey.length() - 3);
-                for (var entry : playerDeltas.entrySet()) {
+                for (var entry : playerProgress.entrySet()) {
                     if (entry.getKey().startsWith(prefix)) {
                         total += entry.getValue();
                     }
                 }
             } else {
-                total += playerDeltas.getOrDefault(trackingKey, 0L);
+                total += playerProgress.getOrDefault(trackingKey, 0L);
             }
         }
 
