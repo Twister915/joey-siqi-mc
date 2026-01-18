@@ -243,21 +243,30 @@ public final class PermissionStorage {
     public Completable addGroupPermission(String groupName, String permission, @Nullable UUID worldId, boolean state) {
         String canonical = Group.normalize(groupName);
         return storage.execute(conn -> {
-            String sql = """
+            // Use different ON CONFLICT clauses for global vs world-specific
+            // because partial unique indexes require matching WHERE clause
+            String sql = worldId == null
+                    ? """
+                    INSERT INTO group_permissions (group_name, permission, world_id, state)
+                    VALUES (?, ?, NULL, ?)
+                    ON CONFLICT (group_name, permission) WHERE world_id IS NULL
+                    DO UPDATE SET state = EXCLUDED.state
+                    """
+                    : """
                     INSERT INTO group_permissions (group_name, permission, world_id, state)
                     VALUES (?, ?, ?, ?)
-                    ON CONFLICT (group_name, permission, world_id)
+                    ON CONFLICT (group_name, permission, world_id) WHERE world_id IS NOT NULL
                     DO UPDATE SET state = EXCLUDED.state
                     """;
             try (PreparedStatement stmt = conn.prepareStatement(sql)) {
                 stmt.setString(1, canonical);
                 stmt.setString(2, permission.toLowerCase());
                 if (worldId == null) {
-                    stmt.setNull(3, Types.OTHER);
+                    stmt.setBoolean(3, state);
                 } else {
                     stmt.setObject(3, worldId);
+                    stmt.setBoolean(4, state);
                 }
-                stmt.setBoolean(4, state);
                 stmt.executeUpdate();
             }
         });
@@ -369,21 +378,30 @@ public final class PermissionStorage {
      */
     public Completable addPlayerPermission(UUID playerId, String permission, @Nullable UUID worldId, boolean state) {
         return storage.execute(conn -> {
-            String sql = """
+            // Use different ON CONFLICT clauses for global vs world-specific
+            // because partial unique indexes require matching WHERE clause
+            String sql = worldId == null
+                    ? """
+                    INSERT INTO player_permissions (player_id, permission, world_id, state)
+                    VALUES (?, ?, NULL, ?)
+                    ON CONFLICT (player_id, permission) WHERE world_id IS NULL
+                    DO UPDATE SET state = EXCLUDED.state
+                    """
+                    : """
                     INSERT INTO player_permissions (player_id, permission, world_id, state)
                     VALUES (?, ?, ?, ?)
-                    ON CONFLICT (player_id, permission, world_id)
+                    ON CONFLICT (player_id, permission, world_id) WHERE world_id IS NOT NULL
                     DO UPDATE SET state = EXCLUDED.state
                     """;
             try (PreparedStatement stmt = conn.prepareStatement(sql)) {
                 stmt.setObject(1, playerId);
                 stmt.setString(2, permission.toLowerCase());
                 if (worldId == null) {
-                    stmt.setNull(3, Types.OTHER);
+                    stmt.setBoolean(3, state);
                 } else {
                     stmt.setObject(3, worldId);
+                    stmt.setBoolean(4, state);
                 }
-                stmt.setBoolean(4, state);
                 stmt.executeUpdate();
             }
         });
