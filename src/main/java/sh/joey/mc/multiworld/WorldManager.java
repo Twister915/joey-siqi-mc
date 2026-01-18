@@ -8,6 +8,7 @@ import org.bukkit.World;
 import org.bukkit.WorldCreator;
 import org.bukkit.WorldType;
 import org.bukkit.entity.Player;
+import org.bukkit.generator.ChunkGenerator;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.util.HashMap;
@@ -72,12 +73,24 @@ public final class WorldManager {
 
         config.seed().ifPresent(creator::seed);
 
-        if (config.superflat()) {
+        // Apply custom generator if specified
+        ChunkGenerator generator = getGenerator(config.generator());
+        if (generator != null) {
+            creator.generator(generator);
+        } else if (config.superflat()) {
+            // Fallback to superflat if no custom generator
             creator.type(WorldType.FLAT);
             config.generatorSettings().ifPresent(creator::generatorSettings);
         }
 
         return creator.createWorld();
+    }
+
+    private ChunkGenerator getGenerator(WorldConfig.Generator generator) {
+        return switch (generator) {
+            case VOID -> new VoidGenerator();
+            case DEFAULT -> null;
+        };
     }
 
     private void applyWorldSettings(World world, WorldConfig config) {

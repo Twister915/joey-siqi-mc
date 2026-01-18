@@ -115,6 +115,10 @@ public record WorldsConfig(Map<String, WorldConfig> worlds) {
                 pregenSize = OptionalInt.empty();
             }
 
+            // Parse generator (default DEFAULT - vanilla generation)
+            WorldConfig.Generator generator = WorldConfig.Generator.fromString(
+                    worldSection.getString("generator"));
+
             WorldConfig worldConfig = new WorldConfig(
                     worldName.toLowerCase(),
                     seed,
@@ -131,7 +135,8 @@ public record WorldsConfig(Map<String, WorldConfig> worlds) {
                     time,
                     weather,
                     disableAdvancements,
-                    pregenSize
+                    pregenSize,
+                    generator
             );
 
             worlds.put(worldName.toLowerCase(), worldConfig);

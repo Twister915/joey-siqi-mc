@@ -36,7 +36,8 @@ worlds:
 | `dimension` | string | `overworld` | World dimension: `overworld`, `nether`, or `end` |
 | `gamemode` | string | `SURVIVAL` | Player gamemode: `SURVIVAL`, `CREATIVE`, `ADVENTURE`, `SPECTATOR` |
 | `seed` | number | (random) | World seed (only used when creating new worlds) |
-| `superflat` | boolean | `false` | Use superflat terrain (only for new overworld) |
+| `generator` | string | `default` | World generator: `default` (vanilla) or `void` (empty void world) |
+| `superflat` | boolean | `false` | Use superflat terrain (only for new overworld, ignored if `generator` is set) |
 | `generator_settings` | string | (none) | Superflat JSON config (see below) |
 | `structures` | boolean | `true` | Generate structures (villages, temples, etc.) - only for new worlds |
 | `hidden` | boolean | `false` | If true, world is hidden from `/world` list and cannot be teleported to directly |
@@ -102,6 +103,56 @@ worlds:
 - [Minecraft Wiki - Superflat](https://minecraft.wiki/w/Superflat)
 - [Chunkbase Superflat Generator](https://chunkbase.com/apps/superflat-generator)
 - [Misode's Generator](https://misode.github.io/worldgen/flat-world-preset/)
+
+## Void Generator
+
+The `generator: void` option creates a completely empty void world with just a 3x3 bedrock platform at spawn. This works with any dimension, including End (for black sky void worlds).
+
+### Features
+
+- Empty world (all air except spawn platform)
+- 3x3 bedrock platform at y=64
+- Fixed spawn location on the platform
+- Works with all dimensions (overworld, nether, end)
+- No structures, caves, or terrain generation
+
+### Example: Admin Void World
+
+```yaml
+worlds:
+  admin_void:
+    dimension: end
+    gamemode: CREATIVE
+    access: permission
+    generator: void
+    structures: false
+    teleport_warmup: false
+    inventory_group: admin_void
+    game_rules:
+      doMobSpawning: false
+      doDaylightCycle: false
+```
+
+This creates a void world with End dimension (black sky), restricted to players with `smp.world.admin_void` permission.
+
+### Example: Build Competition World
+
+```yaml
+worlds:
+  build_contest:
+    dimension: overworld
+    gamemode: CREATIVE
+    generator: void
+    structures: false
+    inventory_group: build_contest
+    game_rules:
+      doMobSpawning: false
+      doWeatherCycle: false
+      doDaylightCycle: false
+    time: 6000
+```
+
+A void world with blue sky (overworld dimension), fixed at noon, for building competitions.
 
 ## Game Rules
 

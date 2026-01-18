@@ -29,6 +29,7 @@ import java.util.OptionalLong;
  * @param disableAdvancements If true, players cannot earn advancements in this world
  * @param pregenSize        Optional chunk pre-generation size in blocks per side. If set, chunks within this
  *                          square area centered on spawn will be pre-generated when the server is empty.
+ * @param generator         The world generator to use (DEFAULT for vanilla, VOID for empty void world)
  */
 public record WorldConfig(
         String name,
@@ -46,7 +47,8 @@ public record WorldConfig(
         OptionalLong time,
         Optional<Weather> weather,
         boolean disableAdvancements,
-        OptionalInt pregenSize
+        OptionalInt pregenSize,
+        Generator generator
 ) {
     /**
      * Convert pregen size in blocks to chunks.
@@ -131,6 +133,26 @@ public record WorldConfig(
                 case "permission" -> PERMISSION;
                 case "hidden" -> HIDDEN;
                 default -> ALL;
+            };
+        }
+    }
+
+    /**
+     * World generator types.
+     */
+    public enum Generator {
+        /** Use vanilla world generation */
+        DEFAULT,
+        /** Use void generator (empty world with bedrock spawn platform) */
+        VOID;
+
+        public static Generator fromString(String value) {
+            if (value == null) {
+                return DEFAULT;
+            }
+            return switch (value.toLowerCase()) {
+                case "void" -> VOID;
+                default -> DEFAULT;
             };
         }
     }
