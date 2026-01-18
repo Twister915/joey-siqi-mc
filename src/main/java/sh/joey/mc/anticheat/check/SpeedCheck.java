@@ -19,9 +19,10 @@ public final class SpeedCheck implements Check {
     private static final String NAME = "Speed";
     private static final double BASE_WALK_SPEED = 4.317;
     private static final double BASE_SPRINT_SPEED = 5.612;
-    // Sprint-jumping adds ~30-40% speed, plus lag compensation can cause spikes
-    private static final double GROUND_TOLERANCE = 1.25;
-    private static final double AIR_TOLERANCE = 1.60;
+    // High tolerance to only catch obvious speed hacks - legitimate play has many edge cases
+    // (sprint-jumping, stairs, slabs, block collisions, lag compensation, etc.)
+    private static final double GROUND_TOLERANCE = 1.50;
+    private static final double AIR_TOLERANCE = 1.80;
 
     private final Observable<Detection> detections;
 
