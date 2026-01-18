@@ -20,6 +20,8 @@ import java.time.Duration;
 import java.util.List;
 import java.util.logging.Logger;
 
+import static java.util.Collections.emptyList;
+
 /**
  * Steve AI model provider using LM Studio's OpenAI-compatible API.
  * <p>
@@ -95,7 +97,12 @@ public final class LmStudioSteveProvider implements SteveModelProvider {
 
         @Override
         public Single<SteveAnswer> ask(String question) {
-            return Single.fromCallable(() -> askBlocking(question))
+            return ask(question, emptyList());
+        }
+
+        @Override
+        public Single<SteveAnswer> ask(String question, List<ConversationTurn> history) {
+            return Single.fromCallable(() -> askBlocking(question, history))
                     .subscribeOn(Schedulers.io());
         }
 
@@ -104,10 +111,14 @@ public final class LmStudioSteveProvider implements SteveModelProvider {
             return info;
         }
 
-        private SteveAnswer askBlocking(String question) throws IOException, InterruptedException {
-            logger.info("Steve asking LM Studio (" + modelName + "): " + truncate(question, 100));
+        private SteveAnswer askBlocking(String question, List<ConversationTurn> history) throws IOException, InterruptedException {
+            if (history.isEmpty()) {
+                logger.info("Steve asking LM Studio (" + modelName + "): " + truncate(question, 100));
+            } else {
+                logger.info("Steve asking LM Studio (" + modelName + ") (with " + history.size() + " prior turns): " + truncate(question, 100));
+            }
 
-            JsonObject requestBody = buildRequestBody(question);
+            JsonObject requestBody = buildRequestBody(question, history);
             String apiUrl = endpointUrl + "/v1/chat/completions";
 
             HttpRequest request = HttpRequest.newBuilder()
@@ -127,13 +138,13 @@ public final class LmStudioSteveProvider implements SteveModelProvider {
             return parseResponse(response.body());
         }
 
-        private JsonObject buildRequestBody(String question) {
+        private JsonObject buildRequestBody(String question, List<ConversationTurn> history) {
             JsonObject body = new JsonObject();
             body.addProperty("model", modelName);
             body.addProperty("max_tokens", MAX_TOKENS);
             body.addProperty("temperature", 0.7);
 
-            // Messages array with system prompt and user message
+            // Messages array with system prompt, history, and user message
             JsonArray messages = new JsonArray();
 
             // System message (uses simple instructions for local models)
@@ -142,7 +153,20 @@ public final class LmStudioSteveProvider implements SteveModelProvider {
             systemMessage.addProperty("content", SteveSystemPrompt.INSTRUCTIONS);
             messages.add(systemMessage);
 
-            // User message
+            // Add history turns (oldest to newest)
+            for (ConversationTurn turn : history) {
+                JsonObject historyUserMessage = new JsonObject();
+                historyUserMessage.addProperty("role", "user");
+                historyUserMessage.addProperty("content", turn.question());
+                messages.add(historyUserMessage);
+
+                JsonObject historyAssistantMessage = new JsonObject();
+                historyAssistantMessage.addProperty("role", "assistant");
+                historyAssistantMessage.addProperty("content", turn.answer());
+                messages.add(historyAssistantMessage);
+            }
+
+            // Current user message
             JsonObject userMessage = new JsonObject();
             userMessage.addProperty("role", "user");
             userMessage.addProperty("content", question);

@@ -16,5 +16,6 @@ public record SteveHistoryEntry(
         List<SteveAnswer.Citation> citations,
         Optional<Double> costCents,
         Optional<String> modelName,
+        int contextCount,
         Instant askedAt
 ) {}

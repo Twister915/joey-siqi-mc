@@ -13,12 +13,15 @@ import org.bukkit.entity.Player;
 import sh.joey.mc.SiqiJoeyPlugin;
 import sh.joey.mc.permissions.DisplayManager;
 import sh.joey.mc.steve.SteveAnswer.Citation;
+import sh.joey.mc.steve.SteveModel.ConversationTurn;
 import sh.joey.mc.steve.provider.RateLimitException;
 import sh.joey.mc.util.DurationFormat;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -35,6 +38,11 @@ public final class SteveManager implements Disposable {
     private static final Pattern STEVE_MENTION = Pattern.compile("@steve", Pattern.CASE_INSENSITIVE);
     private static final String PERMISSION = "smp.steve";
 
+    // Conversation chain settings
+    private static final Duration CHAIN_GAP = Duration.ofSeconds(60);
+    private static final Duration CLEANUP_AGE = Duration.ofMinutes(10);
+    private static final int MAX_CHAIN_LENGTH = 5;
+
     private final SiqiJoeyPlugin plugin;
     private final SteveConfig config;
     private volatile SteveModel model;
@@ -46,6 +54,13 @@ public final class SteveManager implements Disposable {
     private final Map<UUID, Instant> cooldownEndTimes = new HashMap<>();
     // Prevent duplicate questions while one is pending
     private final Set<UUID> pendingQuestions = ConcurrentHashMap.newKeySet();
+    // Recent conversations for chain detection (player -> list of entries, oldest first)
+    private final Map<UUID, List<ConversationEntry>> recentConversations = new ConcurrentHashMap<>();
+
+    /**
+     * A conversation entry for chain tracking.
+     */
+    private record ConversationEntry(String question, String answer, Instant timestamp) {}
 
     public SteveManager(SiqiJoeyPlugin plugin, SteveConfig config, SteveModel model,
                         SteveStorage storage, DisplayManager displayManager) {
@@ -122,6 +137,10 @@ public final class SteveManager implements Disposable {
         // Set cooldown
         startCooldown(playerId);
 
+        // Get conversation chain for context
+        List<ConversationTurn> conversationChain = getConversationChain(playerId);
+        int contextCount = conversationChain.size();
+
         // Track whether API call has completed (to avoid showing "thinking..." after error/success)
         var completed = new java.util.concurrent.atomic.AtomicBoolean(false);
 
@@ -134,10 +153,10 @@ public final class SteveManager implements Disposable {
                     }
                 });
 
-        // Call API and track response time
+        // Call API with conversation history and track response time
         long startTime = System.currentTimeMillis();
         SteveModel currentModel = model; // Capture for lambda
-        currentModel.ask(question)
+        currentModel.ask(question, conversationChain)
                 .observeOn(plugin.mainScheduler())
                 .doFinally(() -> {
                     completed.set(true);
@@ -148,8 +167,11 @@ public final class SteveManager implements Disposable {
                             long elapsedMs = System.currentTimeMillis() - startTime;
                             broadcastResponse(response, currentModel.info(), elapsedMs);
 
-                            // Save to history
-                            storage.saveHistory(playerId, question, response, currentModel.info().displayName())
+                            // Record conversation for future chain detection
+                            recordConversation(playerId, question, response.text());
+
+                            // Save to history with context count
+                            storage.saveHistory(playerId, question, response, currentModel.info().displayName(), contextCount)
                                     .subscribe(
                                             () -> {},
                                             err -> plugin.getLogger().warning("Failed to save Steve history: " + err.getMessage())
@@ -168,6 +190,68 @@ public final class SteveManager implements Disposable {
                             }
                         }
                 );
+    }
+
+    /**
+     * Gets the conversation chain for a player based on message timing.
+     * Messages within 60 seconds of each other form a chain.
+     *
+     * @param playerId the player to get the chain for
+     * @return list of conversation turns (oldest first), max 5 entries
+     */
+    private List<ConversationTurn> getConversationChain(UUID playerId) {
+        List<ConversationEntry> history = recentConversations.get(playerId);
+        if (history == null || history.isEmpty()) {
+            return List.of();
+        }
+
+        // Clean up old entries first
+        cleanupOldEntries(history);
+        if (history.isEmpty()) {
+            return List.of();
+        }
+
+        List<ConversationEntry> chain = new ArrayList<>();
+        Instant referenceTime = Instant.now();
+
+        // Walk backwards from most recent
+        for (int i = history.size() - 1; i >= 0; i--) {
+            ConversationEntry entry = history.get(i);
+            Duration gap = Duration.between(entry.timestamp(), referenceTime);
+
+            if (gap.compareTo(CHAIN_GAP) <= 0) {
+                chain.add(0, entry);
+                referenceTime = entry.timestamp();
+            } else {
+                break;
+            }
+        }
+
+        // Limit chain length
+        if (chain.size() > MAX_CHAIN_LENGTH) {
+            chain = chain.subList(chain.size() - MAX_CHAIN_LENGTH, chain.size());
+        }
+
+        // Convert to ConversationTurn
+        return chain.stream()
+                .map(e -> new ConversationTurn(e.question(), e.answer()))
+                .toList();
+    }
+
+    /**
+     * Records a conversation for future chain detection.
+     */
+    private void recordConversation(UUID playerId, String question, String answer) {
+        recentConversations.computeIfAbsent(playerId, k -> new ArrayList<>())
+                .add(new ConversationEntry(question, answer, Instant.now()));
+    }
+
+    /**
+     * Removes entries older than 10 minutes from the list.
+     */
+    private void cleanupOldEntries(List<ConversationEntry> entries) {
+        Instant cutoff = Instant.now().minus(CLEANUP_AGE);
+        entries.removeIf(e -> e.timestamp().isBefore(cutoff));
     }
 
     private String extractQuestion(Component message) {

@@ -36,12 +36,18 @@ public final class SteveStorage {
 
     /**
      * Save a Steve Q&A to history.
+     *
+     * @param playerId the player who asked
+     * @param question the question text
+     * @param answer the AI response
+     * @param modelName the model used
+     * @param contextCount number of prior Q&A turns included as conversation context
      */
-    public Completable saveHistory(UUID playerId, String question, SteveAnswer answer, String modelName) {
+    public Completable saveHistory(UUID playerId, String question, SteveAnswer answer, String modelName, int contextCount) {
         return storage.execute(conn -> {
             try (var stmt = conn.prepareStatement("""
-                    INSERT INTO steve_history (player_id, question, answer, citations, cost_cents, model_name)
-                    VALUES (?, ?, ?, ?::jsonb, ?, ?)
+                    INSERT INTO steve_history (player_id, question, answer, citations, cost_cents, model_name, context_count)
+                    VALUES (?, ?, ?, ?::jsonb, ?, ?, ?)
                     """)) {
                 stmt.setObject(1, playerId);
                 stmt.setString(2, question);
@@ -62,6 +68,7 @@ public final class SteveStorage {
                 }
 
                 stmt.setString(6, modelName);
+                stmt.setInt(7, contextCount);
                 stmt.executeUpdate();
             }
         });
@@ -74,7 +81,7 @@ public final class SteveStorage {
         return storage.queryFlowable(conn -> {
             List<SteveHistoryEntry> entries = new ArrayList<>();
             try (var stmt = conn.prepareStatement("""
-                    SELECT id, player_id, question, answer, citations, cost_cents, model_name, asked_at
+                    SELECT id, player_id, question, answer, citations, cost_cents, model_name, context_count, asked_at
                     FROM steve_history
                     WHERE player_id = ?
                     ORDER BY asked_at DESC
@@ -107,6 +114,7 @@ public final class SteveStorage {
                             citations,
                             costCents,
                             modelName,
+                            rs.getInt("context_count"),
                             rs.getTimestamp("asked_at").toInstant()
                     ));
                 }

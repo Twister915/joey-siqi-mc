@@ -23,6 +23,8 @@ import java.util.List;
 import java.util.Set;
 import java.util.logging.Logger;
 
+import static java.util.Collections.emptyList;
+
 /**
  * Steve AI model provider using Anthropic's Claude API.
  * <p>
@@ -99,7 +101,12 @@ public final class AnthropicSteveProvider implements SteveModelProvider {
 
         @Override
         public Single<SteveAnswer> ask(String question) {
-            return Single.fromCallable(() -> askBlocking(question))
+            return ask(question, emptyList());
+        }
+
+        @Override
+        public Single<SteveAnswer> ask(String question, List<ConversationTurn> history) {
+            return Single.fromCallable(() -> askBlocking(question, history))
                     .subscribeOn(Schedulers.io());
         }
 
@@ -108,10 +115,14 @@ public final class AnthropicSteveProvider implements SteveModelProvider {
             return INFO;
         }
 
-        private SteveAnswer askBlocking(String question) throws IOException, InterruptedException {
-            logger.info("Steve asking Claude: " + truncate(question, 100));
+        private SteveAnswer askBlocking(String question, List<ConversationTurn> history) throws IOException, InterruptedException {
+            if (history.isEmpty()) {
+                logger.info("Steve asking Claude: " + truncate(question, 100));
+            } else {
+                logger.info("Steve asking Claude (with " + history.size() + " prior turns): " + truncate(question, 100));
+            }
 
-            JsonObject requestBody = buildRequestBody(question);
+            JsonObject requestBody = buildRequestBody(question, history);
 
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(API_URL))
@@ -136,7 +147,7 @@ public final class AnthropicSteveProvider implements SteveModelProvider {
             return parseResponse(response.body());
         }
 
-        private JsonObject buildRequestBody(String question) {
+        private JsonObject buildRequestBody(String question, List<ConversationTurn> history) {
             JsonObject body = new JsonObject();
             body.addProperty("model", MODEL);
             body.addProperty("max_tokens", 200);
@@ -162,8 +173,23 @@ public final class AnthropicSteveProvider implements SteveModelProvider {
 
             body.add("system", system);
 
-            // Messages array
+            // Messages array - include conversation history as alternating user/assistant messages
             JsonArray messages = new JsonArray();
+
+            // Add history turns first (oldest to newest)
+            for (ConversationTurn turn : history) {
+                JsonObject historyUserMessage = new JsonObject();
+                historyUserMessage.addProperty("role", "user");
+                historyUserMessage.addProperty("content", turn.question());
+                messages.add(historyUserMessage);
+
+                JsonObject historyAssistantMessage = new JsonObject();
+                historyAssistantMessage.addProperty("role", "assistant");
+                historyAssistantMessage.addProperty("content", turn.answer());
+                messages.add(historyAssistantMessage);
+            }
+
+            // Add current question
             JsonObject userMessage = new JsonObject();
             userMessage.addProperty("role", "user");
             userMessage.addProperty("content", question);

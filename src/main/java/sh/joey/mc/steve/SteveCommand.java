@@ -219,12 +219,15 @@ public final class SteveCommand implements Command {
         }
         items.add(PaginatedItem.wrapping(answerLine, "A: " + answerText));
 
-        // Meta line (model, cost, sources)
+        // Meta line (model, cost, sources, context)
         List<String> metaParts = new ArrayList<>();
         entry.modelName().ifPresent(m -> metaParts.add(m));
         entry.costCents().ifPresent(c -> metaParts.add(String.format("%.1f¢", c)));
         if (!entry.citations().isEmpty()) {
             metaParts.add(entry.citations().size() + " source" + (entry.citations().size() > 1 ? "s" : ""));
+        }
+        if (entry.contextCount() > 0) {
+            metaParts.add(entry.contextCount() + " prior \u2937");
         }
 
         if (!metaParts.isEmpty()) {
