@@ -34,6 +34,20 @@ dependencies {
     implementation 'io.reactivex.rxjava3:rxjava:3.1.12'
     implementation 'com.zaxxer:HikariCP:5.1.0'
     implementation 'org.postgresql:postgresql:42.7.7'
+
+    // Paper API for tests (needed at runtime for Adventure API classes used by PermissibleAttributes)
+    testImplementation 'io.papermc.paper:paper-api:1.21.11-R0.1-SNAPSHOT'
+
+    // JUnit 5
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.11.3'
+
+    // Testcontainers
+    testImplementation 'org.testcontainers:testcontainers:1.20.4'
+    testImplementation 'org.testcontainers:postgresql:1.20.4'
+    testImplementation 'org.testcontainers:junit-jupiter:1.20.4'
+
+    // AssertJ for fluent assertions
+    testImplementation 'org.assertj:assertj-core:3.26.3'
 }
 
 tasks.named('build') {
@@ -48,6 +62,18 @@ shadowJar {
     // PostgreSQL driver uses ServiceLoader - don't relocate
 }
 
+// Run only unit tests (exclude integration tests) - this is the default
 test {
-    useJUnitPlatform()
+    useJUnitPlatform {
+        excludeTags 'integration'
+    }
+}
+
+// Run only integration tests (requires Docker)
+tasks.register('integrationTest', Test) {
+    useJUnitPlatform {
+        includeTags 'integration'
+    }
+    description = 'Runs PostgreSQL integration tests (requires Docker)'
+    group = 'verification'
 }

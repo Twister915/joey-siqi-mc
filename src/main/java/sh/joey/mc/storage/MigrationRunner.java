@@ -1,6 +1,7 @@
 package sh.joey.mc.storage;
 
 import org.bukkit.plugin.java.JavaPlugin;
+import org.jetbrains.annotations.Nullable;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -42,14 +43,27 @@ public final class MigrationRunner {
     private static final String MIGRATIONS_PATH = "migrations";
     private static final Pattern MIGRATION_PATTERN = Pattern.compile("^(\\d{3})_.*\\.sql$");
 
-    private final JavaPlugin plugin;
+    private final @Nullable JavaPlugin plugin;
     private final DatabaseService database;
     private final Logger logger;
 
+    /**
+     * Production constructor - uses plugin's classloader and logger.
+     */
     public MigrationRunner(JavaPlugin plugin, DatabaseService database) {
         this.plugin = plugin;
         this.database = database;
         this.logger = plugin.getLogger();
+    }
+
+    /**
+     * Test constructor - works without JavaPlugin.
+     * Uses MigrationRunner's classloader to find migrations.
+     */
+    public MigrationRunner(DatabaseService database, Logger logger) {
+        this.plugin = null;
+        this.database = database;
+        this.logger = logger;
     }
 
     /**
@@ -114,7 +128,10 @@ public final class MigrationRunner {
         List<Migration> pending = new ArrayList<>();
 
         try {
-            URL migrationsUrl = plugin.getClass().getClassLoader().getResource(MIGRATIONS_PATH);
+            ClassLoader classLoader = plugin != null
+                    ? plugin.getClass().getClassLoader()
+                    : getClass().getClassLoader();
+            URL migrationsUrl = classLoader.getResource(MIGRATIONS_PATH);
             if (migrationsUrl == null) {
                 logger.info("No migrations folder found");
                 return pending;
