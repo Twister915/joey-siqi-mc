@@ -9,6 +9,7 @@ import sh.joey.mc.steve.SteveAnswer;
 import sh.joey.mc.steve.SteveModel;
 import sh.joey.mc.steve.SteveModelInfo;
 import sh.joey.mc.steve.SteveModelProvider;
+import sh.joey.mc.steve.SteveSystemPrompt;
 
 import java.io.IOException;
 import java.net.URI;
@@ -63,12 +64,13 @@ public final class LmStudioSteveProvider implements SteveModelProvider {
     }
 
     @Override
-    public SteveModel create(String systemPrompt) {
-        return new LmStudioSteveModel(endpointUrl, modelName, systemPrompt, info, logger);
+    public SteveModel create() {
+        return new LmStudioSteveModel(endpointUrl, modelName, info, logger);
     }
 
     /**
      * LM Studio model implementation using OpenAI-compatible chat completions API.
+     * Uses the simple instruction prompt (no cached knowledge base).
      */
     private static final class LmStudioSteveModel implements SteveModel {
 
@@ -78,15 +80,12 @@ public final class LmStudioSteveProvider implements SteveModelProvider {
         private final HttpClient httpClient;
         private final String endpointUrl;
         private final String modelName;
-        private final String systemPrompt;
         private final SteveModelInfo info;
         private final Logger logger;
 
-        LmStudioSteveModel(String endpointUrl, String modelName, String systemPrompt,
-                          SteveModelInfo info, Logger logger) {
+        LmStudioSteveModel(String endpointUrl, String modelName, SteveModelInfo info, Logger logger) {
             this.endpointUrl = endpointUrl;
             this.modelName = modelName;
-            this.systemPrompt = systemPrompt;
             this.info = info;
             this.logger = logger;
             this.httpClient = HttpClient.newBuilder()
@@ -137,10 +136,10 @@ public final class LmStudioSteveProvider implements SteveModelProvider {
             // Messages array with system prompt and user message
             JsonArray messages = new JsonArray();
 
-            // System message
+            // System message (uses simple instructions for local models)
             JsonObject systemMessage = new JsonObject();
             systemMessage.addProperty("role", "system");
-            systemMessage.addProperty("content", systemPrompt);
+            systemMessage.addProperty("content", SteveSystemPrompt.INSTRUCTIONS);
             messages.add(systemMessage);
 
             // User message

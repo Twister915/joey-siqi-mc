@@ -37,12 +37,10 @@ public final class SteveCommand implements Command {
 
     private final SteveManager manager;
     private final SteveModelRegistry registry;
-    private final String systemPrompt;
 
-    public SteveCommand(SteveManager manager, SteveModelRegistry registry, String systemPrompt) {
+    public SteveCommand(SteveManager manager, SteveModelRegistry registry) {
         this.manager = manager;
         this.registry = registry;
-        this.systemPrompt = systemPrompt;
     }
 
     @Override
@@ -158,7 +156,7 @@ public final class SteveCommand implements Command {
         }
 
         SteveModelProvider provider = providerOpt.get();
-        SteveModel newModel = provider.create(systemPrompt);
+        SteveModel newModel = provider.create();
         manager.setModel(newModel);
 
         sender.sendMessage(Messages.PREFIX.append(
