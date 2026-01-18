@@ -8,11 +8,12 @@ import org.bukkit.block.Block;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.player.PlayerMoveEvent;
-import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.potion.PotionEffectType;
 import sh.joey.mc.SiqiJoeyPlugin;
 import sh.joey.mc.anticheat.Detection;
 
+import java.util.ArrayDeque;
+import java.util.Deque;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -22,20 +23,22 @@ public final class SpeedCheck implements Check {
     private static final String NAME = "Speed";
     private static final double BASE_WALK_SPEED = 4.317;
     private static final double BASE_SPRINT_SPEED = 5.612;
-    // High tolerance to account for b-hopping, momentum, and edge cases
-    private static final double GROUND_TOLERANCE = 2.70;
-    private static final double AIR_TOLERANCE = 3.00;
+    // Tolerance before counting as a violation
+    private static final double GROUND_TOLERANCE = 1.50;
+    private static final double AIR_TOLERANCE = 1.80;
+
+    // Debouncing: require sustained violations over time window
+    private static final long WINDOW_MS = 8000; // 8 seconds
+    private static final double AVERAGE_THRESHOLD = 1.0; // Average weight needed to flag
 
     // Track last movement time per player to calculate actual speed
     private final Map<UUID, Long> lastMoveTime = new ConcurrentHashMap<>();
+    // Track violations over time window for debouncing
+    private final Map<UUID, Deque<ViolationSample>> violationWindows = new ConcurrentHashMap<>();
 
     private final Observable<Detection> detections;
 
     public SpeedCheck(SiqiJoeyPlugin plugin) {
-        // Clean up on player quit
-        plugin.watchEvent(PlayerQuitEvent.class)
-                .subscribe(e -> lastMoveTime.remove(e.getPlayer().getUniqueId()));
-
         this.detections = plugin.watchEvent(EventPriority.MONITOR, PlayerMoveEvent.class)
                 .filter(e -> !e.isCancelled())
                 .filter(e -> shouldCheck(e.getPlayer()))
@@ -72,18 +75,11 @@ public final class SpeedCheck implements Check {
         // Get time since last movement
         Long lastTime = lastMoveTime.put(playerId, now);
         if (lastTime == null) {
-            // First movement, can't calculate speed yet
             return Observable.empty();
         }
 
         long deltaMs = now - lastTime;
-        if (deltaMs <= 0) {
-            // Same millisecond or clock issue, skip
-            return Observable.empty();
-        }
-
-        // Skip if too much time passed (player was stationary, teleported, etc.)
-        if (deltaMs > 1000) {
+        if (deltaMs <= 0 || deltaMs > 1000) {
             return Observable.empty();
         }
 
@@ -95,33 +91,53 @@ public final class SpeedCheck implements Check {
                 Math.pow(to.getZ() - from.getZ(), 2)
         );
 
-        // Calculate actual speed in blocks per second using real elapsed time
         double deltaSeconds = deltaMs / 1000.0;
         double speed = horizontalDistance / deltaSeconds;
-
         double maxSpeed = calculateMaxSpeed(player);
 
-        // Use higher tolerance when airborne (jumping, falling) since movement is less predictable
         boolean onGround = player.isOnGround();
         double tolerance = onGround ? GROUND_TOLERANCE : AIR_TOLERANCE;
 
+        // Get or create violation window for this player
+        Deque<ViolationSample> window = violationWindows.computeIfAbsent(playerId, k -> new ArrayDeque<>());
+
+        // Prune old samples outside the time window
+        while (!window.isEmpty() && (now - window.peekFirst().timestamp) > WINDOW_MS) {
+            window.pollFirst();
+        }
+
+        // Check if this movement is a violation
         if (speed > maxSpeed * tolerance) {
             double ratio = speed / maxSpeed;
             double weight = Math.min(5.0, (ratio - 1.0) * 10);
 
-            return Observable.just(new Detection(
-                    playerId,
-                    NAME,
-                    weight,
-                    player.getLocation(),
-                    Map.of(
-                            "speed", speed,
-                            "maxSpeed", maxSpeed,
-                            "ratio", ratio,
-                            "onGround", onGround,
-                            "deltaMs", deltaMs
-                    )
-            ));
+            // Add to window
+            window.addLast(new ViolationSample(now, weight));
+
+            // Calculate average weight over the window
+            double totalWeight = 0;
+            for (ViolationSample sample : window) {
+                totalWeight += sample.weight;
+            }
+            double avgWeight = totalWeight / (WINDOW_MS / 1000.0); // Weight per second
+
+            // Only flag if average exceeds threshold
+            if (avgWeight >= AVERAGE_THRESHOLD) {
+                return Observable.just(new Detection(
+                        playerId,
+                        NAME,
+                        weight,
+                        player.getLocation(),
+                        Map.of(
+                                "speed", speed,
+                                "maxSpeed", maxSpeed,
+                                "ratio", ratio,
+                                "onGround", onGround,
+                                "avgWeight", avgWeight,
+                                "samplesInWindow", window.size()
+                        )
+                ));
+            }
         }
 
         return Observable.empty();
@@ -129,7 +145,6 @@ public final class SpeedCheck implements Check {
 
     private double calculateMaxSpeed(Player player) {
         // Always use sprint speed as baseline - isSprinting() can flicker on landing
-        // Players walking slowly won't trigger anyway since their speed is well below threshold
         double baseSpeed = BASE_SPRINT_SPEED;
 
         var speedEffect = player.getPotionEffect(PotionEffectType.SPEED);
@@ -181,4 +196,12 @@ public final class SpeedCheck implements Check {
     public Observable<Detection> detections() {
         return detections;
     }
+
+    @Override
+    public void onPlayerQuit(UUID playerId) {
+        lastMoveTime.remove(playerId);
+        violationWindows.remove(playerId);
+    }
+
+    private record ViolationSample(long timestamp, double weight) {}
 }

@@ -3,6 +3,7 @@ package sh.joey.mc.anticheat;
 import io.reactivex.rxjava3.core.Observable;
 import io.reactivex.rxjava3.disposables.CompositeDisposable;
 import io.reactivex.rxjava3.disposables.Disposable;
+import org.bukkit.event.player.PlayerQuitEvent;
 import sh.joey.mc.SiqiJoeyPlugin;
 import sh.joey.mc.anticheat.check.Check;
 import sh.joey.mc.anticheat.check.FlyCheck;
@@ -72,6 +73,15 @@ public final class AntiCheatManager implements Disposable {
                 violationTracker::flag,
                 err -> plugin.getLogger().warning("Detection error: " + err.getMessage())
         ));
+
+        // Dispatch player quit events to all checks for cleanup
+        disposables.add(plugin.watchEvent(PlayerQuitEvent.class)
+                .subscribe(event -> {
+                    var playerId = event.getPlayer().getUniqueId();
+                    for (Check check : checks) {
+                        check.onPlayerQuit(playerId);
+                    }
+                }));
 
         // GrimAC integration (soft dependency - check before loading class to avoid NoClassDefFoundError)
         if (plugin.getServer().getPluginManager().isPluginEnabled("GrimAC")) {
