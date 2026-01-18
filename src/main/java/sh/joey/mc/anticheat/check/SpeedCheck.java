@@ -8,25 +8,34 @@ import org.bukkit.block.Block;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.player.PlayerMoveEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.potion.PotionEffectType;
 import sh.joey.mc.SiqiJoeyPlugin;
 import sh.joey.mc.anticheat.Detection;
 
 import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 public final class SpeedCheck implements Check {
 
     private static final String NAME = "Speed";
     private static final double BASE_WALK_SPEED = 4.317;
     private static final double BASE_SPRINT_SPEED = 5.612;
-    // High tolerance to only catch obvious speed hacks - legitimate play has many edge cases
-    // (sprint-jumping, stairs, slabs, block collisions, lag compensation, etc.)
-    private static final double GROUND_TOLERANCE = 1.50;
-    private static final double AIR_TOLERANCE = 1.80;
+    // Tolerance for speed above calculated max (accounts for edge cases)
+    private static final double GROUND_TOLERANCE = 1.35;
+    private static final double AIR_TOLERANCE = 1.50;
+
+    // Track last movement time per player to calculate actual speed
+    private final Map<UUID, Long> lastMoveTime = new ConcurrentHashMap<>();
 
     private final Observable<Detection> detections;
 
     public SpeedCheck(SiqiJoeyPlugin plugin) {
+        // Clean up on player quit
+        plugin.watchEvent(PlayerQuitEvent.class)
+                .subscribe(e -> lastMoveTime.remove(e.getPlayer().getUniqueId()));
+
         this.detections = plugin.watchEvent(EventPriority.MONITOR, PlayerMoveEvent.class)
                 .filter(e -> !e.isCancelled())
                 .filter(e -> shouldCheck(e.getPlayer()))
@@ -57,6 +66,27 @@ public final class SpeedCheck implements Check {
 
     private Observable<Detection> check(PlayerMoveEvent event) {
         Player player = event.getPlayer();
+        UUID playerId = player.getUniqueId();
+        long now = System.currentTimeMillis();
+
+        // Get time since last movement
+        Long lastTime = lastMoveTime.put(playerId, now);
+        if (lastTime == null) {
+            // First movement, can't calculate speed yet
+            return Observable.empty();
+        }
+
+        long deltaMs = now - lastTime;
+        if (deltaMs <= 0) {
+            // Same millisecond or clock issue, skip
+            return Observable.empty();
+        }
+
+        // Skip if too much time passed (player was stationary, teleported, etc.)
+        if (deltaMs > 1000) {
+            return Observable.empty();
+        }
+
         Location from = event.getFrom();
         Location to = event.getTo();
 
@@ -65,7 +95,10 @@ public final class SpeedCheck implements Check {
                 Math.pow(to.getZ() - from.getZ(), 2)
         );
 
-        double speed = horizontalDistance * 20;
+        // Calculate actual speed in blocks per second using real elapsed time
+        double deltaSeconds = deltaMs / 1000.0;
+        double speed = horizontalDistance / deltaSeconds;
+
         double maxSpeed = calculateMaxSpeed(player);
 
         // Use higher tolerance when airborne (jumping, falling) since movement is less predictable
@@ -77,7 +110,7 @@ public final class SpeedCheck implements Check {
             double weight = Math.min(5.0, (ratio - 1.0) * 10);
 
             return Observable.just(new Detection(
-                    player.getUniqueId(),
+                    playerId,
                     NAME,
                     weight,
                     player.getLocation(),
@@ -85,7 +118,8 @@ public final class SpeedCheck implements Check {
                             "speed", speed,
                             "maxSpeed", maxSpeed,
                             "ratio", ratio,
-                            "onGround", onGround
+                            "onGround", onGround,
+                            "deltaMs", deltaMs
                     )
             ));
         }
