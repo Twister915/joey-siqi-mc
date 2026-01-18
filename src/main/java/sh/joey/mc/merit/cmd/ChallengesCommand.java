@@ -4,6 +4,7 @@ import com.destroystokyo.paper.event.server.AsyncTabCompleteEvent;
 import io.reactivex.rxjava3.core.Completable;
 import io.reactivex.rxjava3.core.Maybe;
 import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.event.HoverEvent;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextDecoration;
 import org.bukkit.command.CommandSender;
@@ -94,24 +95,19 @@ public final class ChallengesCommand implements Command {
 
     private void displayChallenges(Player player, List<Challenge> challenges, Map<String, Long> progressMap,
                                    MeritStorage.WeeklyOnlineTime onlineTime, int weekNumber) {
-        player.sendMessage(Component.empty());
         player.sendMessage(Messages.PREFIX.append(
                 Component.text("Weekly Challenges (Week " + weekNumber + ")").color(NamedTextColor.GOLD)));
-        player.sendMessage(Component.empty());
 
         for (Challenge challenge : challenges) {
             long currentProgress = progressMap.getOrDefault(challenge.id(), 0L);
             boolean completed = meritManager.getProgressTracker().isChallengeCompleted(player.getUniqueId(), challenge.id());
-
             displayChallenge(player, challenge, currentProgress, completed);
         }
 
         // Online time bonus
-        player.sendMessage(Component.empty());
         displayOnlineTimeBonus(player, onlineTime);
 
-        // Summary
-        player.sendMessage(Component.empty());
+        // Summary - fetch and display
         meritManager.getStorage().getOrCreatePlayerMerit(player.getUniqueId())
                 .observeOn(plugin.mainScheduler())
                 .subscribe(
@@ -120,15 +116,12 @@ public final class ChallengesCommand implements Command {
                             long toNext = calc.meritToNextLevel(merit.totalMerit());
 
                             player.sendMessage(Messages.PREFIX.append(
-                                    Component.text("Total: ", NamedTextColor.GRAY)
+                                    Component.text("Level ", NamedTextColor.GRAY)
+                                            .append(Component.text(merit.level(), Messages.getLevelColor(merit.level())))
+                                            .append(Component.text(" | ", NamedTextColor.DARK_GRAY))
                                             .append(Messages.formatMerit(merit.totalMerit()))
-                                            .append(Component.text(" | Level ", NamedTextColor.GRAY))
-                                            .append(Component.text(merit.level(), Messages.getLevelColor(merit.level())))));
-
-                            player.sendMessage(Messages.PREFIX.append(
-                                    Component.text("Next level: ", NamedTextColor.GRAY)
-                                            .append(Messages.formatMerit(calc.meritForLevel(merit.level() + 1)))
-                                            .append(Component.text(" (" + Messages.formatNumber(toNext) + " to go)", NamedTextColor.DARK_GRAY))));
+                                            .append(Component.text(" | ", NamedTextColor.DARK_GRAY))
+                                            .append(Component.text(Messages.formatNumber(toNext) + " to next", NamedTextColor.GRAY))));
                         },
                         err -> {}
                 );
@@ -138,24 +131,21 @@ public final class ChallengesCommand implements Command {
         Component progressBar = Messages.progressBar(currentProgress, challenge.target(), 10);
         NamedTextColor statusColor = completed ? NamedTextColor.GREEN : NamedTextColor.YELLOW;
 
-        Component line = Component.text("  ", NamedTextColor.GRAY)
+        // Build hover tooltip with description and reward
+        Component tooltip = Component.text(challenge.description(), NamedTextColor.GRAY)
+                .append(Component.newline())
+                .append(Component.text("+" + challenge.meritReward() + " Merit", NamedTextColor.LIGHT_PURPLE));
+
+        String progressText = completed ? " \u2713" : ": " + currentProgress + "/" + challenge.target();
+
+        Component line = Component.text(" ", NamedTextColor.GRAY)
                 .append(progressBar)
                 .append(Component.text(" "))
-                .append(Component.text(challenge.name(), statusColor));
-
-        if (completed) {
-            line = line.append(Component.text(" [Complete]", NamedTextColor.GREEN, TextDecoration.ITALIC));
-        } else {
-            line = line.append(Component.text(": " + currentProgress + "/" + challenge.target(), NamedTextColor.GRAY));
-        }
+                .append(Component.text(challenge.name(), statusColor))
+                .append(Component.text(progressText, completed ? NamedTextColor.GREEN : NamedTextColor.GRAY))
+                .hoverEvent(HoverEvent.showText(tooltip));
 
         player.sendMessage(line);
-
-        // Show reward on hover/below
-        Component rewardLine = Component.text("    ", NamedTextColor.GRAY)
-                .append(Component.text("+" + challenge.meritReward() + " Merit", NamedTextColor.LIGHT_PURPLE))
-                .append(Component.text(" - " + challenge.description(), NamedTextColor.DARK_GRAY));
-        player.sendMessage(rewardLine);
     }
 
     private void displayOnlineTimeBonus(Player player, MeritStorage.WeeklyOnlineTime onlineTime) {
@@ -173,21 +163,21 @@ public final class ChallengesCommand implements Command {
         long remainingMinutes = totalMinutes % 60;
         int earned = onlineTime.meritClaimed();
 
-        // Calculate target hours for cap
-        int capHours = (cap / reward) * intervalMinutes / 60;
-
         Component progressBar = Messages.progressBar(earned, cap, 10);
 
-        player.sendMessage(Component.text("  ", NamedTextColor.GRAY)
+        // Build hover tooltip
+        Component tooltip = Component.text("Earn " + reward + " Merit every " + intervalMinutes + " minutes", NamedTextColor.GRAY)
+                .append(Component.newline())
+                .append(Component.text("Weekly cap: " + cap + " Merit", NamedTextColor.GRAY));
+
+        Component line = Component.text(" ", NamedTextColor.GRAY)
                 .append(progressBar)
-                .append(Component.text(" Online Time Bonus", NamedTextColor.AQUA)));
+                .append(Component.text(" Online Time", NamedTextColor.AQUA))
+                .append(Component.text(": " + totalHours + "h " + remainingMinutes + "m", NamedTextColor.GRAY))
+                .append(Component.text(" (+" + earned + "/" + cap + ")", NamedTextColor.LIGHT_PURPLE))
+                .hoverEvent(HoverEvent.showText(tooltip));
 
-        player.sendMessage(Component.text("    ", NamedTextColor.GRAY)
-                .append(Component.text(String.format("%dh %dm played this week", totalHours, remainingMinutes), NamedTextColor.GRAY)));
-
-        player.sendMessage(Component.text("    ", NamedTextColor.GRAY)
-                .append(Component.text("+" + earned + "/" + cap + " Merit", NamedTextColor.LIGHT_PURPLE))
-                .append(Component.text(" (" + reward + " per " + intervalMinutes + "min)", NamedTextColor.DARK_GRAY)));
+        player.sendMessage(line);
     }
 
     private void showLeaderboard(Player player) {

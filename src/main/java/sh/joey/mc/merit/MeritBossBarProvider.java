@@ -46,6 +46,7 @@ public final class MeritBossBarProvider implements BossBarProvider {
         String title;
         BarColor color;
         long duration;
+        float progress = percent / 100.0f;
 
         if (percent == 100) {
             title = "\u2605 " + challengeName + " Complete!"; // star
@@ -62,7 +63,7 @@ public final class MeritBossBarProvider implements BossBarProvider {
         }
 
         long expiresAt = System.currentTimeMillis() + duration;
-        notifications.put(playerId, new MeritNotification(title, color, 1.0f, expiresAt));
+        notifications.put(playerId, new MeritNotification(title, color, progress, expiresAt));
     }
 
     /**
