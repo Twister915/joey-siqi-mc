@@ -155,6 +155,14 @@ public record Region(
     }
 
     /**
+     * Create a new region with the specified name.
+     */
+    public Region withName(String newName) {
+        return new Region(id, ownerId, ownerName, newName, worldId,
+                radius, buildingAccess, containerAccess, doorAccess, members, anchors);
+    }
+
+    /**
      * Create a new region with the specified building access level.
      */
     public Region withBuildingAccess(AccessLevel level) {

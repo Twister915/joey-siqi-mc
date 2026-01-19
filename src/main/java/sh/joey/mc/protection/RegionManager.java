@@ -248,6 +248,23 @@ public final class RegionManager implements Disposable {
     }
 
     /**
+     * Update a region's name.
+     *
+     * @param regionId the region ID
+     * @param name the new name
+     * @return Completable that completes on success
+     */
+    public Completable updateName(UUID regionId, String name) {
+        String normalized = RegionStorage.normalizeName(name);
+        return storage.updateName(regionId, normalized)
+                .doOnComplete(() -> {
+                    cache.get(regionId).ifPresent(region -> {
+                        cache.update(region.withName(normalized));
+                    });
+                });
+    }
+
+    /**
      * Update a region's access settings.
      *
      * @param regionId the region ID

@@ -369,6 +369,21 @@ public final class RegionStorage {
     }
 
     /**
+     * Update the name of a region.
+     */
+    public Completable updateName(UUID regionId, String name) {
+        return storage.execute(conn -> {
+            String sql = "UPDATE protection_regions SET name = ? WHERE id = ? AND deleted_at IS NULL";
+
+            try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+                stmt.setString(1, normalizeName(name));
+                stmt.setObject(2, regionId);
+                stmt.executeUpdate();
+            }
+        });
+    }
+
+    /**
      * Update the access settings of a region.
      */
     public Completable updateAccess(UUID regionId, AccessLevel building, AccessLevel containers, AccessLevel doors) {

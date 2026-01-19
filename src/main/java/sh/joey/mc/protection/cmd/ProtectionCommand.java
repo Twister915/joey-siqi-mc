@@ -28,6 +28,7 @@ import sh.joey.mc.protection.RadiusLimitResolver;
 import sh.joey.mc.protection.Region;
 import sh.joey.mc.protection.RegionLimitResolver;
 import sh.joey.mc.protection.RegionManager;
+import sh.joey.mc.protection.RegionStorage;
 import sh.joey.mc.protection.RegionVisualizer;
 
 import java.util.ArrayList;
@@ -45,7 +46,7 @@ public final class ProtectionCommand implements Command {
 
     private static final List<String> SUBCOMMANDS = List.of(
             "claim", "unclaim", "info", "list", "trust", "untrust",
-            "settings", "access", "radius", "repair", "visualize", "help",
+            "settings", "access", "radius", "rename", "repair", "visualize", "help",
             "cancel", "expand", "anchors", "bypass", "cleanup", "forceunclaim", "forcerepair"
     );
 
@@ -109,6 +110,7 @@ public final class ProtectionCommand implements Command {
             case "settings" -> handleSettings(player);
             case "access" -> handleAccess(player, subArgs);
             case "radius" -> handleRadius(player, subArgs);
+            case "rename" -> handleRename(player, subArgs);
             case "repair" -> handleRepair(player, subArgs);
             case "visualize" -> handleVisualize(player);
             case "help" -> handleHelp(player);
@@ -191,20 +193,11 @@ public final class ProtectionCommand implements Command {
     }
 
     private Completable handleUnclaim(Player player, String[] args) {
-        if (args.length == 0) {
-            Messages.error(player, "Usage: /protection unclaim <name>");
+        String name = args.length > 0 ? String.join(" ", args) : null;
+        Region region = getOwnedRegion(player, name);
+        if (region == null) {
             return Completable.complete();
         }
-
-        String name = String.join(" ", args);
-        Optional<Region> regionOpt = manager.getRegion(player.getUniqueId(), name);
-
-        if (regionOpt.isEmpty()) {
-            Messages.error(player, "You don't have a region named \"" + name + "\".");
-            return Completable.complete();
-        }
-
-        Region region = regionOpt.get();
 
         // Confirm deletion
         confirmationManager.request(player, new ConfirmationRequest() {
@@ -556,27 +549,38 @@ public final class ProtectionCommand implements Command {
     }
 
     private Completable handleRadius(Player player, String[] args) {
-        if (args.length < 2) {
-            Messages.error(player, "Usage: /protection radius <name> <blocks>");
+        if (args.length < 1) {
+            Messages.error(player, "Usage: /protection radius [name] <blocks>");
             return Completable.complete();
         }
 
-        String name = args[0];
+        // Determine if first arg is name or radius
+        String name = null;
         int newRadius;
-        try {
-            newRadius = Integer.parseInt(args[1]);
-        } catch (NumberFormatException e) {
-            Messages.error(player, "Invalid radius. Must be a number.");
-            return Completable.complete();
+
+        if (args.length >= 2) {
+            // /protection radius <name> <blocks>
+            name = args[0];
+            try {
+                newRadius = Integer.parseInt(args[1]);
+            } catch (NumberFormatException e) {
+                Messages.error(player, "Invalid radius. Must be a number.");
+                return Completable.complete();
+            }
+        } else {
+            // /protection radius <blocks> - use current region
+            try {
+                newRadius = Integer.parseInt(args[0]);
+            } catch (NumberFormatException e) {
+                Messages.error(player, "Invalid radius. Must be a number.");
+                return Completable.complete();
+            }
         }
 
-        Optional<Region> regionOpt = manager.getRegion(player.getUniqueId(), name);
-        if (regionOpt.isEmpty()) {
-            Messages.error(player, "You don't have a region named \"" + name + "\".");
+        Region region = getOwnedRegion(player, name);
+        if (region == null) {
             return Completable.complete();
         }
-
-        Region region = regionOpt.get();
 
         // Check bounds
         int minRadius = manager.getConfig().minRadius();
@@ -611,6 +615,57 @@ public final class ProtectionCommand implements Command {
                 .observeOn(plugin.mainScheduler())
                 .doOnComplete(() -> Messages.success(player, "Updated radius to " + newRadius + " blocks."))
                 .doOnError(err -> Messages.error(player, "Failed to update radius."))
+                .onErrorComplete();
+    }
+
+    private Completable handleRename(Player player, String[] args) {
+        if (args.length < 1) {
+            Messages.error(player, "Usage: /protection rename [current-name] <new-name>");
+            return Completable.complete();
+        }
+
+        // Determine if first arg is current name or new name
+        String currentName = null;
+        String newName;
+
+        if (args.length >= 2) {
+            // /protection rename <current-name> <new-name>
+            currentName = args[0];
+            newName = args[1];
+        } else {
+            // /protection rename <new-name> - use current region
+            newName = args[0];
+        }
+
+        // Validate new name
+        if (newName.length() > 32) {
+            Messages.error(player, "Region name cannot exceed 32 characters.");
+            return Completable.complete();
+        }
+
+        if (!newName.matches("[a-zA-Z0-9_-]+")) {
+            Messages.error(player, "Region name can only contain letters, numbers, underscores, and hyphens.");
+            return Completable.complete();
+        }
+
+        Region region = getOwnedRegion(player, currentName);
+        if (region == null) {
+            return Completable.complete();
+        }
+
+        // Check if new name already exists
+        String normalizedNew = RegionStorage.normalizeName(newName);
+        Optional<Region> existingOpt = manager.getRegion(player.getUniqueId(), normalizedNew);
+        if (existingOpt.isPresent() && !existingOpt.get().id().equals(region.id())) {
+            Messages.error(player, "You already have a region named \"" + normalizedNew + "\".");
+            return Completable.complete();
+        }
+
+        String oldName = region.name();
+        return manager.updateName(region.id(), newName)
+                .observeOn(plugin.mainScheduler())
+                .doOnComplete(() -> Messages.success(player, "Renamed \"" + oldName + "\" to \"" + normalizedNew + "\"."))
+                .doOnError(err -> Messages.error(player, "Failed to rename region."))
                 .onErrorComplete();
     }
 
@@ -683,13 +738,15 @@ public final class ProtectionCommand implements Command {
 
         helpLine(player, "/protection", "List your regions");
         helpLine(player, "/protection claim [name]", "Claim lodestone you're looking at");
-        helpLine(player, "/protection unclaim <name>", "Remove protection");
+        helpLine(player, "/protection unclaim [name]", "Remove protection");
         helpLine(player, "/protection info", "Info for region you're standing in");
         helpLine(player, "/protection trust <player>", "Add member to current region");
         helpLine(player, "/protection untrust <player>", "Remove member");
         helpLine(player, "/protection settings", "Show access settings");
         helpLine(player, "/protection access <setting> <level>", "Change access level");
-        helpLine(player, "/protection radius <name> <blocks>", "Adjust region radius");
+        helpLine(player, "/protection radius [name] <blocks>", "Adjust region radius");
+        helpLine(player, "/protection rename [name] <new-name>", "Rename a region");
+        helpLine(player, "/protection anchors [name]", "List anchors in a region");
         helpLine(player, "/protection repair [name]", "Repair orphaned region");
         helpLine(player, "/protection visualize", "Toggle border particles");
 
@@ -710,6 +767,33 @@ public final class ProtectionCommand implements Command {
                 .append(Component.text(" - " + description).color(NamedTextColor.GRAY)));
     }
 
+    /**
+     * Get an owned region by name, or the current region if no name given.
+     * Returns null and sends error message if region not found or not owned.
+     */
+    @Nullable
+    private Region getOwnedRegion(Player player, @Nullable String name) {
+        if (name != null && !name.isEmpty()) {
+            Optional<Region> regionOpt = manager.getRegion(player.getUniqueId(), name);
+            if (regionOpt.isEmpty()) {
+                Messages.error(player, "You don't have a region named \"" + name + "\".");
+                return null;
+            }
+            return regionOpt.get();
+        } else {
+            Region region = manager.getRegionAt(player.getLocation());
+            if (region == null) {
+                Messages.error(player, "You must be standing in a region or specify a name.");
+                return null;
+            }
+            if (!region.isOwner(player.getUniqueId())) {
+                Messages.error(player, "You don't own this region.");
+                return null;
+            }
+            return region;
+        }
+    }
+
     private Completable handleCancel(Player player) {
         lodestoneListener.cancelPendingClaim(player);
         return Completable.complete();
@@ -726,26 +810,10 @@ public final class ProtectionCommand implements Command {
     }
 
     private Completable handleAnchors(Player player, String[] args) {
-        // Get region - either by name or current location
-        Region region;
-        if (args.length > 0) {
-            String name = String.join(" ", args);
-            Optional<Region> regionOpt = manager.getRegion(player.getUniqueId(), name);
-            if (regionOpt.isEmpty()) {
-                Messages.error(player, "You don't have a region named \"" + name + "\".");
-                return Completable.complete();
-            }
-            region = regionOpt.get();
-        } else {
-            region = manager.getRegionAt(player.getLocation());
-            if (region == null) {
-                Messages.error(player, "You must be standing in a region or specify a name.");
-                return Completable.complete();
-            }
-            if (!region.isOwner(player.getUniqueId())) {
-                Messages.error(player, "You don't own this region.");
-                return Completable.complete();
-            }
+        String name = args.length > 0 ? String.join(" ", args) : null;
+        Region region = getOwnedRegion(player, name);
+        if (region == null) {
+            return Completable.complete();
         }
 
         // List anchors
@@ -925,7 +993,7 @@ public final class ProtectionCommand implements Command {
             String partial = args[1].toLowerCase();
 
             switch (subcommand) {
-                case "unclaim", "radius", "repair" -> {
+                case "unclaim", "radius", "rename", "repair" -> {
                     // Complete with owned region names
                     completions.addAll(manager.getOwnedRegions(player.getUniqueId()).stream()
                             .map(Region::name)
