@@ -6,11 +6,15 @@ import net.kyori.adventure.text.Component;
 import org.bukkit.entity.Player;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
+import org.jetbrains.annotations.Nullable;
 import sh.joey.mc.SiqiJoeyPlugin;
 import sh.joey.mc.merit.challenge.ChallengeAssigner;
 import sh.joey.mc.merit.challenge.ChallengeRegistry;
 import sh.joey.mc.merit.tracking.*;
 import sh.joey.mc.storage.StorageService;
+
+import java.util.UUID;
+import java.util.function.Consumer;
 
 /**
  * Central manager for the merit system.
@@ -29,6 +33,10 @@ public final class MeritManager implements Disposable {
     private final ProgressTracker progressTracker;
     private final OnlineTimeTracker onlineTimeTracker;
 
+    // Listener for level changes (used by DisplayManager to update nameplates)
+    @Nullable
+    private Consumer<UUID> levelChangeListener;
+
     public MeritManager(SiqiJoeyPlugin plugin, StorageService storageService, MeritConfig config) {
         this.plugin = plugin;
         this.config = config;
@@ -41,6 +49,9 @@ public final class MeritManager implements Disposable {
         // Create progress tracker
         this.progressTracker = new ProgressTracker(plugin, storage, bossBarProvider, assigner, levelCalculator, config);
         disposables.add(progressTracker);
+
+        // Wire up level change notifications
+        progressTracker.setLevelChangeCallback(this::notifyLevelChange);
 
         // Create all trackers
         disposables.add(new MiningTracker(plugin, progressTracker));
@@ -138,6 +149,24 @@ public final class MeritManager implements Disposable {
      */
     public long getCurrentSessionSeconds(java.util.UUID playerId) {
         return onlineTimeTracker.getCurrentSessionSeconds(playerId);
+    }
+
+    /**
+     * Set a listener to be notified when a player's level changes.
+     * Used by DisplayManager to refresh nameplates.
+     */
+    public void setLevelChangeListener(@Nullable Consumer<UUID> listener) {
+        this.levelChangeListener = listener;
+    }
+
+    /**
+     * Notify that a player's level has changed.
+     * Called by ProgressTracker when levels are updated.
+     */
+    public void notifyLevelChange(UUID playerId) {
+        if (levelChangeListener != null) {
+            levelChangeListener.accept(playerId);
+        }
     }
 
     @Override

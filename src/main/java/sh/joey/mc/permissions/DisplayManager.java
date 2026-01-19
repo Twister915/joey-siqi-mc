@@ -103,6 +103,17 @@ public final class DisplayManager implements Disposable {
      */
     public void setMeritManager(@Nullable MeritManager meritManager) {
         this.meritManager = meritManager;
+
+        // Register as a level change listener to refresh displays when levels change
+        if (meritManager != null) {
+            meritManager.setLevelChangeListener(playerId -> {
+                Player player = plugin.getServer().getPlayer(playerId);
+                if (player != null && player.isOnline()) {
+                    updateDisplay(player);
+                }
+            });
+        }
+
         // Refresh all displays to include level
         refreshAll();
     }

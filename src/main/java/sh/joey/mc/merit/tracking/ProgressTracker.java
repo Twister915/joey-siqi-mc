@@ -14,6 +14,8 @@ import sh.joey.mc.merit.Messages;
 import sh.joey.mc.merit.challenge.Challenge;
 import sh.joey.mc.merit.challenge.ChallengeAssigner;
 
+import org.jetbrains.annotations.Nullable;
+
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -21,6 +23,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 import java.util.logging.Logger;
 
 import net.kyori.adventure.text.Component;
@@ -60,6 +63,10 @@ public final class ProgressTracker implements Disposable {
 
     // Track current week number to detect week transitions
     private volatile int currentWeekNumber;
+
+    // Callback for level changes (to notify DisplayManager)
+    @Nullable
+    private Consumer<UUID> levelChangeCallback;
 
     public ProgressTracker(SiqiJoeyPlugin plugin, MeritStorage storage, MeritBossBarProvider bossBarProvider,
                            ChallengeAssigner assigner, LevelCalculator levelCalculator, MeritConfig config) {
@@ -215,6 +222,9 @@ public final class ProgressTracker implements Disposable {
         // Cache the correct level
         playerLevels.put(playerId, calculatedLevel);
 
+        // Always notify level change on load so DisplayManager can show the level
+        notifyLevelChange(playerId);
+
         // Check if player should have gained levels (curve may have changed)
         if (calculatedLevel > storedLevel) {
             // Update the stored level in the database
@@ -306,6 +316,23 @@ public final class ProgressTracker implements Disposable {
      */
     public int getCachedLevel(UUID playerId) {
         return playerLevels.getOrDefault(playerId, 1);
+    }
+
+    /**
+     * Set a callback to be invoked when a player's level changes.
+     * Used by MeritManager to notify DisplayManager.
+     */
+    public void setLevelChangeCallback(@Nullable Consumer<UUID> callback) {
+        this.levelChangeCallback = callback;
+    }
+
+    /**
+     * Notify that a player's level has changed.
+     */
+    private void notifyLevelChange(UUID playerId) {
+        if (levelChangeCallback != null) {
+            levelChangeCallback.accept(playerId);
+        }
     }
 
     /**
@@ -478,8 +505,11 @@ public final class ProgressTracker implements Disposable {
                 .subscribe(
                         newLevel -> {
                             playerLevels.put(playerId, newLevel);
-                            if (newLevel > oldLevel && player != null && player.isOnline()) {
-                                onLevelUp(player, newLevel);
+                            if (newLevel > oldLevel) {
+                                notifyLevelChange(playerId);
+                                if (player != null && player.isOnline()) {
+                                    onLevelUp(player, newLevel);
+                                }
                             }
                         },
                         err -> logger.warning("Failed to award merit: " + err.getMessage())
