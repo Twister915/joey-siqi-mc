@@ -6,10 +6,12 @@ import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.Tag;
 import org.bukkit.block.Block;
+import org.bukkit.entity.EnderDragon;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Hanging;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.Projectile;
+import org.bukkit.entity.Wither;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.block.BlockExplodeEvent;
@@ -177,8 +179,11 @@ public final class ProtectionListener implements Disposable {
             return;
         }
 
-        // Block non-player entity changes (enderman pickup, silverfish breaking, etc.)
-        event.setCancelled(true);
+        // Block only griefing entities; allow everything else for vanilla gameplay
+        // (sheep eating grass, villagers farming, falling blocks, snow golems, etc.)
+        if (isGriefingEntity(event.getEntity())) {
+            event.setCancelled(true);
+        }
     }
 
     private void onPlayerInteract(PlayerInteractEvent event) {
@@ -314,6 +319,15 @@ public final class ProtectionListener implements Disposable {
         }
 
         return null;
+    }
+
+    /**
+     * Check if an entity causes mass block destruction.
+     * These are blocked; all other entities are allowed for vanilla gameplay.
+     */
+    private boolean isGriefingEntity(Entity entity) {
+        return entity instanceof Wither        // Mass block destruction
+            || entity instanceof EnderDragon;  // Destroys blocks in flight path
     }
 
     @Override
