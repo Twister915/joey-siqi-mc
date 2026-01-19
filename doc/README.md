@@ -29,6 +29,7 @@ Complete documentation for Siqi & Joey's Minecraft Plugin.
 
 | System | Description |
 |--------|-------------|
+| [Daily Messages](daily-messages.md) | Themed messages at dawn each Minecraft day |
 | [Messages](messages.md) | Death, join/leave, chat formatting |
 | [Steve](steve.md) | AI Minecraft expert chatbot |
 | [Tips](tips.md) | Periodic gameplay tips |

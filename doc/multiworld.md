@@ -15,18 +15,41 @@ Worlds are configured in `config.yml` under the `worlds` section:
 
 ```yaml
 worlds:
-  creative:
+  world:
+    dimension: overworld
+    gamemode: SURVIVAL
+    difficulty: hard
+    inventory_group: survival
+    pregen_size: 40000
+  world_nether:
+    dimension: nether
+    gamemode: SURVIVAL
+    difficulty: hard
+    inventory_group: survival
+    access: hidden
+  world_the_end:
+    dimension: end
+    gamemode: SURVIVAL
+    difficulty: hard
+    inventory_group: survival
+    access: hidden
+    pregen_size: 3000
+  superflat:
     dimension: overworld
     gamemode: CREATIVE
     superflat: true
+    structures: false
+    disable_advancements: true
+    time: 6000
+    weather: clear
     generator_settings: '{"layers":[{"block":"minecraft:bedrock","height":1},{"block":"minecraft:dirt","height":2},{"block":"minecraft:grass_block","height":1}],"biome":"minecraft:plains"}'
-    difficulty: peaceful
+    difficulty: normal
     game_rules:
-      doMobSpawning: false
-      doDaylightCycle: false
+      spawn_mobs: false
+      advance_time: false
+      block_drops: false
     inventory_group: creative
     teleport_warmup: false
-    disable_advancements: true
 ```
 
 ### Config Options
@@ -40,13 +63,40 @@ worlds:
 | `superflat` | boolean | `false` | Use superflat terrain (only for new overworld, ignored if `generator` is set) |
 | `generator_settings` | string | (none) | Superflat JSON config (see below) |
 | `structures` | boolean | `true` | Generate structures (villages, temples, etc.) - only for new worlds |
-| `hidden` | boolean | `false` | If true, world is hidden from `/world` list and cannot be teleported to directly |
+| `access` | string | `all` | Access control: `all` (anyone with `smp.world`), `permission` (requires `smp.world.<worldname>`), `hidden` (not accessible via `/world`) |
 | `difficulty` | string | (server default) | World difficulty: `peaceful`, `easy`, `normal`, `hard` |
 | `game_rules` | map | (none) | Game rule overrides (see below) |
 | `inventory_group` | string | (world name) | Inventory group name |
 | `teleport_warmup` | boolean | `true` | If false, teleports from this world are instant (no countdown) |
 | `disable_advancements` | boolean | `false` | If true, players cannot earn advancements in this world |
 | `pregen_size` | number | (none) | Pre-generate chunks in a square area centered on spawn (blocks per side) |
+
+## Access Control
+
+The `access` option controls who can use `/world` to teleport to a world:
+
+| Value | Description |
+|-------|-------------|
+| `all` | Anyone with `smp.world` permission can teleport (default) |
+| `permission` | Requires `smp.world.<worldname>` permission |
+| `hidden` | World is completely hidden from `/world` list and cannot be teleported to |
+
+**Use cases:**
+- `all` - Public worlds everyone can visit (creative, minigames)
+- `permission` - Admin-only worlds, VIP areas, or worlds under construction
+- `hidden` - Vanilla dimension worlds (nether, end) that players access through portals
+
+**Example:**
+```yaml
+worlds:
+  world_nether:
+    dimension: nether
+    access: hidden          # Access via portals only
+  admin_area:
+    access: permission      # Requires smp.world.admin_area
+  creative:
+    access: all             # Anyone can /world creative
+```
 
 ## Superflat Generator Settings
 
@@ -129,8 +179,8 @@ worlds:
     teleport_warmup: false
     inventory_group: admin_void
     game_rules:
-      doMobSpawning: false
-      doDaylightCycle: false
+      spawn_mobs: false
+      advance_time: false
 ```
 
 This creates a void world with End dimension (black sky), restricted to players with `smp.world.admin_void` permission.
@@ -146,9 +196,9 @@ worlds:
     structures: false
     inventory_group: build_contest
     game_rules:
-      doMobSpawning: false
-      doWeatherCycle: false
-      doDaylightCycle: false
+      spawn_mobs: false
+      advance_weather: false
+      advance_time: false
     time: 6000
 ```
 
@@ -156,35 +206,34 @@ A void world with blue sky (overworld dimension), fixed at noon, for building co
 
 ## Game Rules
 
-Configure per-world game rules under the `game_rules` section. Boolean rules use `true`/`false`, integer rules use numbers.
+Configure per-world game rules under the `game_rules` section. Boolean rules use `true`/`false`, integer rules use numbers. Game rule names use snake_case (e.g., `spawn_mobs`, `advance_time`).
 
 ### Common Boolean Rules
 
 | Rule | Default | Description |
 |------|---------|-------------|
-| `doMobSpawning` | true | Mobs spawn naturally |
-| `doDaylightCycle` | true | Time advances |
-| `doWeatherCycle` | true | Weather changes |
-| `doFireTick` | true | Fire spreads |
-| `mobGriefing` | true | Mobs can modify blocks |
-| `keepInventory` | false | Keep inventory on death |
-| `doTileDrops` | true | Blocks drop items |
-| `doEntityDrops` | true | Entities drop items |
-| `doImmediateRespawn` | false | Skip death screen |
-| `naturalRegeneration` | true | Health regenerates |
+| `spawn_mobs` | true | Mobs spawn naturally |
+| `advance_time` | true | Time advances (daylight cycle) |
+| `advance_weather` | true | Weather changes |
+| `mob_griefing` | true | Mobs can modify blocks |
+| `keep_inventory` | false | Keep inventory on death |
+| `block_drops` | true | Blocks drop items |
+| `entity_drops` | true | Entities drop items |
+| `immediate_respawn` | false | Skip death screen |
+| `natural_health_regeneration` | true | Health regenerates |
 | `pvp` | true | Players can damage each other |
-| `fallDamage` | true | Fall damage enabled |
-| `fireDamage` | true | Fire damage enabled |
-| `drowningDamage` | true | Drowning damage enabled |
-| `freezeDamage` | true | Powder snow damage enabled |
+| `fall_damage` | true | Fall damage enabled |
+| `fire_damage` | true | Fire damage enabled |
+| `drowning_damage` | true | Drowning damage enabled |
+| `freeze_damage` | true | Powder snow damage enabled |
 
 ### Common Integer Rules
 
 | Rule | Default | Description |
 |------|---------|-------------|
-| `randomTickSpeed` | 3 | Speed of random ticks (crop growth, etc.) |
-| `spawnRadius` | 10 | Spawn protection radius |
-| `maxEntityCramming` | 24 | Max entities before suffocation |
+| `random_tick_speed` | 3 | Speed of random ticks (crop growth, etc.) |
+| `respawn_radius` | 10 | Spawn protection radius |
+| `max_entity_cramming` | 24 | Max entities before suffocation |
 
 For a complete list, see the [Minecraft Wiki - Game Rules](https://minecraft.wiki/w/Game_rule).
 
@@ -213,8 +262,8 @@ worlds:
     generator_settings: '{"layers":[{"block":"minecraft:bedrock","height":1},{"block":"minecraft:dirt","height":2},{"block":"minecraft:grass_block","height":1}],"biome":"minecraft:plains"}'
     difficulty: peaceful
     game_rules:
-      doMobSpawning: false
-      doDaylightCycle: false
+      spawn_mobs: false
+      advance_time: false
     inventory_group: creative
     teleport_warmup: false
     disable_advancements: true
@@ -236,7 +285,7 @@ worlds:
   world_nether:
     gamemode: SURVIVAL
     inventory_group: default
-    hidden: true
+    access: hidden
     pregen_size: 5000
 
   # Creative world - no pre-generation needed
