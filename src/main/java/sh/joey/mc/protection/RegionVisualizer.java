@@ -18,6 +18,7 @@ import java.util.concurrent.TimeUnit;
 /**
  * Visualizes region borders using particles.
  * Players can toggle visualization on/off.
+ * Renders circles around each anchor in a region.
  */
 public final class RegionVisualizer implements Disposable {
 
@@ -85,16 +86,22 @@ public final class RegionVisualizer implements Disposable {
         // Find regions near the player (within render distance)
         int renderDistance = 64;
         for (Region region : manager.getCache().getRegionsInWorld(world.getUID())) {
-            double dx = region.centerX() - playerLoc.getX();
-            double dz = region.centerZ() - playerLoc.getZ();
-            double distance = Math.sqrt(dx * dx + dz * dz);
+            // Check if any anchor is within render distance
+            boolean anyNearby = false;
+            for (Anchor anchor : region.anchors()) {
+                double dx = anchor.x() - playerLoc.getX();
+                double dz = anchor.z() - playerLoc.getZ();
+                double distance = Math.sqrt(dx * dx + dz * dz);
 
-            // Only render if player is within render distance of the region border
-            if (distance > region.radius() + renderDistance) {
-                continue;
+                if (distance <= region.radius() + renderDistance) {
+                    anyNearby = true;
+                    break;
+                }
             }
 
-            renderRegion(player, region);
+            if (anyNearby) {
+                renderRegion(player, region);
+            }
         }
     }
 
@@ -108,9 +115,28 @@ public final class RegionVisualizer implements Disposable {
         Particle.DustOptions dustOptions = new Particle.DustOptions(color, 1.0f);
 
         double playerY = player.getLocation().getY();
-        double centerX = region.centerX() + 0.5;
-        double centerZ = region.centerZ() + 0.5;
         int radius = region.radius();
+
+        // Render circle around each anchor
+        for (Anchor anchor : region.anchors()) {
+            double centerX = anchor.x() + 0.5;
+            double centerZ = anchor.z() + 0.5;
+
+            // Check if this anchor is close enough to render
+            double dx = centerX - player.getLocation().getX();
+            double dz = centerZ - player.getLocation().getZ();
+            if (dx * dx + dz * dz > (radius + 64) * (radius + 64)) {
+                continue;
+            }
+
+            renderAnchorCircle(player, centerX, centerZ, radius, playerY, dustOptions);
+        }
+    }
+
+    private void renderAnchorCircle(Player player, double centerX, double centerZ, int radius,
+                                     double playerY, Particle.DustOptions dustOptions) {
+        World world = player.getWorld();
+        if (world == null) return;
 
         // Render circle at player's Y level
         for (int i = 0; i < POINTS_PER_CIRCLE; i++) {

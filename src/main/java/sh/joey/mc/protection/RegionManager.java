@@ -10,6 +10,7 @@ import org.bukkit.event.player.PlayerJoinEvent;
 import org.jetbrains.annotations.Nullable;
 import sh.joey.mc.SiqiJoeyPlugin;
 
+import java.time.Instant;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
@@ -118,6 +119,14 @@ public final class RegionManager implements Disposable {
     }
 
     /**
+     * Find a region by anchor location (exact lodestone block).
+     */
+    @Nullable
+    public Region getRegionByAnchor(UUID worldId, int x, int y, int z) {
+        return cache.findByAnchorLocation(worldId, x, y, z);
+    }
+
+    /**
      * Get all regions owned by a player.
      */
     public List<Region> getOwnedRegions(UUID ownerId) {
@@ -161,7 +170,14 @@ public final class RegionManager implements Disposable {
     }
 
     /**
-     * Create a new region.
+     * Find nearby owned regions that could be expanded with a new anchor.
+     */
+    public List<Region> findNearbyOwnedRegions(UUID ownerId, UUID worldId, int x, int z) {
+        return cache.findNearbyOwnedRegions(ownerId, worldId, x, z, config.defaultRadius());
+    }
+
+    /**
+     * Create a new region with its first anchor.
      *
      * @param ownerId the owner's UUID
      * @param name the region name
@@ -169,23 +185,33 @@ public final class RegionManager implements Disposable {
      * @return Single that completes with the created region, or errors on failure
      */
     public Single<Region> createRegion(UUID ownerId, String name, Location location) {
+        UUID regionId = UUID.randomUUID();
+        UUID anchorId = UUID.randomUUID();
+
+        Anchor firstAnchor = new Anchor(
+                anchorId,
+                regionId,
+                location.getBlockX(),
+                location.getBlockY(),
+                location.getBlockZ(),
+                Instant.now()
+        );
+
         Region region = new Region(
-                UUID.randomUUID(),
+                regionId,
                 ownerId,
                 null, // Owner name will be loaded from DB
                 RegionStorage.normalizeName(name),
                 location.getWorld().getUID(),
-                location.getBlockX(),
-                location.getBlockY(),
-                location.getBlockZ(),
                 config.defaultRadius(),
                 AccessLevel.MEMBERS,
                 AccessLevel.MEMBERS,
                 AccessLevel.EVERYBODY,
-                new HashSet<>()
+                new HashSet<>(),
+                List.of(firstAnchor)
         );
 
-        return storage.createRegion(region)
+        return storage.createRegion(region, firstAnchor)
                 .toSingleDefault(region)
                 .doOnSuccess(r -> cache.add(r));
     }
@@ -258,9 +284,9 @@ public final class RegionManager implements Disposable {
                             newMembers.add(memberId);
                             cache.update(new Region(
                                     region.id(), region.ownerId(), region.ownerName(), region.name(),
-                                    region.worldId(), region.centerX(), region.centerY(), region.centerZ(),
-                                    region.radius(), region.buildingAccess(), region.containerAccess(),
-                                    region.doorAccess(), newMembers
+                                    region.worldId(), region.radius(),
+                                    region.buildingAccess(), region.containerAccess(), region.doorAccess(),
+                                    newMembers, region.anchors()
                             ));
                         });
                     }
@@ -283,11 +309,63 @@ public final class RegionManager implements Disposable {
                             newMembers.remove(memberId);
                             cache.update(new Region(
                                     region.id(), region.ownerId(), region.ownerName(), region.name(),
-                                    region.worldId(), region.centerX(), region.centerY(), region.centerZ(),
-                                    region.radius(), region.buildingAccess(), region.containerAccess(),
-                                    region.doorAccess(), newMembers
+                                    region.worldId(), region.radius(),
+                                    region.buildingAccess(), region.containerAccess(), region.doorAccess(),
+                                    newMembers, region.anchors()
                             ));
                         });
+                    }
+                });
+    }
+
+    // === Anchor Operations ===
+
+    /**
+     * Add an anchor to an existing region.
+     *
+     * @param regionId the region ID
+     * @param location the lodestone location
+     * @return Single that completes with the new anchor
+     */
+    public Single<Anchor> addAnchor(UUID regionId, Location location) {
+        Anchor anchor = new Anchor(
+                UUID.randomUUID(),
+                regionId,
+                location.getBlockX(),
+                location.getBlockY(),
+                location.getBlockZ(),
+                Instant.now()
+        );
+
+        return storage.addAnchor(anchor)
+                .toSingleDefault(anchor)
+                .doOnSuccess(a -> {
+                    cache.get(regionId).ifPresent(region -> {
+                        cache.update(region.withAnchor(a));
+                    });
+                });
+    }
+
+    /**
+     * Remove an anchor from a region.
+     * Cannot remove the last anchor - use deleteRegion instead.
+     *
+     * @param anchorId the anchor ID
+     * @return Single that completes with true if removed
+     */
+    public Single<Boolean> removeAnchor(UUID anchorId) {
+        return storage.removeAnchor(anchorId)
+                .doOnSuccess(removed -> {
+                    if (removed) {
+                        // Find the region containing this anchor and update cache
+                        for (Region region : cache.getAllRegions()) {
+                            for (Anchor anchor : region.anchors()) {
+                                if (anchor.id().equals(anchorId)) {
+                                    cache.update(region.withoutAnchor(anchorId));
+                                    return;
+                                }
+                            }
+                        }
                     }
                 });
     }
@@ -324,6 +402,15 @@ public final class RegionManager implements Disposable {
      */
     public void markRepaired(UUID regionId) {
         cache.clearOrphaned(regionId);
+    }
+
+    /**
+     * Mark an anchor as orphaned.
+     */
+    public void markAnchorOrphaned(UUID regionId, UUID anchorId) {
+        // For now, mark the whole region as orphaned if any anchor is missing
+        // Future enhancement: track per-anchor orphan status
+        cache.markOrphaned(regionId);
     }
 
     /**

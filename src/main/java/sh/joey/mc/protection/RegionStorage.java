@@ -9,9 +9,12 @@ import sh.joey.mc.storage.StorageService;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -39,9 +42,9 @@ public final class RegionStorage {
      */
     public Flowable<Region> getAllRegions() {
         return storage.queryFlowable(conn -> {
-            String sql = """
-                SELECT r.id, r.owner_id, r.name, r.world_id,
-                       r.center_x, r.center_y, r.center_z, r.radius,
+            // First, load all regions with their members
+            String regionSql = """
+                SELECT r.id, r.owner_id, r.name, r.world_id, r.radius,
                        r.building_access, r.container_access, r.door_access,
                        pn.username as owner_name,
                        COALESCE(array_agg(rm.member_id) FILTER (WHERE rm.member_id IS NOT NULL), '{}') as members
@@ -49,17 +52,39 @@ public final class RegionStorage {
                 LEFT JOIN region_members rm ON r.id = rm.region_id
                 LEFT JOIN player_names pn ON r.owner_id = pn.player_id
                 WHERE r.deleted_at IS NULL
-                GROUP BY r.id, r.owner_id, r.name, r.world_id,
-                         r.center_x, r.center_y, r.center_z, r.radius,
+                GROUP BY r.id, r.owner_id, r.name, r.world_id, r.radius,
                          r.building_access, r.container_access, r.door_access, pn.username
                 ORDER BY r.created_at
                 """;
 
-            List<Region> regions = new ArrayList<>();
-            try (PreparedStatement stmt = conn.prepareStatement(sql);
+            // Load all anchors for active regions
+            String anchorSql = """
+                SELECT a.id, a.region_id, a.x, a.y, a.z, a.created_at
+                FROM region_anchors a
+                INNER JOIN protection_regions r ON a.region_id = r.id
+                WHERE r.deleted_at IS NULL
+                ORDER BY a.created_at
+                """;
+
+            // Load anchors into a map by region ID
+            Map<UUID, List<Anchor>> anchorsByRegion = new HashMap<>();
+            try (PreparedStatement stmt = conn.prepareStatement(anchorSql);
                  ResultSet rs = stmt.executeQuery()) {
                 while (rs.next()) {
-                    regions.add(readRegion(rs));
+                    Anchor anchor = readAnchor(rs);
+                    anchorsByRegion.computeIfAbsent(anchor.regionId(), k -> new ArrayList<>())
+                            .add(anchor);
+                }
+            }
+
+            // Load regions and attach anchors
+            List<Region> regions = new ArrayList<>();
+            try (PreparedStatement stmt = conn.prepareStatement(regionSql);
+                 ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    UUID regionId = rs.getObject("id", UUID.class);
+                    List<Anchor> anchors = anchorsByRegion.getOrDefault(regionId, List.of());
+                    regions.add(readRegion(rs, anchors));
                 }
             }
             return regions;
@@ -72,8 +97,7 @@ public final class RegionStorage {
     public Maybe<Region> getRegion(UUID regionId) {
         return storage.queryMaybe(conn -> {
             String sql = """
-                SELECT r.id, r.owner_id, r.name, r.world_id,
-                       r.center_x, r.center_y, r.center_z, r.radius,
+                SELECT r.id, r.owner_id, r.name, r.world_id, r.radius,
                        r.building_access, r.container_access, r.door_access,
                        pn.username as owner_name,
                        COALESCE(array_agg(rm.member_id) FILTER (WHERE rm.member_id IS NOT NULL), '{}') as members
@@ -81,8 +105,7 @@ public final class RegionStorage {
                 LEFT JOIN region_members rm ON r.id = rm.region_id
                 LEFT JOIN player_names pn ON r.owner_id = pn.player_id
                 WHERE r.id = ? AND r.deleted_at IS NULL
-                GROUP BY r.id, r.owner_id, r.name, r.world_id,
-                         r.center_x, r.center_y, r.center_z, r.radius,
+                GROUP BY r.id, r.owner_id, r.name, r.world_id, r.radius,
                          r.building_access, r.container_access, r.door_access, pn.username
                 """;
 
@@ -91,7 +114,8 @@ public final class RegionStorage {
 
                 try (ResultSet rs = stmt.executeQuery()) {
                     if (rs.next()) {
-                        return readRegion(rs);
+                        List<Anchor> anchors = loadAnchorsForRegion(conn, regionId);
+                        return readRegion(rs, anchors);
                     }
                     return null;
                 }
@@ -106,8 +130,7 @@ public final class RegionStorage {
         String normalizedName = normalizeName(name);
         return storage.queryMaybe(conn -> {
             String sql = """
-                SELECT r.id, r.owner_id, r.name, r.world_id,
-                       r.center_x, r.center_y, r.center_z, r.radius,
+                SELECT r.id, r.owner_id, r.name, r.world_id, r.radius,
                        r.building_access, r.container_access, r.door_access,
                        pn.username as owner_name,
                        COALESCE(array_agg(rm.member_id) FILTER (WHERE rm.member_id IS NOT NULL), '{}') as members
@@ -115,8 +138,7 @@ public final class RegionStorage {
                 LEFT JOIN region_members rm ON r.id = rm.region_id
                 LEFT JOIN player_names pn ON r.owner_id = pn.player_id
                 WHERE r.owner_id = ? AND LOWER(r.name) = ? AND r.deleted_at IS NULL
-                GROUP BY r.id, r.owner_id, r.name, r.world_id,
-                         r.center_x, r.center_y, r.center_z, r.radius,
+                GROUP BY r.id, r.owner_id, r.name, r.world_id, r.radius,
                          r.building_access, r.container_access, r.door_access, pn.username
                 """;
 
@@ -126,7 +148,9 @@ public final class RegionStorage {
 
                 try (ResultSet rs = stmt.executeQuery()) {
                     if (rs.next()) {
-                        return readRegion(rs);
+                        UUID regionId = rs.getObject("id", UUID.class);
+                        List<Anchor> anchors = loadAnchorsForRegion(conn, regionId);
+                        return readRegion(rs, anchors);
                     }
                     return null;
                 }
@@ -140,8 +164,7 @@ public final class RegionStorage {
     public Flowable<Region> getOwnedRegions(UUID ownerId) {
         return storage.queryFlowable(conn -> {
             String sql = """
-                SELECT r.id, r.owner_id, r.name, r.world_id,
-                       r.center_x, r.center_y, r.center_z, r.radius,
+                SELECT r.id, r.owner_id, r.name, r.world_id, r.radius,
                        r.building_access, r.container_access, r.door_access,
                        pn.username as owner_name,
                        COALESCE(array_agg(rm.member_id) FILTER (WHERE rm.member_id IS NOT NULL), '{}') as members
@@ -149,11 +172,31 @@ public final class RegionStorage {
                 LEFT JOIN region_members rm ON r.id = rm.region_id
                 LEFT JOIN player_names pn ON r.owner_id = pn.player_id
                 WHERE r.owner_id = ? AND r.deleted_at IS NULL
-                GROUP BY r.id, r.owner_id, r.name, r.world_id,
-                         r.center_x, r.center_y, r.center_z, r.radius,
+                GROUP BY r.id, r.owner_id, r.name, r.world_id, r.radius,
                          r.building_access, r.container_access, r.door_access, pn.username
                 ORDER BY r.created_at
                 """;
+
+            // Load anchors for this owner's regions
+            String anchorSql = """
+                SELECT a.id, a.region_id, a.x, a.y, a.z, a.created_at
+                FROM region_anchors a
+                INNER JOIN protection_regions r ON a.region_id = r.id
+                WHERE r.owner_id = ? AND r.deleted_at IS NULL
+                ORDER BY a.created_at
+                """;
+
+            Map<UUID, List<Anchor>> anchorsByRegion = new HashMap<>();
+            try (PreparedStatement stmt = conn.prepareStatement(anchorSql)) {
+                stmt.setObject(1, ownerId);
+                try (ResultSet rs = stmt.executeQuery()) {
+                    while (rs.next()) {
+                        Anchor anchor = readAnchor(rs);
+                        anchorsByRegion.computeIfAbsent(anchor.regionId(), k -> new ArrayList<>())
+                                .add(anchor);
+                    }
+                }
+            }
 
             List<Region> regions = new ArrayList<>();
             try (PreparedStatement stmt = conn.prepareStatement(sql)) {
@@ -161,7 +204,9 @@ public final class RegionStorage {
 
                 try (ResultSet rs = stmt.executeQuery()) {
                     while (rs.next()) {
-                        regions.add(readRegion(rs));
+                        UUID regionId = rs.getObject("id", UUID.class);
+                        List<Anchor> anchors = anchorsByRegion.getOrDefault(regionId, List.of());
+                        regions.add(readRegion(rs, anchors));
                     }
                 }
             }
@@ -175,8 +220,7 @@ public final class RegionStorage {
     public Flowable<Region> getMemberRegions(UUID memberId) {
         return storage.queryFlowable(conn -> {
             String sql = """
-                SELECT r.id, r.owner_id, r.name, r.world_id,
-                       r.center_x, r.center_y, r.center_z, r.radius,
+                SELECT r.id, r.owner_id, r.name, r.world_id, r.radius,
                        r.building_access, r.container_access, r.door_access,
                        pn.username as owner_name,
                        COALESCE(array_agg(rm2.member_id) FILTER (WHERE rm2.member_id IS NOT NULL), '{}') as members
@@ -185,11 +229,32 @@ public final class RegionStorage {
                 LEFT JOIN region_members rm2 ON r.id = rm2.region_id
                 LEFT JOIN player_names pn ON r.owner_id = pn.player_id
                 WHERE r.deleted_at IS NULL
-                GROUP BY r.id, r.owner_id, r.name, r.world_id,
-                         r.center_x, r.center_y, r.center_z, r.radius,
+                GROUP BY r.id, r.owner_id, r.name, r.world_id, r.radius,
                          r.building_access, r.container_access, r.door_access, pn.username
                 ORDER BY r.created_at
                 """;
+
+            // Load anchors for member regions
+            String anchorSql = """
+                SELECT a.id, a.region_id, a.x, a.y, a.z, a.created_at
+                FROM region_anchors a
+                INNER JOIN protection_regions r ON a.region_id = r.id
+                INNER JOIN region_members rm ON r.id = rm.region_id AND rm.member_id = ?
+                WHERE r.deleted_at IS NULL
+                ORDER BY a.created_at
+                """;
+
+            Map<UUID, List<Anchor>> anchorsByRegion = new HashMap<>();
+            try (PreparedStatement stmt = conn.prepareStatement(anchorSql)) {
+                stmt.setObject(1, memberId);
+                try (ResultSet rs = stmt.executeQuery()) {
+                    while (rs.next()) {
+                        Anchor anchor = readAnchor(rs);
+                        anchorsByRegion.computeIfAbsent(anchor.regionId(), k -> new ArrayList<>())
+                                .add(anchor);
+                    }
+                }
+            }
 
             List<Region> regions = new ArrayList<>();
             try (PreparedStatement stmt = conn.prepareStatement(sql)) {
@@ -197,7 +262,9 @@ public final class RegionStorage {
 
                 try (ResultSet rs = stmt.executeQuery()) {
                     while (rs.next()) {
-                        regions.add(readRegion(rs));
+                        UUID regionId = rs.getObject("id", UUID.class);
+                        List<Anchor> anchors = anchorsByRegion.getOrDefault(regionId, List.of());
+                        regions.add(readRegion(rs, anchors));
                     }
                 }
             }
@@ -224,30 +291,46 @@ public final class RegionStorage {
     }
 
     /**
-     * Create a new region.
+     * Create a new region with its first anchor.
+     *
+     * @param region the region to create
+     * @param firstAnchor the initial anchor (lodestone location)
      */
-    public Completable createRegion(Region region) {
+    public Completable createRegion(Region region, Anchor firstAnchor) {
         String normalizedName = normalizeName(region.name());
         return storage.execute(conn -> {
-            String sql = """
+            // Insert region
+            String regionSql = """
                 INSERT INTO protection_regions
-                    (id, owner_id, name, world_id, center_x, center_y, center_z, radius,
+                    (id, owner_id, name, world_id, radius,
                      building_access, container_access, door_access)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """;
 
-            try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+            try (PreparedStatement stmt = conn.prepareStatement(regionSql)) {
                 stmt.setObject(1, region.id());
                 stmt.setObject(2, region.ownerId());
                 stmt.setString(3, normalizedName);
                 stmt.setObject(4, region.worldId());
-                stmt.setInt(5, region.centerX());
-                stmt.setInt(6, region.centerY());
-                stmt.setInt(7, region.centerZ());
-                stmt.setInt(8, region.radius());
-                stmt.setString(9, region.buildingAccess().name());
-                stmt.setString(10, region.containerAccess().name());
-                stmt.setString(11, region.doorAccess().name());
+                stmt.setInt(5, region.radius());
+                stmt.setString(6, region.buildingAccess().name());
+                stmt.setString(7, region.containerAccess().name());
+                stmt.setString(8, region.doorAccess().name());
+                stmt.executeUpdate();
+            }
+
+            // Insert first anchor
+            String anchorSql = """
+                INSERT INTO region_anchors (id, region_id, x, y, z)
+                VALUES (?, ?, ?, ?, ?)
+                """;
+
+            try (PreparedStatement stmt = conn.prepareStatement(anchorSql)) {
+                stmt.setObject(1, firstAnchor.id());
+                stmt.setObject(2, region.id());
+                stmt.setInt(3, firstAnchor.x());
+                stmt.setInt(4, firstAnchor.y());
+                stmt.setInt(5, firstAnchor.z());
                 stmt.executeUpdate();
             }
         });
@@ -255,6 +338,7 @@ public final class RegionStorage {
 
     /**
      * Soft-delete a region by setting deleted_at.
+     * Anchors are cascade-deleted by foreign key.
      *
      * @return true if a region was deleted
      */
@@ -364,15 +448,101 @@ public final class RegionStorage {
         });
     }
 
-    private Region readRegion(ResultSet rs) throws SQLException {
+    // ========== Anchor Operations ==========
+
+    /**
+     * Add an anchor to a region.
+     */
+    public Completable addAnchor(Anchor anchor) {
+        return storage.execute(conn -> {
+            String sql = "INSERT INTO region_anchors (id, region_id, x, y, z) VALUES (?, ?, ?, ?, ?)";
+
+            try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+                stmt.setObject(1, anchor.id());
+                stmt.setObject(2, anchor.regionId());
+                stmt.setInt(3, anchor.x());
+                stmt.setInt(4, anchor.y());
+                stmt.setInt(5, anchor.z());
+                stmt.executeUpdate();
+            }
+        });
+    }
+
+    /**
+     * Remove an anchor from a region.
+     *
+     * @return true if the anchor was removed
+     */
+    public Single<Boolean> removeAnchor(UUID anchorId) {
+        return storage.query(conn -> {
+            String sql = "DELETE FROM region_anchors WHERE id = ?";
+
+            try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+                stmt.setObject(1, anchorId);
+                return stmt.executeUpdate() > 0;
+            }
+        });
+    }
+
+    /**
+     * Get all anchors for a region.
+     */
+    public Flowable<Anchor> getAnchors(UUID regionId) {
+        return storage.queryFlowable(conn -> loadAnchorsForRegion(conn, regionId));
+    }
+
+    /**
+     * Count anchors for a region.
+     */
+    public Single<Integer> countAnchors(UUID regionId) {
+        return storage.query(conn -> {
+            String sql = "SELECT COUNT(*) FROM region_anchors WHERE region_id = ?";
+
+            try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+                stmt.setObject(1, regionId);
+
+                try (ResultSet rs = stmt.executeQuery()) {
+                    rs.next();
+                    return rs.getInt(1);
+                }
+            }
+        });
+    }
+
+    // ========== Helper Methods ==========
+
+    private List<Anchor> loadAnchorsForRegion(java.sql.Connection conn, UUID regionId) throws SQLException {
+        String sql = "SELECT id, region_id, x, y, z, created_at FROM region_anchors WHERE region_id = ? ORDER BY created_at";
+
+        List<Anchor> anchors = new ArrayList<>();
+        try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setObject(1, regionId);
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    anchors.add(readAnchor(rs));
+                }
+            }
+        }
+        return anchors;
+    }
+
+    private Anchor readAnchor(ResultSet rs) throws SQLException {
+        return new Anchor(
+                rs.getObject("id", UUID.class),
+                rs.getObject("region_id", UUID.class),
+                rs.getInt("x"),
+                rs.getInt("y"),
+                rs.getInt("z"),
+                rs.getTimestamp("created_at").toInstant()
+        );
+    }
+
+    private Region readRegion(ResultSet rs, List<Anchor> anchors) throws SQLException {
         UUID id = rs.getObject("id", UUID.class);
         UUID ownerId = rs.getObject("owner_id", UUID.class);
         String ownerName = rs.getString("owner_name");
         String name = rs.getString("name");
         UUID worldId = rs.getObject("world_id", UUID.class);
-        int centerX = rs.getInt("center_x");
-        int centerY = rs.getInt("center_y");
-        int centerZ = rs.getInt("center_z");
         int radius = rs.getInt("radius");
         AccessLevel buildingAccess = AccessLevel.fromString(rs.getString("building_access"));
         AccessLevel containerAccess = AccessLevel.fromString(rs.getString("container_access"));
@@ -389,7 +559,7 @@ public final class RegionStorage {
             }
         }
 
-        return new Region(id, ownerId, ownerName, name, worldId, centerX, centerY, centerZ,
-                radius, buildingAccess, containerAccess, doorAccess, members);
+        return new Region(id, ownerId, ownerName, name, worldId,
+                radius, buildingAccess, containerAccess, doorAccess, members, List.copyOf(anchors));
     }
 }

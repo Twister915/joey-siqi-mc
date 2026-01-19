@@ -20,6 +20,7 @@ import sh.joey.mc.confirm.ConfirmationManager;
 import sh.joey.mc.confirm.ConfirmationRequest;
 import sh.joey.mc.player.PlayerResolver;
 import sh.joey.mc.protection.AccessLevel;
+import sh.joey.mc.protection.Anchor;
 import sh.joey.mc.protection.LodestoneListener;
 import sh.joey.mc.protection.Messages;
 import sh.joey.mc.protection.ProtectionListener;
@@ -45,7 +46,7 @@ public final class ProtectionCommand implements Command {
     private static final List<String> SUBCOMMANDS = List.of(
             "claim", "unclaim", "info", "list", "trust", "untrust",
             "settings", "access", "radius", "repair", "visualize", "help",
-            "cancel", "bypass", "cleanup", "forceunclaim", "forcerepair"
+            "cancel", "expand", "anchors", "bypass", "cleanup", "forceunclaim", "forcerepair"
     );
 
     private static final List<String> ACCESS_SETTINGS = List.of("building", "containers", "doors");
@@ -112,6 +113,8 @@ public final class ProtectionCommand implements Command {
             case "visualize" -> handleVisualize(player);
             case "help" -> handleHelp(player);
             case "cancel" -> handleCancel(player);
+            case "expand" -> handleExpand(player);
+            case "anchors" -> handleAnchors(player, subArgs);
             case "bypass" -> handleBypass(player);
             case "cleanup" -> handleCleanup(player);
             case "forceunclaim" -> handleForceUnclaim(player, subArgs);
@@ -589,11 +592,15 @@ public final class ProtectionCommand implements Command {
             return Completable.complete();
         }
 
-        // Check for intersection with new radius
-        Region intersecting = manager.findIntersecting(
-                region.worldId(), region.centerX(), region.centerZ(),
-                newRadius, region.id()
-        );
+        // Check for intersection with new radius - check each anchor
+        Region intersecting = null;
+        for (Anchor anchor : region.anchors()) {
+            intersecting = manager.findIntersecting(
+                    region.worldId(), anchor.x(), anchor.z(),
+                    newRadius, region.id()
+            );
+            if (intersecting != null) break;
+        }
 
         if (intersecting != null) {
             Messages.error(player, "New radius would overlap with \"" + intersecting.name() + "\".");
@@ -642,7 +649,7 @@ public final class ProtectionCommand implements Command {
         }
 
         // Place the lodestone
-        Location center = region.getCenterLocation();
+        Location center = region.getPrimaryLocation();
         if (center == null) {
             Messages.error(player, "Cannot repair - world not loaded.");
             return Completable.complete();
@@ -705,6 +712,59 @@ public final class ProtectionCommand implements Command {
 
     private Completable handleCancel(Player player) {
         lodestoneListener.cancelPendingClaim(player);
+        return Completable.complete();
+    }
+
+    private Completable handleExpand(Player player) {
+        if (!lodestoneListener.hasPendingExpansion(player.getUniqueId())) {
+            Messages.error(player, "No pending expansion. Place a lodestone near an existing region first.");
+            return Completable.complete();
+        }
+
+        lodestoneListener.processExpand(player);
+        return Completable.complete();
+    }
+
+    private Completable handleAnchors(Player player, String[] args) {
+        // Get region - either by name or current location
+        Region region;
+        if (args.length > 0) {
+            String name = String.join(" ", args);
+            Optional<Region> regionOpt = manager.getRegion(player.getUniqueId(), name);
+            if (regionOpt.isEmpty()) {
+                Messages.error(player, "You don't have a region named \"" + name + "\".");
+                return Completable.complete();
+            }
+            region = regionOpt.get();
+        } else {
+            region = manager.getRegionAt(player.getLocation());
+            if (region == null) {
+                Messages.error(player, "You must be standing in a region or specify a name.");
+                return Completable.complete();
+            }
+            if (!region.isOwner(player.getUniqueId())) {
+                Messages.error(player, "You don't own this region.");
+                return Completable.complete();
+            }
+        }
+
+        // List anchors
+        Messages.send(player, Component.text("Anchors for \"" + region.name() + "\":")
+                .color(NamedTextColor.GOLD));
+
+        int i = 1;
+        for (Anchor anchor : region.anchors()) {
+            String coords = anchor.x() + ", " + anchor.y() + ", " + anchor.z();
+            player.sendMessage(Component.text("  " + i + ". ")
+                    .color(NamedTextColor.GRAY)
+                    .append(Component.text(coords)
+                            .color(NamedTextColor.WHITE)));
+            i++;
+        }
+
+        player.sendMessage(Component.text("  Radius: " + region.radius() + " blocks per anchor")
+                .color(NamedTextColor.GRAY));
+
         return Completable.complete();
     }
 
@@ -830,7 +890,7 @@ public final class ProtectionCommand implements Command {
                         return Completable.complete();
                     }
 
-                    Location center = region.getCenterLocation();
+                    Location center = region.getPrimaryLocation();
                     if (center == null) {
                         Messages.error(player, "Cannot repair - world not loaded.");
                         return Completable.complete();

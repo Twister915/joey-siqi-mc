@@ -213,6 +213,69 @@ public final class RegionCache {
     }
 
     /**
+     * Find a region that has an anchor at the exact block coordinates.
+     *
+     * @param worldId the world UUID
+     * @param x block X coordinate
+     * @param y block Y coordinate
+     * @param z block Z coordinate
+     * @return the region with an anchor at this location, or null
+     */
+    @Nullable
+    public Region findByAnchorLocation(UUID worldId, int x, int y, int z) {
+        List<Region> worldRegions = regionsByWorld.get(worldId);
+        if (worldRegions == null) {
+            return null;
+        }
+
+        for (Region region : worldRegions) {
+            if (region.getAnchorAt(x, y, z) != null) {
+                return region;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Find all regions owned by a player that are close enough to add an anchor at the given location.
+     * "Close enough" means the new anchor's circle would touch or overlap with an existing anchor's circle.
+     *
+     * @param ownerId the owner to check
+     * @param worldId the world UUID
+     * @param x the proposed anchor X
+     * @param z the proposed anchor Z
+     * @param radius the region's radius
+     * @return list of nearby owned regions that could be expanded
+     */
+    public List<Region> findNearbyOwnedRegions(UUID ownerId, UUID worldId, int x, int z, int radius) {
+        List<Region> worldRegions = regionsByWorld.get(worldId);
+        if (worldRegions == null) {
+            return Collections.emptyList();
+        }
+
+        List<Region> nearby = new ArrayList<>();
+        // Allow anchors to be placed up to 2x radius away (circles can touch but not overlap)
+        int maxDistance = radius * 4; // generous range for "nearby"
+
+        for (Region region : worldRegions) {
+            if (!region.isOwner(ownerId)) {
+                continue;
+            }
+            // Check if any anchor is close enough
+            for (Anchor anchor : region.anchors()) {
+                double dx = anchor.x() - x;
+                double dz = anchor.z() - z;
+                double distance = Math.sqrt(dx * dx + dz * dz);
+                if (distance <= maxDistance) {
+                    nearby.add(region);
+                    break; // Don't add same region multiple times
+                }
+            }
+        }
+        return nearby;
+    }
+
+    /**
      * Count the number of regions owned by a player.
      */
     public int countOwnedRegions(UUID ownerId) {

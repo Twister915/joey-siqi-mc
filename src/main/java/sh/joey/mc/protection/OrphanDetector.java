@@ -14,8 +14,10 @@ import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
 
 /**
- * Detects orphaned regions (where the lodestone is missing).
+ * Detects orphaned regions (where all lodestone anchors are missing).
  * Runs at startup and periodically to catch WorldEdit/chunk regeneration.
+ *
+ * A region is considered orphaned only if ALL of its anchors are missing.
  */
 public final class OrphanDetector implements Disposable {
 
@@ -55,46 +57,79 @@ public final class OrphanDetector implements Disposable {
      */
     public void validateWorld(World world) {
         for (Region region : cache.getRegionsInWorld(world.getUID())) {
-            validateRegion(region);
+            validateRegion(region, world);
         }
     }
 
     /**
-     * Validate a single region's lodestone.
+     * Validate a single region's anchors.
+     * A region is orphaned only if ALL anchors are missing.
      *
      * @param region the region to validate
-     * @return true if the lodestone is present, false if orphaned
+     * @param world  the world containing the region
+     * @return true if at least one anchor has a lodestone, false if all orphaned
      */
-    public boolean validateRegion(Region region) {
-        Location center = region.getCenterLocation();
-        if (center == null || center.getWorld() == null) {
-            // World not loaded - can't validate
+    public boolean validateRegion(Region region, World world) {
+        if (region.anchors().isEmpty()) {
+            // No anchors - consider orphaned
+            markOrphanedIfNeeded(region, true, null);
+            return false;
+        }
+
+        int validAnchors = 0;
+        int checkableAnchors = 0;
+        Anchor lastMissingAnchor = null;
+
+        for (Anchor anchor : region.anchors()) {
+            // Check if chunk is loaded
+            if (!world.isChunkLoaded(anchor.x() >> 4, anchor.z() >> 4)) {
+                // Chunk not loaded - can't validate this anchor, skip it
+                continue;
+            }
+
+            checkableAnchors++;
+            Location loc = anchor.getLocation(region.worldId());
+            if (loc != null) {
+                Block block = loc.getBlock();
+                if (block.getType() == Material.LODESTONE) {
+                    validAnchors++;
+                } else {
+                    lastMissingAnchor = anchor;
+                }
+            }
+        }
+
+        // If we couldn't check any anchors (all chunks unloaded), assume valid
+        if (checkableAnchors == 0) {
             return true;
         }
 
-        // Check if the chunk is loaded before accessing the block
-        if (!center.getWorld().isChunkLoaded(region.centerX() >> 4, region.centerZ() >> 4)) {
-            // Chunk not loaded - can't validate, assume valid
-            return true;
-        }
+        // Region is orphaned only if ALL checkable anchors are missing
+        boolean allMissing = validAnchors == 0;
+        markOrphanedIfNeeded(region, allMissing, lastMissingAnchor);
 
-        Block block = center.getBlock();
-        boolean isLodestone = block.getType() == Material.LODESTONE;
+        return validAnchors > 0;
+    }
 
-        if (!isLodestone && !cache.isOrphaned(region.id())) {
-            // Lodestone missing - mark as orphaned
+    private void markOrphanedIfNeeded(Region region, boolean shouldBeOrphaned, Anchor missingAnchor) {
+        boolean currentlyOrphaned = cache.isOrphaned(region.id());
+
+        if (shouldBeOrphaned && !currentlyOrphaned) {
+            // Becoming orphaned
             cache.markOrphaned(region.id());
-            logger.warning("[Protection] Orphaned region '" + region.name() + "' (" +
-                    region.ownerDisplayName() + ") - lodestone missing at " +
-                    region.centerX() + ", " + region.centerY() + ", " + region.centerZ());
-        } else if (isLodestone && cache.isOrphaned(region.id())) {
-            // Lodestone restored - clear orphaned status
+            if (missingAnchor != null) {
+                logger.warning("[Protection] Orphaned region '" + region.name() + "' (" +
+                        region.ownerDisplayName() + ") - all lodestones missing");
+            } else {
+                logger.warning("[Protection] Orphaned region '" + region.name() + "' (" +
+                        region.ownerDisplayName() + ") - no anchors");
+            }
+        } else if (!shouldBeOrphaned && currentlyOrphaned) {
+            // Lodestone restored
             cache.clearOrphaned(region.id());
             logger.info("[Protection] Region '" + region.name() + "' (" +
                     region.ownerDisplayName() + ") lodestone restored");
         }
-
-        return isLodestone;
     }
 
     /**
@@ -106,16 +141,40 @@ public final class OrphanDetector implements Disposable {
             return true;
         }
 
-        Location center = region.getCenterLocation();
-        if (center == null || center.getWorld() == null) {
-            return false; // Can't check - assume not orphaned
+        World world = Bukkit.getWorld(region.worldId());
+        if (world == null) {
+            return false; // World not loaded - assume not orphaned
         }
 
-        if (!center.getWorld().isChunkLoaded(region.centerX() >> 4, region.centerZ() >> 4)) {
-            return false; // Chunk not loaded - assume not orphaned
+        // Check if at least one anchor has a lodestone
+        for (Anchor anchor : region.anchors()) {
+            if (!world.isChunkLoaded(anchor.x() >> 4, anchor.z() >> 4)) {
+                continue; // Chunk not loaded - can't check this anchor
+            }
+
+            Location loc = anchor.getLocation(region.worldId());
+            if (loc != null && loc.getBlock().getType() == Material.LODESTONE) {
+                return false; // At least one anchor is valid
+            }
         }
 
-        return center.getBlock().getType() != Material.LODESTONE;
+        // If we couldn't check any anchors, assume not orphaned
+        boolean checkedAny = region.anchors().stream()
+                .anyMatch(a -> world.isChunkLoaded(a.x() >> 4, a.z() >> 4));
+
+        return checkedAny; // Only orphaned if we checked at least one anchor and all were missing
+    }
+
+    /**
+     * Check if a specific anchor has its lodestone present.
+     */
+    public boolean isAnchorValid(Anchor anchor, World world) {
+        if (!world.isChunkLoaded(anchor.x() >> 4, anchor.z() >> 4)) {
+            return true; // Can't check - assume valid
+        }
+
+        Location loc = new Location(world, anchor.x(), anchor.y(), anchor.z());
+        return loc.getBlock().getType() == Material.LODESTONE;
     }
 
     @Override
