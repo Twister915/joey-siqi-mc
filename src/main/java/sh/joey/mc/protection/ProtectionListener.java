@@ -168,7 +168,16 @@ public final class ProtectionListener implements Disposable {
         Region region = manager.getRegionAt(event.getBlock().getLocation());
         if (region == null) return;
 
-        // Block enderman pickup, silverfish breaking, etc.
+        // Allow players with building access (e.g., using axe on copper, shovel on grass)
+        if (event.getEntity() instanceof Player player) {
+            if (isBypassing(player.getUniqueId())) return;
+            if (region.canBuild(player.getUniqueId())) return;
+            event.setCancelled(true);
+            Messages.error(player, "You cannot modify blocks in \"" + region.name() + "\".");
+            return;
+        }
+
+        // Block non-player entity changes (enderman pickup, silverfish breaking, etc.)
         event.setCancelled(true);
     }
 
