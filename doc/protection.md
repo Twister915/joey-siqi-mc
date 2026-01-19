@@ -1,6 +1,6 @@
-# Protection System
+# Land Protection
 
-Claim and protect regions using lodestone anchors.
+Claim and protect your builds using lodestone anchors. Share access with friends by trusting them to your regions.
 
 ## Commands
 

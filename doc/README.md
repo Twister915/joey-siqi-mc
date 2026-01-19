@@ -20,6 +20,7 @@ Complete documentation for Siqi & Joey's Minecraft Plugin.
 
 | System | Description |
 |--------|-------------|
+| [Protection](protection.md) | Claim land with lodestones, trust friends |
 | [Settings](settings.md) | Keep inventory, easy mode, display options |
 | [Cosmetics](cosmetics.md) | Elytra trails, resource packs, nicknames |
 | [Merit](merit.md) | Levels and progression system |
@@ -39,7 +40,6 @@ Complete documentation for Siqi & Joey's Minecraft Plugin.
 | [Admin Mode](adminmode.md) | Creative mode with preserved inventory |
 | [Punishments](punishments.md) | Ban, kick, mute, warn |
 | [Whitelist](whitelist.md) | Custom whitelist with invites |
-| [Protection](protection.md) | Spawn protection and regions |
 | [Anticheat](anticheat.md) | Cheat detection system |
 
 ## Technical
