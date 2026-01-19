@@ -51,7 +51,7 @@ public final class MeritManager implements Disposable {
         disposables.add(new SmeltingTracker(plugin, progressTracker));
         disposables.add(new ExplorationTracker(plugin, progressTracker));
         disposables.add(new ProgressionTracker(plugin, progressTracker));
-        this.onlineTimeTracker = new OnlineTimeTracker(plugin, storage, progressTracker, assigner, config);
+        this.onlineTimeTracker = new OnlineTimeTracker(plugin, storage, progressTracker, bossBarProvider, assigner, config);
         disposables.add(onlineTimeTracker);
         disposables.add(new TimeTracker(plugin, progressTracker));
 

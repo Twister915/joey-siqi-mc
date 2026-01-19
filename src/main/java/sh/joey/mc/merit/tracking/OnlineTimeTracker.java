@@ -2,10 +2,12 @@ package sh.joey.mc.merit.tracking;
 
 import io.reactivex.rxjava3.disposables.CompositeDisposable;
 import io.reactivex.rxjava3.disposables.Disposable;
+import org.bukkit.Sound;
 import org.bukkit.entity.Player;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import sh.joey.mc.SiqiJoeyPlugin;
+import sh.joey.mc.merit.MeritBossBarProvider;
 import sh.joey.mc.merit.MeritConfig;
 import sh.joey.mc.merit.MeritStorage;
 import sh.joey.mc.merit.challenge.ChallengeAssigner;
@@ -25,6 +27,7 @@ public final class OnlineTimeTracker implements Disposable {
     private final SiqiJoeyPlugin plugin;
     private final MeritStorage storage;
     private final ProgressTracker progressTracker;
+    private final MeritBossBarProvider bossBarProvider;
     private final ChallengeAssigner assigner;
     private final MeritConfig config;
     private final Logger logger;
@@ -36,10 +39,11 @@ public final class OnlineTimeTracker implements Disposable {
     private final Map<UUID, Long> sessionSeconds = new ConcurrentHashMap<>();
 
     public OnlineTimeTracker(SiqiJoeyPlugin plugin, MeritStorage storage, ProgressTracker progressTracker,
-                             ChallengeAssigner assigner, MeritConfig config) {
+                             MeritBossBarProvider bossBarProvider, ChallengeAssigner assigner, MeritConfig config) {
         this.plugin = plugin;
         this.storage = storage;
         this.progressTracker = progressTracker;
+        this.bossBarProvider = bossBarProvider;
         this.assigner = assigner;
         this.config = config;
         this.logger = plugin.getLogger();
@@ -132,8 +136,8 @@ public final class OnlineTimeTracker implements Disposable {
 
                                 Player player = plugin.getServer().getPlayer(playerId);
                                 if (player != null) {
-                                    sh.joey.mc.merit.Messages.info(player,
-                                            "+" + toAward + " Merit for playing!");
+                                    bossBarProvider.showMeritEarned(playerId, toAward, "Online Time");
+                                    player.playSound(player.getLocation(), Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 0.5f, 1.2f);
                                 }
                             }
                         },

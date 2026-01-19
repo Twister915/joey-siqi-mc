@@ -197,7 +197,7 @@ commands:
   challenges:
     description: View weekly challenges and merit progress
     usage: /challenges [leaderboard|stats|history|info]
-    aliases: [level, merit]
+    aliases: [c, level, merit]
   meritadmin:
     description: Admin commands for managing player merit
     usage: /meritadmin <grant|set|reset> <player> [amount]
