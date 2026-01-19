@@ -366,6 +366,36 @@ public final class ProgressTracker implements Disposable {
     }
 
     /**
+     * Get progress breakdown by individual tracking key for a challenge.
+     * Returns a map of tracking key -> progress count.
+     * <p>
+     * For :ANY keys, returns entries for each matching key in the player's progress.
+     */
+    public Map<String, Long> getProgressByTrackingKey(UUID playerId, Challenge challenge) {
+        Map<String, Long> playerProgress = progressCache.getOrDefault(playerId, Map.of());
+        Map<String, Long> result = new HashMap<>();
+
+        for (String trackingKey : challenge.trackingKeys()) {
+            if (trackingKey.endsWith(":ANY")) {
+                // For :ANY keys, include all matching keys from player progress
+                String prefix = trackingKey.substring(0, trackingKey.length() - 3);
+                for (var entry : playerProgress.entrySet()) {
+                    if (entry.getKey().startsWith(prefix) && entry.getValue() > 0) {
+                        result.put(entry.getKey(), entry.getValue());
+                    }
+                }
+            } else {
+                long progress = playerProgress.getOrDefault(trackingKey, 0L);
+                if (progress > 0) {
+                    result.put(trackingKey, progress);
+                }
+            }
+        }
+
+        return result;
+    }
+
+    /**
      * Check if a stat update triggers any challenge progress.
      */
     private void checkChallengeProgress(UUID playerId, String key, long delta) {

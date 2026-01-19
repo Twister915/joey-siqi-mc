@@ -4,6 +4,7 @@ import com.destroystokyo.paper.event.server.AsyncTabCompleteEvent;
 import io.reactivex.rxjava3.core.Completable;
 import io.reactivex.rxjava3.core.Maybe;
 import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.event.ClickEvent;
 import net.kyori.adventure.text.event.HoverEvent;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextDecoration;
@@ -16,6 +17,7 @@ import sh.joey.mc.merit.LevelCalculator;
 import sh.joey.mc.merit.MeritManager;
 import sh.joey.mc.merit.MeritStorage;
 import sh.joey.mc.merit.Messages;
+import sh.joey.mc.merit.TrackingKeyDisplay;
 import sh.joey.mc.merit.challenge.Challenge;
 import sh.joey.mc.merit.challenge.ChallengeAssigner;
 import sh.joey.mc.player.PlayerResolver;
@@ -69,6 +71,13 @@ public final class ChallengesCommand implements Command {
                 case "stats", "level" -> showStats(player);
                 case "history" -> showHistory(player);
                 case "info", "help" -> showInfo(player);
+                case "detail" -> {
+                    if (args.length < 2) {
+                        Messages.error(player, "Usage: /challenges detail <challenge_id>");
+                    } else {
+                        showChallengeDetail(player, args[1]);
+                    }
+                }
                 default -> showWeeklyChallenges(player);
             }
         });
@@ -133,10 +142,37 @@ public final class ChallengesCommand implements Command {
         Component progressBar = Messages.progressBar(currentProgress, challenge.target(), 10);
         NamedTextColor statusColor = completed ? NamedTextColor.GREEN : NamedTextColor.YELLOW;
 
-        // Build hover tooltip with description and reward
-        Component tooltip = Component.text(challenge.description(), NamedTextColor.GRAY)
-                .append(Component.newline())
+        // Build hover tooltip with description, criteria summary, and reward
+        Component tooltip = Component.text(challenge.description(), NamedTextColor.GRAY);
+
+        // Add criteria summary to tooltip
+        List<String> displayNames = TrackingKeyDisplay.getDisplayNames(challenge);
+        if (!displayNames.isEmpty()) {
+            tooltip = tooltip.append(Component.newline());
+
+            if (displayNames.size() <= 2) {
+                // Show all criteria for simple challenges
+                tooltip = tooltip.append(Component.text("Counts: ", NamedTextColor.DARK_GRAY))
+                        .append(Component.text(String.join(", ", displayNames), NamedTextColor.WHITE));
+            } else {
+                // Show first 2 + "+N more" for complex challenges
+                String preview = displayNames.get(0) + ", " + displayNames.get(1);
+                int remaining = displayNames.size() - 2;
+                tooltip = tooltip.append(Component.text("Counts: ", NamedTextColor.DARK_GRAY))
+                        .append(Component.text(preview, NamedTextColor.WHITE))
+                        .append(Component.text(" +" + remaining + " more", NamedTextColor.GRAY));
+            }
+        }
+
+        tooltip = tooltip.append(Component.newline())
                 .append(Component.text("+" + challenge.meritReward() + " Merit", NamedTextColor.LIGHT_PURPLE));
+
+        // Add click hint for challenges with multiple tracking keys
+        if (displayNames.size() > 2) {
+            tooltip = tooltip.append(Component.newline())
+                    .append(Component.newline())
+                    .append(Component.text("Click for details", NamedTextColor.DARK_GRAY, TextDecoration.ITALIC));
+        }
 
         String progressText = completed ? " \u2713" : ": " + currentProgress + "/" + challenge.target();
 
@@ -145,7 +181,8 @@ public final class ChallengesCommand implements Command {
                 .append(Component.text(" "))
                 .append(Component.text(challenge.name(), statusColor))
                 .append(Component.text(progressText, completed ? NamedTextColor.GREEN : NamedTextColor.GRAY))
-                .hoverEvent(HoverEvent.showText(tooltip));
+                .hoverEvent(HoverEvent.showText(tooltip))
+                .clickEvent(ClickEvent.runCommand("/challenges detail " + challenge.id()));
 
         player.sendMessage(line);
     }
@@ -340,6 +377,59 @@ public final class ChallengesCommand implements Command {
                 .append(Component.text(" - Recent completions", NamedTextColor.GRAY)));
     }
 
+    private void showChallengeDetail(Player player, String challengeId) {
+        var challengeOpt = meritManager.getRegistry().getById(challengeId);
+        if (challengeOpt.isEmpty()) {
+            Messages.error(player, "Challenge not found: " + challengeId);
+            return;
+        }
+
+        Challenge challenge = challengeOpt.get();
+        UUID playerId = player.getUniqueId();
+        Map<String, Long> progressByKey = meritManager.getProgressTracker().getProgressByTrackingKey(playerId, challenge);
+        long totalProgress = meritManager.getProgressTracker().getChallengeProgress(playerId, challenge);
+        boolean completed = meritManager.getProgressTracker().isChallengeCompleted(playerId, challenge.id());
+
+        // Header
+        player.sendMessage(Component.empty());
+        player.sendMessage(Messages.PREFIX.append(
+                Component.text(challenge.name(), NamedTextColor.GOLD)
+                        .append(Component.text(" Details", NamedTextColor.GRAY))));
+        player.sendMessage(Component.text("  " + challenge.description(), NamedTextColor.GRAY));
+        player.sendMessage(Component.empty());
+
+        // Progress by type
+        if (progressByKey.isEmpty()) {
+            player.sendMessage(Component.text("  No progress yet", NamedTextColor.DARK_GRAY, TextDecoration.ITALIC));
+        } else {
+            player.sendMessage(Component.text("  Progress by type:", NamedTextColor.GRAY));
+
+            // Sort entries by progress (descending) for better readability
+            List<Map.Entry<String, Long>> sortedEntries = progressByKey.entrySet().stream()
+                    .sorted((a, b) -> Long.compare(b.getValue(), a.getValue()))
+                    .toList();
+
+            for (var entry : sortedEntries) {
+                String displayName = TrackingKeyDisplay.toDisplayName(entry.getKey());
+                long count = entry.getValue();
+                player.sendMessage(Component.text("    " + displayName + ": ", NamedTextColor.WHITE)
+                        .append(Component.text(Messages.formatNumber(count), NamedTextColor.AQUA)));
+            }
+        }
+
+        // Divider and total
+        player.sendMessage(Component.text("  ─────────────────", NamedTextColor.DARK_GRAY));
+        NamedTextColor totalColor = completed ? NamedTextColor.GREEN : NamedTextColor.WHITE;
+        String checkmark = completed ? " \u2713" : "";
+        player.sendMessage(Component.text("  Total: ", NamedTextColor.GRAY)
+                .append(Component.text(Messages.formatNumber(totalProgress) + "/" + Messages.formatNumber(challenge.target()) + checkmark, totalColor)));
+
+        // Reward
+        player.sendMessage(Component.empty());
+        player.sendMessage(Component.text("  Reward: ", NamedTextColor.GRAY)
+                .append(Component.text("+" + challenge.meritReward() + " Merit", NamedTextColor.LIGHT_PURPLE)));
+    }
+
     @Override
     public Maybe<List<AsyncTabCompleteEvent.Completion>> tabComplete(SiqiJoeyPlugin plugin, CommandSender sender, String[] args) {
         if (args.length == 1) {
@@ -348,9 +438,20 @@ public final class ChallengesCommand implements Command {
                     AsyncTabCompleteEvent.Completion.completion("leaderboard"),
                     AsyncTabCompleteEvent.Completion.completion("stats"),
                     AsyncTabCompleteEvent.Completion.completion("history"),
-                    AsyncTabCompleteEvent.Completion.completion("info")
+                    AsyncTabCompleteEvent.Completion.completion("info"),
+                    AsyncTabCompleteEvent.Completion.completion("detail")
             );
             return Maybe.just(completions);
+        }
+        if (args.length == 2 && "detail".equalsIgnoreCase(args[0])) {
+            // Tab complete with the player's weekly challenge IDs
+            if (sender instanceof Player player) {
+                List<Challenge> challenges = meritManager.getAssigner().getWeeklyChallenges(player.getUniqueId());
+                List<AsyncTabCompleteEvent.Completion> completions = challenges.stream()
+                        .map(c -> AsyncTabCompleteEvent.Completion.completion(c.id()))
+                        .toList();
+                return Maybe.just(completions);
+            }
         }
         return Maybe.empty();
     }
