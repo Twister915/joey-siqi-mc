@@ -96,6 +96,20 @@ public final class MeritStorage {
     }
 
     /**
+     * Update a player's level (for retroactive level-ups when curve changes).
+     */
+    public Completable updateLevel(UUID playerId, int level) {
+        return storage.execute(conn -> {
+            try (var stmt = conn.prepareStatement(
+                    "UPDATE player_merit SET level = ?, updated_at = NOW() WHERE player_id = ?")) {
+                stmt.setInt(1, level);
+                stmt.setObject(2, playerId);
+                stmt.executeUpdate();
+            }
+        });
+    }
+
+    /**
      * Set a player's total merit (for admin commands).
      */
     public Completable setMerit(UUID playerId, long totalMerit, int level) {

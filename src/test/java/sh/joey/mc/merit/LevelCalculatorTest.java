@@ -15,9 +15,9 @@ class LevelCalculatorTest {
 
     @BeforeEach
     void setUp() {
-        // Create a config with default values
+        // Create a config with default values including early level discount
         MeritConfig config = new MeritConfig(
-                true, 100, 1.8, 10, 30, 500, 30, 8
+                true, 100, 1.8, 20, 0.7, 10, 30, 500, 30, 8
         );
         calculator = new LevelCalculator(config);
     }

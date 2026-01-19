@@ -2,23 +2,41 @@ package sh.joey.mc.merit;
 
 /**
  * Calculates levels from merit using the formula: merit_for_level(n) = base * n^exponent
+ *
+ * For early levels (below softCap), a discount is applied to make progression faster.
+ * The discount linearly decreases from earlyDiscount at level 1 to 0 at softCap.
  */
 public final class LevelCalculator {
 
     private final int baseXp;
     private final double exponent;
+    private final int softCap;
+    private final double earlyDiscount;
 
     public LevelCalculator(MeritConfig config) {
         this.baseXp = config.levelBaseXp();
         this.exponent = config.levelExponent();
+        this.softCap = config.levelSoftCap();
+        this.earlyDiscount = config.levelEarlyDiscount();
     }
 
     /**
      * Calculate the total merit required to reach a given level.
+     * Early levels (below softCap) receive a discount to speed up progression.
      */
     public long meritForLevel(int level) {
         if (level <= 1) return 0;
-        return (long) (baseXp * Math.pow(level, exponent));
+
+        double baseMerit = baseXp * Math.pow(level, exponent);
+
+        // Early level discount: reduces requirements for levels below softCap
+        // Discount is highest at level 2 and decreases linearly to 0 at softCap
+        if (level < softCap && earlyDiscount > 0) {
+            double discountFactor = 1.0 - (double)(softCap - level) * earlyDiscount / softCap;
+            baseMerit *= discountFactor;
+        }
+
+        return (long) baseMerit;
     }
 
     /**

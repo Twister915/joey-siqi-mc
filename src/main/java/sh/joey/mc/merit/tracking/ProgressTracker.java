@@ -165,11 +165,11 @@ public final class ProgressTracker implements Disposable {
     public void loadPlayer(UUID playerId) {
         int weekNumber = assigner.getCurrentWeekNumber();
 
-        // Load player merit/level
+        // Load player merit/level and check for retroactive level-ups (in case curve changed)
         disposables.add(storage.getOrCreatePlayerMerit(playerId)
                 .observeOn(plugin.mainScheduler())
                 .subscribe(
-                        merit -> playerLevels.put(playerId, merit.level()),
+                        merit -> handleMeritLoaded(playerId, merit),
                         err -> logger.warning("Failed to load merit for " + playerId + ": " + err.getMessage())
                 ));
 
@@ -202,6 +202,63 @@ public final class ProgressTracker implements Disposable {
                         },
                         err -> logger.warning("Failed to load challenge completion status for " + playerId + ": " + err.getMessage())
                 ));
+    }
+
+    /**
+     * Handle loaded merit data and check for retroactive level-ups.
+     * If the leveling curve changed, players may have earned additional levels.
+     */
+    private void handleMeritLoaded(UUID playerId, MeritStorage.PlayerMerit merit) {
+        int storedLevel = merit.level();
+        int calculatedLevel = levelCalculator.levelForMerit(merit.totalMerit());
+
+        // Cache the correct level
+        playerLevels.put(playerId, calculatedLevel);
+
+        // Check if player should have gained levels (curve may have changed)
+        if (calculatedLevel > storedLevel) {
+            // Update the stored level in the database
+            disposables.add(storage.updateLevel(playerId, calculatedLevel)
+                    .subscribe(
+                            () -> {},
+                            err -> logger.warning("Failed to update level for " + playerId + ": " + err.getMessage())
+                    ));
+
+            // Show level-up notification to the player
+            Player player = plugin.getServer().getPlayer(playerId);
+            if (player != null && player.isOnline()) {
+                int levelsGained = calculatedLevel - storedLevel;
+                if (levelsGained == 1) {
+                    onLevelUp(player, calculatedLevel);
+                } else {
+                    // Multiple levels gained - show special message
+                    onMultipleLevelUp(player, storedLevel, calculatedLevel);
+                }
+            }
+        }
+    }
+
+    /**
+     * Handle gaining multiple levels at once (e.g., from curve changes).
+     */
+    private void onMultipleLevelUp(Player player, int oldLevel, int newLevel) {
+        // Boss bar notification
+        bossBarProvider.showLevelUp(player.getUniqueId(), newLevel);
+
+        // Chat messages
+        player.sendMessage(Component.empty());
+        player.sendMessage(Messages.PREFIX.append(
+                Component.text("LEVEL UP!", NamedTextColor.LIGHT_PURPLE, TextDecoration.BOLD)));
+        player.sendMessage(Messages.PREFIX.append(
+                Component.text("You jumped from level ", NamedTextColor.GRAY)
+                        .append(Component.text(oldLevel, NamedTextColor.WHITE))
+                        .append(Component.text(" to level ", NamedTextColor.GRAY))
+                        .append(Component.text(newLevel, Messages.getLevelColor(newLevel), TextDecoration.BOLD))
+                        .append(Component.text("!", NamedTextColor.GRAY))));
+        player.sendMessage(Component.empty());
+
+        // Sound
+        player.playSound(player.getLocation(), Sound.UI_TOAST_CHALLENGE_COMPLETE, 1.0f, 1.0f);
     }
 
     /**

@@ -104,6 +104,11 @@ merit:
   level-base-xp: 100
   # Exponent for level curve (higher = slower progression at high levels)
   level-exponent: 1.8
+  # Early level soft cap - levels below this get a discount for faster progression
+  level-soft-cap: 20
+  # Early level discount (0.0-1.0) - how much faster early levels are
+  # At 0.7: level 2 requires ~63% less merit, scaling to 0% discount at soft-cap
+  level-early-discount: 0.7
   # Merit earned for online time
   online-time-reward: 10
   # Minutes of play time required for each reward
