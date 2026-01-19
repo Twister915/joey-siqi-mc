@@ -128,6 +128,8 @@ class MeritStorageIntegrationTest extends PostgresIntegrationTest {
 
     // ===== PLAYER PROGRESS TESTS =====
 
+    private static final int TEST_WEEK = 42;
+
     @Test
     @DisplayName("Update progress creates new entries")
     void updateProgress_createsNewEntries() {
@@ -137,9 +139,9 @@ class MeritStorageIntegrationTest extends PostgresIntegrationTest {
                 "blocks_mined:IRON_ORE", 25L
         );
 
-        blockingAwait(meritStorage.updateProgress(playerId, deltas));
+        blockingAwait(meritStorage.updateProgress(playerId, TEST_WEEK, deltas));
 
-        Map<String, Long> progress = blockingGet(meritStorage.getProgress(playerId));
+        Map<String, Long> progress = blockingGet(meritStorage.getProgress(playerId, TEST_WEEK));
         assertThat(progress).containsEntry("blocks_mined:STONE", 100L);
         assertThat(progress).containsEntry("blocks_mined:IRON_ORE", 25L);
     }
@@ -149,33 +151,33 @@ class MeritStorageIntegrationTest extends PostgresIntegrationTest {
     void updateProgress_accumulatesValues() {
         UUID playerId = UUID.randomUUID();
 
-        blockingAwait(meritStorage.updateProgress(playerId, Map.of("blocks_mined:STONE", 100L)));
-        blockingAwait(meritStorage.updateProgress(playerId, Map.of("blocks_mined:STONE", 50L)));
+        blockingAwait(meritStorage.updateProgress(playerId, TEST_WEEK, Map.of("blocks_mined:STONE", 100L)));
+        blockingAwait(meritStorage.updateProgress(playerId, TEST_WEEK, Map.of("blocks_mined:STONE", 50L)));
 
-        Map<String, Long> progress = blockingGet(meritStorage.getProgress(playerId));
+        Map<String, Long> progress = blockingGet(meritStorage.getProgress(playerId, TEST_WEEK));
         assertThat(progress).containsEntry("blocks_mined:STONE", 150L);
     }
 
     @Test
-    @DisplayName("Get progress stat returns specific stat")
-    void getProgressStat_returnsSpecificStat() {
+    @DisplayName("Get progress returns specific stat from map")
+    void getProgress_returnsSpecificStat() {
         UUID playerId = UUID.randomUUID();
-        blockingAwait(meritStorage.updateProgress(playerId, Map.of(
+        blockingAwait(meritStorage.updateProgress(playerId, TEST_WEEK, Map.of(
                 "blocks_mined:STONE", 100L,
                 "blocks_mined:IRON_ORE", 25L
         )));
 
-        long stoneMined = blockingGet(meritStorage.getProgressStat(playerId, "blocks_mined:STONE"));
-        assertThat(stoneMined).isEqualTo(100);
+        Map<String, Long> progress = blockingGet(meritStorage.getProgress(playerId, TEST_WEEK));
+        assertThat(progress.get("blocks_mined:STONE")).isEqualTo(100L);
     }
 
     @Test
-    @DisplayName("Get progress stat returns 0 for unknown stat")
-    void getProgressStat_returnsZeroForUnknown() {
+    @DisplayName("Get progress returns empty map for unknown player")
+    void getProgress_returnsEmptyForUnknown() {
         UUID playerId = UUID.randomUUID();
 
-        long unknown = blockingGet(meritStorage.getProgressStat(playerId, "unknown:stat"));
-        assertThat(unknown).isEqualTo(0);
+        Map<String, Long> progress = blockingGet(meritStorage.getProgress(playerId, TEST_WEEK));
+        assertThat(progress).isEmpty();
     }
 
     // ===== WEEKLY CHALLENGE PROGRESS TESTS =====
