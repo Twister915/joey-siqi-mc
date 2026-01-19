@@ -84,6 +84,10 @@ public final class FlyCheck implements Check {
         if (hasNearbyClimbable(player)) {
             return true;
         }
+        // Check for water blocks nearby (handles elytra skimming water surface)
+        if (hasNearbyWater(player)) {
+            return true;
+        }
         return false;
     }
 
@@ -102,6 +106,21 @@ public final class FlyCheck implements Check {
         Block atPlayer = loc.getBlock();
         if (CLIMBABLE_BLOCKS.contains(atPlayer.getType())) {
             return true;
+        }
+
+        return false;
+    }
+
+    private boolean hasNearbyWater(Player player) {
+        Location loc = player.getLocation();
+
+        // Check blocks at and below player feet for water (handles skimming water surface with elytra)
+        for (int y = 0; y >= -2; y--) {
+            Block block = loc.clone().add(0, y, 0).getBlock();
+            Material type = block.getType();
+            if (type == Material.WATER || type == Material.BUBBLE_COLUMN) {
+                return true;
+            }
         }
 
         return false;
