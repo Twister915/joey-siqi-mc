@@ -4,6 +4,7 @@ import com.destroystokyo.paper.event.server.AsyncTabCompleteEvent;
 import io.reactivex.rxjava3.core.Completable;
 import io.reactivex.rxjava3.core.Maybe;
 import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.event.HoverEvent;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
@@ -13,9 +14,12 @@ import sh.joey.mc.cmd.Command;
 import sh.joey.mc.merit.LevelCalculator;
 import sh.joey.mc.merit.MeritManager;
 import sh.joey.mc.merit.Messages;
+import sh.joey.mc.merit.challenge.Challenge;
 import sh.joey.mc.player.PlayerResolver;
 
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 /**
@@ -71,6 +75,7 @@ public final class MeritAdminCommand implements Command {
                     handleSet(sender, playerName, args[2]);
                 }
                 case "reset" -> handleReset(sender, playerName);
+                case "inspect" -> handleInspect(sender, playerName);
                 case "reload" -> handleReload(sender);
                 default -> showUsage(sender);
             }
@@ -79,6 +84,8 @@ public final class MeritAdminCommand implements Command {
 
     private void showUsage(CommandSender sender) {
         sender.sendMessage(Messages.PREFIX.append(Component.text("Merit Admin Commands:", NamedTextColor.GOLD)));
+        sender.sendMessage(Component.text("  /meritadmin inspect <player>", NamedTextColor.AQUA)
+                .append(Component.text(" - View player's merit and challenges", NamedTextColor.GRAY)));
         sender.sendMessage(Component.text("  /meritadmin grant <player> <amount>", NamedTextColor.AQUA)
                 .append(Component.text(" - Add merit", NamedTextColor.GRAY)));
         sender.sendMessage(Component.text("  /meritadmin set <player> <amount>", NamedTextColor.AQUA)
@@ -151,6 +158,95 @@ public final class MeritAdminCommand implements Command {
                 );
     }
 
+    private void handleInspect(CommandSender sender, String playerName) {
+        playerResolver.resolvePlayerId(playerName)
+                .observeOn(plugin.mainScheduler())
+                .subscribe(
+                        playerId -> displayInspect(sender, playerName, playerId),
+                        err -> error(sender, "Failed to resolve player: " + err.getMessage()),
+                        () -> error(sender, "Player not found: " + playerName)
+                );
+    }
+
+    private void displayInspect(CommandSender sender, String playerName, UUID playerId) {
+        var assigner = meritManager.getAssigner();
+        int weekNumber = assigner.getCurrentWeekNumber();
+        List<Challenge> challenges = assigner.getWeeklyChallenges(playerId);
+
+        // Get player merit
+        meritManager.getStorage().getOrCreatePlayerMerit(playerId)
+                .observeOn(plugin.mainScheduler())
+                .subscribe(
+                        merit -> {
+                            sender.sendMessage(Component.empty());
+                            sender.sendMessage(Messages.PREFIX.append(
+                                    Component.text("Inspecting: ", NamedTextColor.GOLD)
+                                            .append(Component.text(playerName, NamedTextColor.WHITE))));
+
+                            // Level and merit
+                            LevelCalculator calc = meritManager.getLevelCalculator();
+                            long toNext = calc.meritToNextLevel(merit.totalMerit());
+                            sender.sendMessage(Component.text("  Level: ", NamedTextColor.GRAY)
+                                    .append(Component.text(merit.level(), Messages.getLevelColor(merit.level())))
+                                    .append(Component.text(" | Total Merit: ", NamedTextColor.GRAY))
+                                    .append(Messages.formatMerit(merit.totalMerit()))
+                                    .append(Component.text(" | " + Messages.formatNumber(toNext) + " to next", NamedTextColor.DARK_GRAY)));
+
+                            // Weekly challenges
+                            sender.sendMessage(Component.text("  Weekly Challenges (Week " + weekNumber + "):", NamedTextColor.GRAY));
+
+                            // Get progress for this player
+                            meritManager.getStorage().getProgress(playerId, weekNumber)
+                                    .observeOn(plugin.mainScheduler())
+                                    .subscribe(
+                                            progress -> displayInspectChallenges(sender, playerId, challenges, progress),
+                                            err -> error(sender, "Failed to load progress: " + err.getMessage())
+                                    );
+                        },
+                        err -> error(sender, "Failed to load merit: " + err.getMessage())
+                );
+    }
+
+    private void displayInspectChallenges(CommandSender sender, UUID playerId, List<Challenge> challenges, Map<String, Long> rawProgress) {
+        for (Challenge challenge : challenges) {
+            long progress = calculateChallengeProgress(challenge, rawProgress);
+            boolean completed = progress >= challenge.target();
+            int percent = (int) (progress * 100 / challenge.target());
+
+            NamedTextColor color = completed ? NamedTextColor.GREEN : NamedTextColor.YELLOW;
+            String status = completed ? " \u2713" : " " + percent + "%";
+
+            Component tooltip = Component.text(challenge.description(), NamedTextColor.GRAY)
+                    .append(Component.newline())
+                    .append(Component.text("Progress: " + progress + "/" + challenge.target(), NamedTextColor.WHITE))
+                    .append(Component.newline())
+                    .append(Component.text("Tracks: " + String.join(", ", challenge.trackingKeys()), NamedTextColor.DARK_GRAY));
+
+            sender.sendMessage(Component.text("    ", NamedTextColor.GRAY)
+                    .append(Component.text(challenge.name(), color))
+                    .append(Component.text(status, completed ? NamedTextColor.GREEN : NamedTextColor.GRAY))
+                    .append(Component.text(" +" + challenge.meritReward() + "M", NamedTextColor.LIGHT_PURPLE))
+                    .hoverEvent(HoverEvent.showText(tooltip)));
+        }
+    }
+
+    private long calculateChallengeProgress(Challenge challenge, Map<String, Long> rawProgress) {
+        long total = 0;
+        for (String trackingKey : challenge.trackingKeys()) {
+            if (trackingKey.endsWith(":ANY")) {
+                String prefix = trackingKey.substring(0, trackingKey.length() - 3);
+                for (var entry : rawProgress.entrySet()) {
+                    if (entry.getKey().startsWith(prefix)) {
+                        total += entry.getValue();
+                    }
+                }
+            } else {
+                total += rawProgress.getOrDefault(trackingKey, 0L);
+            }
+        }
+        return total;
+    }
+
     private void handleReload(CommandSender sender) {
         success(sender, "Merit system reloaded.");
     }
@@ -167,6 +263,7 @@ public final class MeritAdminCommand implements Command {
     public Maybe<List<AsyncTabCompleteEvent.Completion>> tabComplete(SiqiJoeyPlugin plugin, CommandSender sender, String[] args) {
         if (args.length == 1) {
             List<AsyncTabCompleteEvent.Completion> completions = List.of(
+                    AsyncTabCompleteEvent.Completion.completion("inspect"),
                     AsyncTabCompleteEvent.Completion.completion("grant"),
                     AsyncTabCompleteEvent.Completion.completion("set"),
                     AsyncTabCompleteEvent.Completion.completion("reset")

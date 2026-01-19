@@ -95,8 +95,10 @@ public final class ChallengesCommand implements Command {
 
     private void displayChallenges(Player player, List<Challenge> challenges, Map<String, Long> progressMap,
                                    MeritStorage.WeeklyOnlineTime onlineTime, int weekNumber) {
+        String resetTime = meritManager.getAssigner().formatTimeUntilReset();
         player.sendMessage(Messages.PREFIX.append(
-                Component.text("Weekly Challenges (Week " + weekNumber + ")").color(NamedTextColor.GOLD)));
+                Component.text("Weekly Challenges", NamedTextColor.GOLD)
+                        .append(Component.text(" (resets in " + resetTime + ")", NamedTextColor.GRAY))));
 
         for (Challenge challenge : challenges) {
             long currentProgress = progressMap.getOrDefault(challenge.id(), 0L);
@@ -183,6 +185,7 @@ public final class ChallengesCommand implements Command {
     private void showLeaderboard(Player player) {
         ChallengeAssigner assigner = meritManager.getAssigner();
         int weekNumber = assigner.getCurrentWeekNumber();
+        String resetTime = assigner.formatTimeUntilReset();
 
         meritManager.getStorage().getWeeklyLeaderboard(weekNumber, 10)
                 .toList()
@@ -191,7 +194,8 @@ public final class ChallengesCommand implements Command {
                         entries -> {
                             player.sendMessage(Component.empty());
                             player.sendMessage(Messages.PREFIX.append(
-                                    Component.text("Weekly Leaderboard (Week " + weekNumber + ")").color(NamedTextColor.GOLD)));
+                                    Component.text("Weekly Leaderboard", NamedTextColor.GOLD)
+                                            .append(Component.text(" (resets in " + resetTime + ")", NamedTextColor.GRAY))));
                             player.sendMessage(Component.empty());
 
                             if (entries.isEmpty()) {
@@ -340,6 +344,7 @@ public final class ChallengesCommand implements Command {
     public Maybe<List<AsyncTabCompleteEvent.Completion>> tabComplete(SiqiJoeyPlugin plugin, CommandSender sender, String[] args) {
         if (args.length == 1) {
             List<AsyncTabCompleteEvent.Completion> completions = List.of(
+                    AsyncTabCompleteEvent.Completion.completion("top"),
                     AsyncTabCompleteEvent.Completion.completion("leaderboard"),
                     AsyncTabCompleteEvent.Completion.completion("stats"),
                     AsyncTabCompleteEvent.Completion.completion("history"),

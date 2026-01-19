@@ -1,7 +1,9 @@
 package sh.joey.mc.merit.challenge;
 
+import java.time.Duration;
 import java.time.LocalDate;
-import java.time.temporal.ChronoField;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -82,5 +84,43 @@ public final class ChallengeAssigner {
         return getWeeklyChallenges(playerId).stream()
                 .filter(c -> c.category() == category)
                 .toList();
+    }
+
+    /**
+     * Get the duration until the next weekly reset.
+     */
+    public Duration getTimeUntilReset() {
+        LocalDateTime now = LocalDateTime.now();
+        long epochDay = EPOCH.toEpochDay();
+        long today = now.toLocalDate().toEpochDay();
+        long daysSinceEpoch = today - epochDay;
+        long daysIntoWeek = daysSinceEpoch % 7;
+        long daysUntilReset = 7 - daysIntoWeek;
+
+        // Reset happens at midnight on the first day of the new week
+        LocalDate resetDate = now.toLocalDate().plusDays(daysUntilReset);
+        LocalDateTime resetTime = LocalDateTime.of(resetDate, LocalTime.MIDNIGHT);
+
+        return Duration.between(now, resetTime);
+    }
+
+    /**
+     * Format the time until reset as a human-readable string.
+     */
+    public String formatTimeUntilReset() {
+        Duration duration = getTimeUntilReset();
+        long totalHours = duration.toHours();
+        long days = totalHours / 24;
+        long hours = totalHours % 24;
+
+        if (days > 0) {
+            return days + "d " + hours + "h";
+        } else if (hours > 0) {
+            long minutes = duration.toMinutesPart();
+            return hours + "h " + minutes + "m";
+        } else {
+            long minutes = duration.toMinutes();
+            return minutes + "m";
+        }
     }
 }
