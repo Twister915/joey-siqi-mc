@@ -40,6 +40,29 @@ homes:
 tips:
   enabled: true
 
+# Protection system - lodestone-based land protection
+# Players place lodestones to protect circular regions around them
+protection:
+  # Number of regions allowed per permission class
+  # Each entry creates permission smp.protection.limit.<name>
+  # Players without any limit permission have unlimited regions
+  limits:
+    default: 2       # smp.protection.limit.default grants 2 regions
+    vip: 5           # smp.protection.limit.vip grants 5 regions
+    # admin: unlimited # smp.protection.limit.admin grants unlimited
+
+  # Maximum radius allowed per permission class
+  # Each entry creates permission smp.protection.radius.<name>
+  max-radius:
+    default: 24      # smp.protection.radius.default allows up to 24 blocks
+    vip: 48          # smp.protection.radius.vip allows up to 48 blocks
+    admin: 128       # smp.protection.radius.admin allows up to 128 blocks
+
+  # Default radius for new claims
+  default-radius: 16
+  # Minimum allowed radius
+  min-radius: 8
+
 # Random teleport configuration
 rtp:
   # Cooldown between RTP uses (in minutes)

@@ -201,12 +201,18 @@ commands:
   meritadmin:
     description: Admin commands for managing player merit
     usage: /meritadmin <grant|set|reset> <player> [amount]
+  protection:
+    description: Manage protected regions
+    usage: /protection [claim|unclaim|info|list|trust|untrust|settings|access|radius|repair|visualize|help]
+    aliases: [prot, pr]
 
 permissions:
   smp.*:
     description: All SMP permissions
     default: op
     children:
+      smp.protection: true
+      smp.protection.admin: true
       smp.rtp: true
       smp.rtp.bypass: true
       smp.pregen: true
@@ -523,4 +529,11 @@ permissions:
 
   smp.merit.admin:
     description: Admin commands for managing player merit
+    default: op
+
+  smp.protection:
+    description: Use protection commands to claim and manage regions
+
+  smp.protection.admin:
+    description: Bypass protection and manage all regions
     default: op

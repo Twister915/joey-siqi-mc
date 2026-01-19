@@ -147,6 +147,14 @@ import sh.joey.mc.rtp.RtpCommand;
 import sh.joey.mc.rtp.RtpConfig;
 import sh.joey.mc.rtp.RtpManager;
 import sh.joey.mc.rtp.RtpStorage;
+import sh.joey.mc.protection.LodestoneListener;
+import sh.joey.mc.protection.ProtectionConfig;
+import sh.joey.mc.protection.ProtectionListener;
+import sh.joey.mc.protection.RegionEntryProvider;
+import sh.joey.mc.protection.RegionManager;
+import sh.joey.mc.protection.RegionStorage;
+import sh.joey.mc.protection.RegionVisualizer;
+import sh.joey.mc.protection.cmd.ProtectionCommand;
 import sh.joey.mc.anticheat.AntiCheatManager;
 import sh.joey.mc.merit.MeritConfig;
 import sh.joey.mc.merit.MeritManager;
@@ -450,6 +458,24 @@ public final class SiqiJoeyPlugin extends JavaPlugin {
         var rtpManager = new RtpManager(this, rtpConfig, rtpStorage);
         components.add(rtpManager);
         components.add(CmdExecutor.register(this, new RtpCommand(this, rtpManager, safeTeleporter, rtpConfig)));
+
+        // Protection system (lodestone-based land protection)
+        var protectionConfig = ProtectionConfig.load(this);
+        var regionStorage = new RegionStorage(storageService);
+        var regionManager = new RegionManager(this, regionStorage, protectionConfig);
+        components.add(regionManager);
+        var protectionListener = new ProtectionListener(this, regionManager);
+        components.add(protectionListener);
+        var regionVisualizer = new RegionVisualizer(this, regionManager);
+        components.add(regionVisualizer);
+        var lodestoneListener = new LodestoneListener(this, regionManager, confirmationManager, protectionListener);
+        components.add(lodestoneListener);
+        var regionEntryProvider = new RegionEntryProvider(this, regionManager);
+        components.add(regionEntryProvider);
+        bossBarManager.registerProvider(regionEntryProvider);
+        components.add(CmdExecutor.register(this,
+                new ProtectionCommand(this, regionManager, lodestoneListener, protectionListener,
+                        regionVisualizer, confirmationManager, playerResolver)));
 
         // Chunk pre-generation system (runs when server is empty)
         var pregenConfig = PregenConfig.load(this);
