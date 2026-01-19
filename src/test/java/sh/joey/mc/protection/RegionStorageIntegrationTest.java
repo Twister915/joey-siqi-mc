@@ -477,13 +477,14 @@ class RegionStorageIntegrationTest extends PostgresIntegrationTest {
             blockingAwait(regionStorage.createRegion(region, anchor));
 
             blockingAwait(regionStorage.updateAccess(region.id(),
-                    AccessLevel.OWNER, AccessLevel.EVERYBODY, AccessLevel.MEMBERS));
+                    AccessLevel.OWNER, AccessLevel.EVERYBODY, AccessLevel.MEMBERS, AccessLevel.MEMBERS));
 
             Optional<Region> retrieved = blockingGet(regionStorage.getRegion(region.id()));
             assertThat(retrieved).isPresent();
             assertThat(retrieved.get().buildingAccess()).isEqualTo(AccessLevel.OWNER);
             assertThat(retrieved.get().containerAccess()).isEqualTo(AccessLevel.EVERYBODY);
             assertThat(retrieved.get().doorAccess()).isEqualTo(AccessLevel.MEMBERS);
+            assertThat(retrieved.get().pvpAccess()).isEqualTo(AccessLevel.MEMBERS);
         }
     }
 
@@ -642,6 +643,7 @@ class RegionStorageIntegrationTest extends PostgresIntegrationTest {
                 AccessLevel.MEMBERS,
                 AccessLevel.MEMBERS,
                 AccessLevel.EVERYBODY,
+                AccessLevel.OWNER,
                 new HashSet<>(),
                 List.of()  // Anchors added separately via createAnchor
         );
