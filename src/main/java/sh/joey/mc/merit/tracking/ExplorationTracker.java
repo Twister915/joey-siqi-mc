@@ -10,6 +10,7 @@ import org.bukkit.entity.Minecart;
 import org.bukkit.entity.Pig;
 import org.bukkit.entity.Player;
 import org.bukkit.event.player.PlayerMoveEvent;
+import org.bukkit.event.player.PlayerTeleportEvent;
 import sh.joey.mc.SiqiJoeyPlugin;
 
 import java.util.Map;
@@ -28,6 +29,8 @@ public final class ExplorationTracker implements Disposable {
 
     private static final long SAMPLE_INTERVAL_MS = 1000; // 1 second
     private static final double MIN_DISTANCE = 0.1; // Minimum distance to track
+    // Max reasonable distance per sample (sprint-jumping with speed effects is ~10 blocks/sec)
+    private static final double MAX_WALK_DISTANCE = 20.0;
 
     public ExplorationTracker(SiqiJoeyPlugin plugin, ProgressTracker progressTracker) {
         disposables.add(plugin.watchEvent(PlayerMoveEvent.class)
@@ -59,12 +62,28 @@ public final class ExplorationTracker implements Disposable {
                     lastLocations.put(playerId, to);
                     lastUpdateTime.put(playerId, now);
 
+                    // Skip unreasonably large movements (likely teleport or other non-walking cause)
+                    if (distance > MAX_WALK_DISTANCE) {
+                        return;
+                    }
+
                     // Determine movement type
                     String movementType = getMovementType(player, from, to);
                     long blocks = (long) distance;
 
                     if (blocks > 0) {
                         progressTracker.increment(playerId, "distance:" + movementType, blocks);
+                    }
+                }));
+
+        // Reset last location on teleport to prevent counting teleport distance
+        disposables.add(plugin.watchEvent(PlayerTeleportEvent.class)
+                .subscribe(event -> {
+                    UUID playerId = event.getPlayer().getUniqueId();
+                    Location destination = event.getTo();
+                    if (destination != null) {
+                        lastLocations.put(playerId, destination);
+                        lastUpdateTime.put(playerId, System.currentTimeMillis());
                     }
                 }));
     }
