@@ -9,6 +9,7 @@ import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitTask;
 import sh.joey.mc.rx.EventObservable;
 
+import java.io.IOException;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import sh.joey.mc.branding.BrandingConfig;
@@ -30,6 +31,8 @@ import sh.joey.mc.home.BedHomeListener;
 import sh.joey.mc.home.HomeCommand;
 import sh.joey.mc.home.HomeLimitConfig;
 import sh.joey.mc.home.HomeStorage;
+import sh.joey.mc.geoip.GeoIpConfig;
+import sh.joey.mc.geoip.GeoIpService;
 import sh.joey.mc.session.OnTimeCommand;
 import sh.joey.mc.session.PlayerSessionStorage;
 import sh.joey.mc.session.PlayerSessionTracker;
@@ -218,9 +221,22 @@ public final class SiqiJoeyPlugin extends JavaPlugin {
         components.add(CmdExecutor.register(this,
                 new OnTimeCommand(this, playerSessionStorage, playerSessionTracker, playerResolver)));
 
+        // GeoIP service (optional - gracefully handles missing database)
+        GeoIpService geoIpService = null;
+        var geoIpConfig = GeoIpConfig.load(this);
+        if (geoIpConfig.enabled()) {
+            try {
+                geoIpService = new GeoIpService(this, geoIpConfig);
+                components.add(geoIpService);
+            } catch (IOException e) {
+                getLogger().warning("GeoIP disabled: " + e.getMessage());
+                getLogger().info("Download GeoLite2-City.mmdb from MaxMind and place in plugin folder");
+            }
+        }
+
         // Whois command (needs playerResolver, so after resolver init)
         components.add(CmdExecutor.register(this,
-                new WhoisCommand(this, playerSessionStorage, nicknameManager, playerResolver)));
+                new WhoisCommand(this, playerSessionStorage, nicknameManager, playerResolver, geoIpService)));
 
         // Private messaging system
         var messageConfig = MessageConfig.load(this);

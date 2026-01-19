@@ -39,6 +39,7 @@ dependencies {
     implementation 'io.reactivex.rxjava3:rxjava:3.1.12'
     implementation 'com.zaxxer:HikariCP:5.1.0'
     implementation 'org.postgresql:postgresql:42.7.7'
+    implementation 'com.maxmind.geoip2:geoip2:5.0.2'
 
     // Paper API for tests (needed at runtime for Adventure API classes used by PermissibleAttributes)
     testImplementation 'io.papermc.paper:paper-api:1.21.11-R0.1-SNAPSHOT'
@@ -67,6 +68,7 @@ shadowJar {
     relocate 'io.reactivex.rxjava3', 'sh.joey.mc.shaded.rxjava3'
     relocate 'org.reactivestreams', 'sh.joey.mc.shaded.reactivestreams'
     relocate 'com.zaxxer.hikari', 'sh.joey.mc.shaded.hikari'
+    relocate 'com.maxmind', 'sh.joey.mc.shaded.maxmind'
     // PostgreSQL driver uses ServiceLoader - don't relocate
 }
 

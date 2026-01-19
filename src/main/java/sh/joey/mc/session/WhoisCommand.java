@@ -12,6 +12,8 @@ import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import sh.joey.mc.SiqiJoeyPlugin;
 import sh.joey.mc.cmd.Command;
+import sh.joey.mc.geoip.GeoIpService;
+import sh.joey.mc.geoip.GeoLocation;
 import sh.joey.mc.nickname.NicknameManager;
 import sh.joey.mc.player.PlayerResolver;
 import sh.joey.mc.util.DurationFormat;
@@ -50,13 +52,16 @@ public final class WhoisCommand implements Command {
     private final PlayerSessionStorage storage;
     private final NicknameManager nicknameManager;
     private final PlayerResolver playerResolver;
+    private final GeoIpService geoIpService;  // nullable
 
     public WhoisCommand(SiqiJoeyPlugin plugin, PlayerSessionStorage storage,
-                        NicknameManager nicknameManager, PlayerResolver playerResolver) {
+                        NicknameManager nicknameManager, PlayerResolver playerResolver,
+                        GeoIpService geoIpService) {
         this.plugin = plugin;
         this.storage = storage;
         this.nicknameManager = nicknameManager;
         this.playerResolver = playerResolver;
+        this.geoIpService = geoIpService;
     }
 
     @Override
@@ -100,48 +105,66 @@ public final class WhoisCommand implements Command {
 
     private Maybe<WhoisInfo> buildWhoisInfo(UUID playerId, boolean includeAdmin) {
         // Get username from storage - if not found, the whole operation returns empty
-        Maybe<String> usernameMaybe = storage.findUsernameById(playerId);
+        return storage.findUsernameById(playerId)
+                .flatMap(username -> buildWhoisInfoForUsername(playerId, username, includeAdmin));
+    }
 
-        return usernameMaybe.flatMap(username -> {
-            // Get nickname from cache or database (supports offline players)
-            Single<String> nicknameSingle = nicknameManager.getNicknameAsync(playerId)
-                    .defaultIfEmpty("");
+    private Maybe<WhoisInfo> buildWhoisInfoForUsername(UUID playerId, String username, boolean includeAdmin) {
+        // Get nickname from cache or database (supports offline players)
+        return nicknameManager.getNicknameAsync(playerId)
+                .defaultIfEmpty("")
+                .flatMapMaybe(nickname -> {
+                    String actualNickname = nickname.isEmpty() ? null : nickname;
+                    Player onlinePlayer = Bukkit.getPlayer(playerId);
+                    boolean isOnline = onlinePlayer != null;
 
-            return nicknameSingle.flatMapMaybe(nickname -> {
-                String actualNickname = nickname.isEmpty() ? null : nickname;
-                Player onlinePlayer = Bukkit.getPlayer(playerId);
-                boolean isOnline = onlinePlayer != null;
-
-                if (!includeAdmin) {
-                    // Basic info only
-                    return Maybe.just(new WhoisInfo(
-                            playerId, username, actualNickname, isOnline,
-                            null, null, null, null, null));
-                }
-
-                // Admin info - combine multiple async queries
-                Single<String> ipSingle = storage.getLastIpAddress(playerId)
-                        .defaultIfEmpty("Unknown");
-
-                Single<Instant> firstJoinSingle = storage.getFirstJoinDate(playerId)
-                        .defaultIfEmpty(Instant.EPOCH);
-
-                Single<Instant> lastSeenSingle = storage.getLastSeenDate(playerId)
-                        .defaultIfEmpty(Instant.EPOCH);
-
-                Single<Long> playtimeSingle = storage.getLifetimeOnlineTime(playerId)
-                        .defaultIfEmpty(0L);
-
-                Single<List<PlayerSessionStorage.UsernameHistoryEntry>> historySingle =
-                        storage.getUsernameHistory(playerId).toList();
-
-                return Single.zip(ipSingle, firstJoinSingle, lastSeenSingle, playtimeSingle, historySingle,
-                        (ip, firstJoin, lastSeen, playtime, history) -> new WhoisInfo(
+                    if (!includeAdmin) {
+                        // Basic info only
+                        return Maybe.just(new WhoisInfo(
                                 playerId, username, actualNickname, isOnline,
-                                ip, firstJoin, lastSeen, playtime, history))
-                        .toMaybe();
-            });
-        });
+                                null, null, null, null, null, null));
+                    }
+
+                    return buildAdminWhoisInfo(playerId, username, actualNickname, isOnline);
+                });
+    }
+
+    private Maybe<WhoisInfo> buildAdminWhoisInfo(UUID playerId, String username, String nickname, boolean isOnline) {
+        Single<String> ipSingle = storage.getLastIpAddress(playerId)
+                .defaultIfEmpty("Unknown");
+
+        Single<Instant> firstJoinSingle = storage.getFirstJoinDate(playerId)
+                .defaultIfEmpty(Instant.EPOCH);
+
+        Single<Instant> lastSeenSingle = storage.getLastSeenDate(playerId)
+                .defaultIfEmpty(Instant.EPOCH);
+
+        Single<Long> playtimeSingle = storage.getLifetimeOnlineTime(playerId)
+                .defaultIfEmpty(0L);
+
+        Single<List<PlayerSessionStorage.UsernameHistoryEntry>> historySingle =
+                storage.getUsernameHistory(playerId).toList();
+
+        // Combine all async queries
+        return Single.zip(ipSingle, firstJoinSingle, lastSeenSingle, playtimeSingle, historySingle,
+                (ip, firstJoin, lastSeen, playtime, history) ->
+                        new WhoisInfo(playerId, username, nickname, isOnline,
+                                ip, null, firstJoin, lastSeen, playtime, history))
+                .flatMap(info -> addGeoLocation(info))
+                .toMaybe();
+    }
+
+    private Single<WhoisInfo> addGeoLocation(WhoisInfo info) {
+        if (geoIpService == null || info.ip().equals("Unknown")) {
+            return Single.just(info);
+        }
+
+        return geoIpService.lookup(info.ip())
+                .map(location -> new WhoisInfo(
+                        info.uuid(), info.username(), info.nickname(), info.isOnline(),
+                        info.ip(), location, info.firstJoin(), info.lastSeen(),
+                        info.playtimeSeconds(), info.usernameHistory()))
+                .defaultIfEmpty(info);
     }
 
     private void displayWhoisInfo(CommandSender sender, WhoisInfo info) {
@@ -170,6 +193,12 @@ public final class WhoisCommand implements Command {
 
             // IP
             sender.sendMessage(line("IP", Component.text(info.ip).color(NamedTextColor.YELLOW)));
+
+            // Location (from GeoIP)
+            if (info.location != null) {
+                sender.sendMessage(line("Location", Component.text(info.location.formatted())
+                        .color(NamedTextColor.WHITE)));
+            }
 
             // First joined
             if (info.firstJoin != null && !info.firstJoin.equals(Instant.EPOCH)) {
@@ -244,6 +273,7 @@ public final class WhoisCommand implements Command {
             String nickname,
             boolean isOnline,
             String ip,
+            GeoLocation location,
             Instant firstJoin,
             Instant lastSeen,
             Long playtimeSeconds,
