@@ -3,6 +3,7 @@ package sh.joey.mc.merit.tracking;
 import io.reactivex.rxjava3.disposables.CompositeDisposable;
 import io.reactivex.rxjava3.disposables.Disposable;
 import org.bukkit.Location;
+import org.bukkit.block.Biome;
 import org.bukkit.entity.Boat;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Horse;
@@ -10,10 +11,15 @@ import org.bukkit.entity.Minecart;
 import org.bukkit.entity.Pig;
 import org.bukkit.entity.Player;
 import org.bukkit.event.player.PlayerMoveEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.player.PlayerTeleportEvent;
+import org.bukkit.event.world.LootGenerateEvent;
+import org.bukkit.loot.LootTable;
 import sh.joey.mc.SiqiJoeyPlugin;
 
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -26,11 +32,37 @@ public final class ExplorationTracker implements Disposable {
     private final CompositeDisposable disposables = new CompositeDisposable();
     private final Map<UUID, Location> lastLocations = new ConcurrentHashMap<>();
     private final Map<UUID, Long> lastUpdateTime = new ConcurrentHashMap<>();
+    private final Map<UUID, Set<Biome>> visitedBiomes = new ConcurrentHashMap<>();
+    private final Map<UUID, Set<String>> discoveredStructures = new ConcurrentHashMap<>();
 
     private static final long SAMPLE_INTERVAL_MS = 1000; // 1 second
     private static final double MIN_DISTANCE = 0.1; // Minimum distance to track
     // Max reasonable distance per sample (sprint-jumping with speed effects is ~10 blocks/sec)
     private static final double MAX_WALK_DISTANCE = 20.0;
+
+    /**
+     * Structure loot table prefixes that indicate structure discovery.
+     */
+    private static final Set<String> STRUCTURE_LOOT_PREFIXES = Set.of(
+            "chests/simple_dungeon",
+            "chests/stronghold",
+            "chests/abandoned_mineshaft",
+            "chests/buried_treasure",
+            "chests/desert_pyramid",
+            "chests/end_city_treasure",
+            "chests/igloo_chest",
+            "chests/jungle_temple",
+            "chests/nether_bridge",
+            "chests/pillager_outpost",
+            "chests/bastion",
+            "chests/ruined_portal",
+            "chests/shipwreck",
+            "chests/underwater_ruin",
+            "chests/village",
+            "chests/woodland_mansion",
+            "chests/ancient_city",
+            "chests/trial_chambers"
+    );
 
     public ExplorationTracker(SiqiJoeyPlugin plugin, ProgressTracker progressTracker) {
         disposables.add(plugin.watchEvent(PlayerMoveEvent.class)
@@ -74,6 +106,13 @@ public final class ExplorationTracker implements Disposable {
                     if (blocks > 0) {
                         progressTracker.increment(playerId, "distance:" + movementType, blocks);
                     }
+
+                    // Track unique biomes visited
+                    Biome currentBiome = to.getBlock().getBiome();
+                    Set<Biome> playerBiomes = visitedBiomes.computeIfAbsent(playerId, k -> new HashSet<>());
+                    if (playerBiomes.add(currentBiome)) {
+                        progressTracker.increment(playerId, "biomes_visited");
+                    }
                 }));
 
         // Reset last location on teleport to prevent counting teleport distance
@@ -86,6 +125,53 @@ public final class ExplorationTracker implements Disposable {
                         lastUpdateTime.put(playerId, System.currentTimeMillis());
                     }
                 }));
+
+        // Track loot chest opens and structure discovery
+        disposables.add(plugin.watchEvent(LootGenerateEvent.class)
+                .filter(event -> event.getEntity() instanceof Player)
+                .subscribe(event -> {
+                    Player player = (Player) event.getEntity();
+                    UUID playerId = player.getUniqueId();
+                    progressTracker.increment(playerId, "loot_chests_opened");
+
+                    // Check if this is a structure loot table
+                    LootTable lootTable = event.getLootTable();
+                    if (lootTable != null) {
+                        String key = lootTable.getKey().getKey();
+                        String structureType = getStructureType(key);
+                        if (structureType != null) {
+                            Set<String> playerStructures = discoveredStructures.computeIfAbsent(playerId, k -> new HashSet<>());
+                            if (playerStructures.add(structureType)) {
+                                progressTracker.increment(playerId, "structures_found");
+                            }
+                        }
+                    }
+                }));
+
+        // Cleanup on quit
+        disposables.add(plugin.watchEvent(PlayerQuitEvent.class)
+                .subscribe(event -> {
+                    UUID playerId = event.getPlayer().getUniqueId();
+                    visitedBiomes.remove(playerId);
+                    discoveredStructures.remove(playerId);
+                }));
+    }
+
+    /**
+     * Extracts the structure type from a loot table key.
+     * Returns null if not a structure loot table.
+     */
+    private String getStructureType(String lootTableKey) {
+        for (String prefix : STRUCTURE_LOOT_PREFIXES) {
+            if (lootTableKey.startsWith(prefix)) {
+                // Normalize to structure category (e.g., "chests/stronghold_corridor" -> "stronghold")
+                String[] parts = prefix.split("/");
+                if (parts.length >= 2) {
+                    return parts[1].split("_")[0]; // Get first part of structure name
+                }
+            }
+        }
+        return null;
     }
 
     private String getMovementType(Player player, Location from, Location to) {
@@ -136,6 +222,8 @@ public final class ExplorationTracker implements Disposable {
         disposables.dispose();
         lastLocations.clear();
         lastUpdateTime.clear();
+        visitedBiomes.clear();
+        discoveredStructures.clear();
     }
 
     @Override

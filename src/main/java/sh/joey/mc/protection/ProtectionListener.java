@@ -277,14 +277,18 @@ public final class ProtectionListener implements Disposable {
         Player attacker = getPlayerAttacker(event);
         if (attacker == null) return;
 
+        // Check bypass mode
+        if (isBypassing(attacker.getUniqueId())) return;
+
         // Check if PvP is in a protected region
         Region region = manager.getRegionAt(playerVictim.getLocation());
         if (region == null) return;
 
-        // PvP is blocked in protected regions unless the region allows it
-        // For now, we always block PvP in protected regions
-        event.setCancelled(true);
-        Messages.error(attacker, "PvP is disabled in \"" + region.name() + "\".");
+        // Check if attacker has PvP access in this region
+        if (!region.canPvp(attacker.getUniqueId())) {
+            event.setCancelled(true);
+            Messages.error(attacker, "PvP is disabled in \"" + region.name() + "\".");
+        }
     }
 
     private Player getPlayerAttacker(EntityDamageByEntityEvent event) {

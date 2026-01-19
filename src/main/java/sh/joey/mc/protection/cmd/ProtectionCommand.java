@@ -50,7 +50,7 @@ public final class ProtectionCommand implements Command {
             "cancel", "expand", "anchors", "bypass", "cleanup", "forceunclaim", "forcerepair"
     );
 
-    private static final List<String> ACCESS_SETTINGS = List.of("building", "containers", "doors");
+    private static final List<String> ACCESS_SETTINGS = List.of("building", "containers", "doors", "pvp");
     private static final List<String> ACCESS_LEVELS = List.of("everybody", "members", "owner");
 
     private final SiqiJoeyPlugin plugin;
@@ -288,6 +288,9 @@ public final class ProtectionCommand implements Command {
         player.sendMessage(Component.text("  Doors: ").color(NamedTextColor.GRAY)
                 .append(Component.text(region.doorAccess().name().toLowerCase())
                         .color(NamedTextColor.WHITE)));
+        player.sendMessage(Component.text("  PvP: ").color(NamedTextColor.GRAY)
+                .append(Component.text(region.pvpAccess().name().toLowerCase())
+                        .color(NamedTextColor.WHITE)));
 
         if (manager.isOrphaned(region.id())) {
             player.sendMessage(Component.text("  ").append(
@@ -468,6 +471,12 @@ public final class ProtectionCommand implements Command {
                 .append(buildAccessOptions("doors", region.doorAccess())));
         player.sendMessage(Component.text("    Who can open doors and fence gates").color(NamedTextColor.DARK_GRAY));
 
+        // PvP
+        player.sendMessage(Component.empty());
+        player.sendMessage(Component.text("  PvP: ").color(NamedTextColor.GRAY)
+                .append(buildAccessOptions("pvp", region.pvpAccess())));
+        player.sendMessage(Component.text("    Who can attack players in this region").color(NamedTextColor.DARK_GRAY));
+
         return Completable.complete();
     }
 
@@ -500,7 +509,7 @@ public final class ProtectionCommand implements Command {
 
     private Completable handleAccess(Player player, String[] args) {
         if (args.length < 2) {
-            Messages.error(player, "Usage: /protection access <building|containers|doors> <everybody|members|owner>");
+            Messages.error(player, "Usage: /protection access <building|containers|doors|pvp> <everybody|members|owner>");
             return Completable.complete();
         }
 
@@ -529,18 +538,20 @@ public final class ProtectionCommand implements Command {
         AccessLevel building = region.buildingAccess();
         AccessLevel containers = region.containerAccess();
         AccessLevel doors = region.doorAccess();
+        AccessLevel pvp = region.pvpAccess();
 
         switch (setting) {
             case "building" -> building = level;
             case "containers" -> containers = level;
             case "doors" -> doors = level;
+            case "pvp" -> pvp = level;
             default -> {
-                Messages.error(player, "Invalid setting. Use: building, containers, or doors.");
+                Messages.error(player, "Invalid setting. Use: building, containers, doors, or pvp.");
                 return Completable.complete();
             }
         }
 
-        return manager.updateAccess(region.id(), building, containers, doors)
+        return manager.updateAccess(region.id(), building, containers, doors, pvp)
                 .observeOn(plugin.mainScheduler())
                 .doOnComplete(() -> Messages.success(player, "Updated " + setting + " access to " +
                         level.name().toLowerCase() + "."))

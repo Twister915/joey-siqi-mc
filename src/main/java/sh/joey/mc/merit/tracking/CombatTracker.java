@@ -9,8 +9,14 @@ import org.bukkit.entity.Player;
 import org.bukkit.entity.Projectile;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityDeathEvent;
+import org.bukkit.event.entity.PlayerDeathEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.ItemStack;
 import sh.joey.mc.SiqiJoeyPlugin;
+
+import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Tracks combat for PvP and PvE challenges.
@@ -18,6 +24,13 @@ import sh.joey.mc.SiqiJoeyPlugin;
 public final class CombatTracker implements Disposable {
 
     private final CompositeDisposable disposables = new CompositeDisposable();
+
+    /**
+     * Tracks players who have gotten a PvP kill without dying.
+     * A "PvP win" is earned when you kill a player and you haven't died
+     * since your last PvP kill (i.e., you survived the encounter).
+     */
+    private final Set<UUID> hasKillSinceLastDeath = ConcurrentHashMap.newKeySet();
 
     public CombatTracker(SiqiJoeyPlugin plugin, ProgressTracker progressTracker) {
         // Track kills
@@ -34,12 +47,23 @@ public final class CombatTracker implements Disposable {
 
                     // PvP kill
                     if (victim instanceof Player) {
-                        progressTracker.increment(killer.getUniqueId(), "pvp_kills");
+                        UUID killerId = killer.getUniqueId();
+                        progressTracker.increment(killerId, "pvp_kills");
 
                         // Track by weapon type
                         String weaponType = getWeaponType(killer.getInventory().getItemInMainHand());
                         if (weaponType != null) {
-                            progressTracker.increment(killer.getUniqueId(), "pvp_kills:" + weaponType);
+                            progressTracker.increment(killerId, "pvp_kills:" + weaponType);
+                        }
+
+                        // Track PvP wins (kill without dying since last kill)
+                        if (hasKillSinceLastDeath.contains(killerId)) {
+                            // Already had a kill, this is another win
+                            progressTracker.increment(killerId, "pvp_wins");
+                        } else {
+                            // First kill since death/login - mark as having a kill
+                            hasKillSinceLastDeath.add(killerId);
+                            progressTracker.increment(killerId, "pvp_wins");
                         }
                     } else {
                         // PvE kill
@@ -66,6 +90,18 @@ public final class CombatTracker implements Disposable {
                             progressTracker.increment(damager.getUniqueId(), "damage_dealt:MOB", damageInt);
                         }
                     }
+                }));
+
+        // Reset PvP win streak on death
+        disposables.add(plugin.watchEvent(PlayerDeathEvent.class)
+                .subscribe(event -> {
+                    hasKillSinceLastDeath.remove(event.getEntity().getUniqueId());
+                }));
+
+        // Cleanup on quit
+        disposables.add(plugin.watchEvent(PlayerQuitEvent.class)
+                .subscribe(event -> {
+                    hasKillSinceLastDeath.remove(event.getPlayer().getUniqueId());
                 }));
     }
 
@@ -109,6 +145,7 @@ public final class CombatTracker implements Disposable {
     @Override
     public void dispose() {
         disposables.dispose();
+        hasKillSinceLastDeath.clear();
     }
 
     @Override

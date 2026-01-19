@@ -207,6 +207,7 @@ public final class RegionManager implements Disposable {
                 AccessLevel.MEMBERS,
                 AccessLevel.MEMBERS,
                 AccessLevel.EVERYBODY,
+                AccessLevel.OWNER,
                 new HashSet<>(),
                 List.of(firstAnchor)
         );
@@ -271,16 +272,18 @@ public final class RegionManager implements Disposable {
      * @param building building access level
      * @param containers container access level
      * @param doors door access level
+     * @param pvp pvp access level
      * @return Completable that completes on success
      */
-    public Completable updateAccess(UUID regionId, AccessLevel building, AccessLevel containers, AccessLevel doors) {
-        return storage.updateAccess(regionId, building, containers, doors)
+    public Completable updateAccess(UUID regionId, AccessLevel building, AccessLevel containers, AccessLevel doors, AccessLevel pvp) {
+        return storage.updateAccess(regionId, building, containers, doors, pvp)
                 .doOnComplete(() -> {
                     cache.get(regionId).ifPresent(region -> {
                         cache.update(region
                                 .withBuildingAccess(building)
                                 .withContainerAccess(containers)
-                                .withDoorAccess(doors));
+                                .withDoorAccess(doors)
+                                .withPvpAccess(pvp));
                     });
                 });
     }
@@ -303,7 +306,7 @@ public final class RegionManager implements Disposable {
                                     region.id(), region.ownerId(), region.ownerName(), region.name(),
                                     region.worldId(), region.radius(),
                                     region.buildingAccess(), region.containerAccess(), region.doorAccess(),
-                                    newMembers, region.anchors()
+                                    region.pvpAccess(), newMembers, region.anchors()
                             ));
                         });
                     }
@@ -328,7 +331,7 @@ public final class RegionManager implements Disposable {
                                     region.id(), region.ownerId(), region.ownerName(), region.name(),
                                     region.worldId(), region.radius(),
                                     region.buildingAccess(), region.containerAccess(), region.doorAccess(),
-                                    newMembers, region.anchors()
+                                    region.pvpAccess(), newMembers, region.anchors()
                             ));
                         });
                     }

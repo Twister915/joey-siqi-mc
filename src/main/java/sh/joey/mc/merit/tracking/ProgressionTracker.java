@@ -5,7 +5,6 @@ import io.reactivex.rxjava3.disposables.Disposable;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
 import org.bukkit.event.enchantment.EnchantItemEvent;
-import org.bukkit.event.inventory.BrewEvent;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryType;
 import org.bukkit.event.player.PlayerAdvancementDoneEvent;
@@ -64,14 +63,6 @@ public final class ProgressionTracker implements Disposable {
                     }
                 }));
 
-        // Track brewing (potions brewed)
-        disposables.add(plugin.watchEvent(BrewEvent.class)
-                .subscribe(event -> {
-                    // BrewEvent doesn't have a player - we track via FuelHolder
-                    // For simplicity, we skip player tracking here
-                    // A more complex approach would track who fuels the brewing stand
-                }));
-
         // Track advancements
         disposables.add(plugin.watchEvent(PlayerAdvancementDoneEvent.class)
                 .subscribe(event -> {
@@ -119,7 +110,29 @@ public final class ProgressionTracker implements Disposable {
                             progressTracker.increment(player.getUniqueId(), "grindstone_uses");
                         }
                     }
+
+                    // Brewing stand - track potions brewed (slots 0-2 are potion slots)
+                    if (type == InventoryType.BREWING && event.getSlot() >= 0 && event.getSlot() <= 2) {
+                        ItemStack item = event.getCurrentItem();
+                        if (item != null && isPotion(item.getType())) {
+                            progressTracker.increment(player.getUniqueId(), "potions_brewed");
+                        }
+                    }
+
+                    // Villager trading - slot 2 is the result slot in merchant inventory
+                    if (type == InventoryType.MERCHANT && event.getSlot() == 2) {
+                        ItemStack result = event.getCurrentItem();
+                        if (result != null && result.getType() != Material.AIR) {
+                            progressTracker.increment(player.getUniqueId(), "villager_trades");
+                        }
+                    }
                 }));
+    }
+
+    private boolean isPotion(Material material) {
+        return material == Material.POTION
+                || material == Material.SPLASH_POTION
+                || material == Material.LINGERING_POTION;
     }
 
     @Override

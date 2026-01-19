@@ -45,7 +45,7 @@ public final class RegionStorage {
             // First, load all regions with their members
             String regionSql = """
                 SELECT r.id, r.owner_id, r.name, r.world_id, r.radius,
-                       r.building_access, r.container_access, r.door_access,
+                       r.building_access, r.container_access, r.door_access, r.pvp_access,
                        pn.username as owner_name,
                        COALESCE(array_agg(rm.member_id) FILTER (WHERE rm.member_id IS NOT NULL), '{}') as members
                 FROM protection_regions r
@@ -53,7 +53,7 @@ public final class RegionStorage {
                 LEFT JOIN player_names pn ON r.owner_id = pn.player_id
                 WHERE r.deleted_at IS NULL
                 GROUP BY r.id, r.owner_id, r.name, r.world_id, r.radius,
-                         r.building_access, r.container_access, r.door_access, pn.username
+                         r.building_access, r.container_access, r.door_access, r.pvp_access, pn.username
                 ORDER BY r.created_at
                 """;
 
@@ -98,7 +98,7 @@ public final class RegionStorage {
         return storage.queryMaybe(conn -> {
             String sql = """
                 SELECT r.id, r.owner_id, r.name, r.world_id, r.radius,
-                       r.building_access, r.container_access, r.door_access,
+                       r.building_access, r.container_access, r.door_access, r.pvp_access,
                        pn.username as owner_name,
                        COALESCE(array_agg(rm.member_id) FILTER (WHERE rm.member_id IS NOT NULL), '{}') as members
                 FROM protection_regions r
@@ -106,7 +106,7 @@ public final class RegionStorage {
                 LEFT JOIN player_names pn ON r.owner_id = pn.player_id
                 WHERE r.id = ? AND r.deleted_at IS NULL
                 GROUP BY r.id, r.owner_id, r.name, r.world_id, r.radius,
-                         r.building_access, r.container_access, r.door_access, pn.username
+                         r.building_access, r.container_access, r.door_access, r.pvp_access, pn.username
                 """;
 
             try (PreparedStatement stmt = conn.prepareStatement(sql)) {
@@ -131,7 +131,7 @@ public final class RegionStorage {
         return storage.queryMaybe(conn -> {
             String sql = """
                 SELECT r.id, r.owner_id, r.name, r.world_id, r.radius,
-                       r.building_access, r.container_access, r.door_access,
+                       r.building_access, r.container_access, r.door_access, r.pvp_access,
                        pn.username as owner_name,
                        COALESCE(array_agg(rm.member_id) FILTER (WHERE rm.member_id IS NOT NULL), '{}') as members
                 FROM protection_regions r
@@ -139,7 +139,7 @@ public final class RegionStorage {
                 LEFT JOIN player_names pn ON r.owner_id = pn.player_id
                 WHERE r.owner_id = ? AND LOWER(r.name) = ? AND r.deleted_at IS NULL
                 GROUP BY r.id, r.owner_id, r.name, r.world_id, r.radius,
-                         r.building_access, r.container_access, r.door_access, pn.username
+                         r.building_access, r.container_access, r.door_access, r.pvp_access, pn.username
                 """;
 
             try (PreparedStatement stmt = conn.prepareStatement(sql)) {
@@ -165,7 +165,7 @@ public final class RegionStorage {
         return storage.queryFlowable(conn -> {
             String sql = """
                 SELECT r.id, r.owner_id, r.name, r.world_id, r.radius,
-                       r.building_access, r.container_access, r.door_access,
+                       r.building_access, r.container_access, r.door_access, r.pvp_access,
                        pn.username as owner_name,
                        COALESCE(array_agg(rm.member_id) FILTER (WHERE rm.member_id IS NOT NULL), '{}') as members
                 FROM protection_regions r
@@ -173,7 +173,7 @@ public final class RegionStorage {
                 LEFT JOIN player_names pn ON r.owner_id = pn.player_id
                 WHERE r.owner_id = ? AND r.deleted_at IS NULL
                 GROUP BY r.id, r.owner_id, r.name, r.world_id, r.radius,
-                         r.building_access, r.container_access, r.door_access, pn.username
+                         r.building_access, r.container_access, r.door_access, r.pvp_access, pn.username
                 ORDER BY r.created_at
                 """;
 
@@ -221,7 +221,7 @@ public final class RegionStorage {
         return storage.queryFlowable(conn -> {
             String sql = """
                 SELECT r.id, r.owner_id, r.name, r.world_id, r.radius,
-                       r.building_access, r.container_access, r.door_access,
+                       r.building_access, r.container_access, r.door_access, r.pvp_access,
                        pn.username as owner_name,
                        COALESCE(array_agg(rm2.member_id) FILTER (WHERE rm2.member_id IS NOT NULL), '{}') as members
                 FROM protection_regions r
@@ -230,7 +230,7 @@ public final class RegionStorage {
                 LEFT JOIN player_names pn ON r.owner_id = pn.player_id
                 WHERE r.deleted_at IS NULL
                 GROUP BY r.id, r.owner_id, r.name, r.world_id, r.radius,
-                         r.building_access, r.container_access, r.door_access, pn.username
+                         r.building_access, r.container_access, r.door_access, r.pvp_access, pn.username
                 ORDER BY r.created_at
                 """;
 
@@ -303,8 +303,8 @@ public final class RegionStorage {
             String regionSql = """
                 INSERT INTO protection_regions
                     (id, owner_id, name, world_id, radius,
-                     building_access, container_access, door_access)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                     building_access, container_access, door_access, pvp_access)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """;
 
             try (PreparedStatement stmt = conn.prepareStatement(regionSql)) {
@@ -316,6 +316,7 @@ public final class RegionStorage {
                 stmt.setString(6, region.buildingAccess().name());
                 stmt.setString(7, region.containerAccess().name());
                 stmt.setString(8, region.doorAccess().name());
+                stmt.setString(9, region.pvpAccess().name());
                 stmt.executeUpdate();
             }
 
@@ -386,11 +387,11 @@ public final class RegionStorage {
     /**
      * Update the access settings of a region.
      */
-    public Completable updateAccess(UUID regionId, AccessLevel building, AccessLevel containers, AccessLevel doors) {
+    public Completable updateAccess(UUID regionId, AccessLevel building, AccessLevel containers, AccessLevel doors, AccessLevel pvp) {
         return storage.execute(conn -> {
             String sql = """
                 UPDATE protection_regions
-                SET building_access = ?, container_access = ?, door_access = ?
+                SET building_access = ?, container_access = ?, door_access = ?, pvp_access = ?
                 WHERE id = ? AND deleted_at IS NULL
                 """;
 
@@ -398,7 +399,8 @@ public final class RegionStorage {
                 stmt.setString(1, building.name());
                 stmt.setString(2, containers.name());
                 stmt.setString(3, doors.name());
-                stmt.setObject(4, regionId);
+                stmt.setString(4, pvp.name());
+                stmt.setObject(5, regionId);
                 stmt.executeUpdate();
             }
         });
@@ -562,6 +564,7 @@ public final class RegionStorage {
         AccessLevel buildingAccess = AccessLevel.fromString(rs.getString("building_access"));
         AccessLevel containerAccess = AccessLevel.fromString(rs.getString("container_access"));
         AccessLevel doorAccess = AccessLevel.fromString(rs.getString("door_access"));
+        AccessLevel pvpAccess = AccessLevel.fromString(rs.getString("pvp_access"));
 
         Set<UUID> members = new HashSet<>();
         java.sql.Array membersArray = rs.getArray("members");
@@ -575,6 +578,6 @@ public final class RegionStorage {
         }
 
         return new Region(id, ownerId, ownerName, name, worldId,
-                radius, buildingAccess, containerAccess, doorAccess, members, List.copyOf(anchors));
+                radius, buildingAccess, containerAccess, doorAccess, pvpAccess, members, List.copyOf(anchors));
     }
 }

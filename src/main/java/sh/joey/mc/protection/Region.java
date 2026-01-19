@@ -23,6 +23,7 @@ public record Region(
         AccessLevel buildingAccess,
         AccessLevel containerAccess,
         AccessLevel doorAccess,
+        AccessLevel pvpAccess,
         Set<UUID> members,
         List<Anchor> anchors
 ) {
@@ -89,6 +90,13 @@ public record Region(
     }
 
     /**
+     * Check if the given player can PvP (attack others) in this region.
+     */
+    public boolean canPvp(UUID playerId) {
+        return hasAccess(playerId, pvpAccess);
+    }
+
+    /**
      * Get the primary anchor (first/oldest anchor).
      * Returns null if no anchors exist.
      */
@@ -151,7 +159,7 @@ public record Region(
      */
     public Region withRadius(int newRadius) {
         return new Region(id, ownerId, ownerName, name, worldId,
-                newRadius, buildingAccess, containerAccess, doorAccess, members, anchors);
+                newRadius, buildingAccess, containerAccess, doorAccess, pvpAccess, members, anchors);
     }
 
     /**
@@ -159,7 +167,7 @@ public record Region(
      */
     public Region withName(String newName) {
         return new Region(id, ownerId, ownerName, newName, worldId,
-                radius, buildingAccess, containerAccess, doorAccess, members, anchors);
+                radius, buildingAccess, containerAccess, doorAccess, pvpAccess, members, anchors);
     }
 
     /**
@@ -167,7 +175,7 @@ public record Region(
      */
     public Region withBuildingAccess(AccessLevel level) {
         return new Region(id, ownerId, ownerName, name, worldId,
-                radius, level, containerAccess, doorAccess, members, anchors);
+                radius, level, containerAccess, doorAccess, pvpAccess, members, anchors);
     }
 
     /**
@@ -175,7 +183,7 @@ public record Region(
      */
     public Region withContainerAccess(AccessLevel level) {
         return new Region(id, ownerId, ownerName, name, worldId,
-                radius, buildingAccess, level, doorAccess, members, anchors);
+                radius, buildingAccess, level, doorAccess, pvpAccess, members, anchors);
     }
 
     /**
@@ -183,7 +191,15 @@ public record Region(
      */
     public Region withDoorAccess(AccessLevel level) {
         return new Region(id, ownerId, ownerName, name, worldId,
-                radius, buildingAccess, containerAccess, level, members, anchors);
+                radius, buildingAccess, containerAccess, level, pvpAccess, members, anchors);
+    }
+
+    /**
+     * Create a new region with the specified PvP access level.
+     */
+    public Region withPvpAccess(AccessLevel level) {
+        return new Region(id, ownerId, ownerName, name, worldId,
+                radius, buildingAccess, containerAccess, doorAccess, level, members, anchors);
     }
 
     /**
@@ -193,7 +209,7 @@ public record Region(
         var newAnchors = new java.util.ArrayList<>(anchors);
         newAnchors.add(anchor);
         return new Region(id, ownerId, ownerName, name, worldId,
-                radius, buildingAccess, containerAccess, doorAccess, members, List.copyOf(newAnchors));
+                radius, buildingAccess, containerAccess, doorAccess, pvpAccess, members, List.copyOf(newAnchors));
     }
 
     /**
@@ -204,7 +220,7 @@ public record Region(
                 .filter(a -> !a.id().equals(anchorId))
                 .toList();
         return new Region(id, ownerId, ownerName, name, worldId,
-                radius, buildingAccess, containerAccess, doorAccess, members, newAnchors);
+                radius, buildingAccess, containerAccess, doorAccess, pvpAccess, members, newAnchors);
     }
 
     /**
