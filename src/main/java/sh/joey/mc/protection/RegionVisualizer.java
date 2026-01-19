@@ -18,7 +18,7 @@ import java.util.concurrent.TimeUnit;
 /**
  * Visualizes region borders using particles.
  * Players can toggle visualization on/off.
- * Renders circles around each anchor in a region.
+ * Renders the outer perimeter of regions (union of all anchor circles).
  */
 public final class RegionVisualizer implements Disposable {
 
@@ -116,9 +116,11 @@ public final class RegionVisualizer implements Disposable {
 
         double playerY = player.getLocation().getY();
         int radius = region.radius();
+        var anchors = region.anchors();
 
-        // Render circle around each anchor
-        for (Anchor anchor : region.anchors()) {
+        // Render outer perimeter only - for each anchor's circle, only render points
+        // that are NOT inside any other anchor's circle
+        for (Anchor anchor : anchors) {
             double centerX = anchor.x() + 0.5;
             double centerZ = anchor.z() + 0.5;
 
@@ -129,16 +131,23 @@ public final class RegionVisualizer implements Disposable {
                 continue;
             }
 
-            renderAnchorCircle(player, centerX, centerZ, radius, playerY, dustOptions);
+            renderOuterPerimeter(player, anchor, anchors, radius, playerY, dustOptions);
         }
     }
 
-    private void renderAnchorCircle(Player player, double centerX, double centerZ, int radius,
-                                     double playerY, Particle.DustOptions dustOptions) {
+    /**
+     * Renders only the outer perimeter points for an anchor's circle.
+     * Points that fall inside another anchor's circle are skipped.
+     */
+    private void renderOuterPerimeter(Player player, Anchor anchor, java.util.List<Anchor> allAnchors,
+                                       int radius, double playerY, Particle.DustOptions dustOptions) {
         World world = player.getWorld();
         if (world == null) return;
 
-        // Render circle at player's Y level
+        double centerX = anchor.x() + 0.5;
+        double centerZ = anchor.z() + 0.5;
+
+        // Render circle points at player's Y level
         for (int i = 0; i < POINTS_PER_CIRCLE; i++) {
             double angle = (2 * Math.PI * i) / POINTS_PER_CIRCLE;
             double x = centerX + radius * Math.cos(angle);
@@ -149,15 +158,44 @@ public final class RegionVisualizer implements Disposable {
             double dz = z - player.getLocation().getZ();
             if (dx * dx + dz * dz > 32 * 32) continue;
 
+            // Skip if this point is inside another anchor's circle (not on outer perimeter)
+            if (isInsideOtherAnchor(x, z, anchor, allAnchors, radius)) continue;
+
             Location loc = new Location(world, x, playerY, z);
             player.spawnParticle(Particle.DUST, loc, 1, dustOptions);
         }
 
-        // Render cardinal pillars
-        renderPillar(player, centerX + radius, centerZ, playerY, dustOptions);
-        renderPillar(player, centerX - radius, centerZ, playerY, dustOptions);
-        renderPillar(player, centerX, centerZ + radius, playerY, dustOptions);
-        renderPillar(player, centerX, centerZ - radius, playerY, dustOptions);
+        // Render cardinal pillars only if they're on the outer perimeter
+        double[] cardinalX = {centerX + radius, centerX - radius, centerX, centerX};
+        double[] cardinalZ = {centerZ, centerZ, centerZ + radius, centerZ - radius};
+
+        for (int i = 0; i < 4; i++) {
+            if (!isInsideOtherAnchor(cardinalX[i], cardinalZ[i], anchor, allAnchors, radius)) {
+                renderPillar(player, cardinalX[i], cardinalZ[i], playerY, dustOptions);
+            }
+        }
+    }
+
+    /**
+     * Checks if a point is inside any other anchor's circle (excluding the source anchor).
+     */
+    private boolean isInsideOtherAnchor(double x, double z, Anchor sourceAnchor,
+                                         java.util.List<Anchor> allAnchors, int radius) {
+        for (Anchor other : allAnchors) {
+            if (other.id().equals(sourceAnchor.id())) continue;
+
+            double otherCenterX = other.x() + 0.5;
+            double otherCenterZ = other.z() + 0.5;
+            double dx = x - otherCenterX;
+            double dz = z - otherCenterZ;
+            double distSq = dx * dx + dz * dz;
+
+            // Use slightly smaller radius to avoid gaps at intersection points
+            if (distSq < (radius - 0.5) * (radius - 0.5)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private void renderPillar(Player player, double x, double z, double baseY, Particle.DustOptions dustOptions) {
