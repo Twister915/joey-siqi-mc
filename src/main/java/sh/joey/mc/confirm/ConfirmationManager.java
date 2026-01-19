@@ -12,22 +12,25 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.player.PlayerQuitEvent;
 import sh.joey.mc.SiqiJoeyPlugin;
 
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
 /**
  * Manages pending confirmation requests for players.
- * Each player can have at most one pending request at a time.
+ * Players can have multiple concurrent requests, each identified by a unique token.
  */
 public final class ConfirmationManager implements Disposable {
 
     private final CompositeDisposable disposables = new CompositeDisposable();
     private final SiqiJoeyPlugin plugin;
-    private final Map<UUID, PendingRequest> pending = new HashMap<>();
+    // Outer map: playerId -> (token -> request). LinkedHashMap preserves insertion order for getLatestToken().
+    private final Map<UUID, LinkedHashMap<String, PendingRequest>> pending = new ConcurrentHashMap<>();
 
     private record PendingRequest(
+        String token,
         ConfirmationRequest request,
         Disposable lifecycle
     ) {}
@@ -41,31 +44,31 @@ public final class ConfirmationManager implements Disposable {
     }
 
     private void handleReceiverQuit(UUID playerId) {
-        PendingRequest req = pending.remove(playerId);
-        if (req != null) {
-            req.lifecycle().dispose();
-            safeCall("onInvalidate", req.request()::onInvalidate);
+        LinkedHashMap<String, PendingRequest> playerRequests = pending.remove(playerId);
+        if (playerRequests != null) {
+            for (PendingRequest req : playerRequests.values()) {
+                req.lifecycle().dispose();
+                safeCall("onInvalidate", req.request()::onInvalidate);
+            }
         }
     }
 
     /**
      * Sends a confirmation request to a player.
-     * Any existing pending request for this player is replaced.
+     * Multiple requests can coexist for the same player, each identified by a unique token.
      */
     public void request(Player player, ConfirmationRequest request) {
         UUID playerId = player.getUniqueId();
-
-        // Cancel any existing request (triggers onReplaced)
-        replace(playerId);
+        String token = generateToken();
 
         // Build lifecycle observable (timeout + custom invalidation)
         // Note: Receiver quit is handled separately via PlayerQuitEvent subscription
         Completable timeout = plugin.timer(request.timeoutSeconds(), TimeUnit.SECONDS)
             .ignoreElements()
-            .doOnComplete(() -> handleTimeout(playerId));
+            .doOnComplete(() -> handleTimeout(playerId, token));
 
         Completable customInvalidation = request.invalidation()
-            .doOnComplete(() -> handleInvalidate(playerId));
+            .doOnComplete(() -> handleInvalidate(playerId, token));
 
         // Race between timeout and custom invalidation (Completable.never() won't complete)
         Completable lifecycle = Completable.ambArray(timeout, customInvalidation);
@@ -75,21 +78,38 @@ public final class ConfirmationManager implements Disposable {
             err -> plugin.getLogger().warning("Confirmation lifecycle error: " + err.getMessage())
         );
 
-        pending.put(playerId, new PendingRequest(request, lifecycleSubscription));
+        pending.computeIfAbsent(playerId, k -> new LinkedHashMap<>())
+            .put(token, new PendingRequest(token, request, lifecycleSubscription));
 
         // Send formatted message to player
-        sendPrompt(player, request);
+        sendPrompt(player, request, token);
     }
 
     /**
-     * Called by /accept command.
+     * Called by /accept command without a token. Accepts the most recent pending request.
      */
     public void accept(Player player) {
         UUID playerId = player.getUniqueId();
-        PendingRequest req = pending.remove(playerId);
+        String latestToken = getLatestToken(playerId);
+
+        if (latestToken == null) {
+            player.sendMessage(Component.text("You don't have anything to accept.")
+                .color(NamedTextColor.RED));
+            return;
+        }
+
+        accept(player, latestToken);
+    }
+
+    /**
+     * Called by /accept command with a specific token.
+     */
+    public void accept(Player player, String token) {
+        UUID playerId = player.getUniqueId();
+        PendingRequest req = removeRequest(playerId, token);
 
         if (req == null) {
-            player.sendMessage(Component.text("You don't have anything to accept.")
+            player.sendMessage(Component.text("That request has expired.")
                 .color(NamedTextColor.RED));
             return;
         }
@@ -99,14 +119,30 @@ public final class ConfirmationManager implements Disposable {
     }
 
     /**
-     * Called by /decline command.
+     * Called by /decline command without a token. Declines the most recent pending request.
      */
     public void decline(Player player) {
         UUID playerId = player.getUniqueId();
-        PendingRequest req = pending.remove(playerId);
+        String latestToken = getLatestToken(playerId);
+
+        if (latestToken == null) {
+            player.sendMessage(Component.text("You don't have anything to decline.")
+                .color(NamedTextColor.RED));
+            return;
+        }
+
+        decline(player, latestToken);
+    }
+
+    /**
+     * Called by /decline command with a specific token.
+     */
+    public void decline(Player player, String token) {
+        UUID playerId = player.getUniqueId();
+        PendingRequest req = removeRequest(playerId, token);
 
         if (req == null) {
-            player.sendMessage(Component.text("You don't have anything to decline.")
+            player.sendMessage(Component.text("That request has expired.")
                 .color(NamedTextColor.RED));
             return;
         }
@@ -116,33 +152,64 @@ public final class ConfirmationManager implements Disposable {
     }
 
     /**
-     * Returns true if the player has a pending request.
+     * Returns true if the player has at least one pending request.
      */
     public boolean hasPending(UUID playerId) {
-        return pending.containsKey(playerId);
+        LinkedHashMap<String, PendingRequest> playerRequests = pending.get(playerId);
+        return playerRequests != null && !playerRequests.isEmpty();
     }
 
-    private void handleTimeout(UUID playerId) {
-        PendingRequest req = pending.remove(playerId);
+    private String generateToken() {
+        String token;
+        do {
+            token = UUID.randomUUID().toString().substring(0, 8);
+        } while (tokenExists(token));
+        return token;
+    }
+
+    private boolean tokenExists(String token) {
+        return pending.values().stream()
+            .anyMatch(map -> map.containsKey(token));
+    }
+
+    private String getLatestToken(UUID playerId) {
+        LinkedHashMap<String, PendingRequest> playerRequests = pending.get(playerId);
+        if (playerRequests == null || playerRequests.isEmpty()) {
+            return null;
+        }
+        // LinkedHashMap preserves insertion order; iterate to find the last key
+        String latest = null;
+        for (String t : playerRequests.keySet()) {
+            latest = t;
+        }
+        return latest;
+    }
+
+    private PendingRequest removeRequest(UUID playerId, String token) {
+        LinkedHashMap<String, PendingRequest> playerRequests = pending.get(playerId);
+        if (playerRequests == null) {
+            return null;
+        }
+        PendingRequest req = playerRequests.remove(token);
+        if (playerRequests.isEmpty()) {
+            pending.remove(playerId);
+        }
+        return req;
+    }
+
+    private void handleTimeout(UUID playerId, String token) {
+        PendingRequest req = removeRequest(playerId, token);
         if (req != null) {
             req.lifecycle().dispose();
             safeCall("onTimeout", req.request()::onTimeout);
         }
     }
 
-    private void handleInvalidate(UUID playerId) {
-        PendingRequest req = pending.remove(playerId);
+    private void handleInvalidate(UUID playerId, String token) {
+        PendingRequest req = removeRequest(playerId, token);
         if (req != null) {
             req.lifecycle().dispose();
             safeCall("onInvalidate", req.request()::onInvalidate);
-        }
-    }
-
-    private void replace(UUID playerId) {
-        PendingRequest req = pending.remove(playerId);
-        if (req != null) {
-            req.lifecycle().dispose();
-            safeCall("onReplaced", req.request()::onReplaced);
         }
     }
 
@@ -158,16 +225,16 @@ public final class ConfirmationManager implements Disposable {
         }
     }
 
-    private void sendPrompt(Player player, ConfirmationRequest request) {
+    private void sendPrompt(Player player, ConfirmationRequest request, String token) {
         // Line 1: prefix + prompt text
         Component promptLine = request.prefix()
             .append(Component.text(request.promptText()).color(NamedTextColor.WHITE));
 
-        // Line 2: buttons
+        // Line 2: buttons with token in click events
         Component acceptButton = Component.text("[" + request.acceptText() + "]")
             .color(NamedTextColor.GREEN)
             .decorate(TextDecoration.BOLD)
-            .clickEvent(ClickEvent.runCommand("/accept"))
+            .clickEvent(ClickEvent.runCommand("/accept " + token))
             .hoverEvent(HoverEvent.showText(
                 Component.text("Click to " + request.acceptText().toLowerCase())
                     .color(NamedTextColor.GREEN)));
@@ -175,7 +242,7 @@ public final class ConfirmationManager implements Disposable {
         Component declineButton = Component.text("[" + request.declineText() + "]")
             .color(NamedTextColor.RED)
             .decorate(TextDecoration.BOLD)
-            .clickEvent(ClickEvent.runCommand("/decline"))
+            .clickEvent(ClickEvent.runCommand("/decline " + token))
             .hoverEvent(HoverEvent.showText(
                 Component.text("Click to " + request.declineText().toLowerCase())
                     .color(NamedTextColor.RED)));
@@ -193,10 +260,12 @@ public final class ConfirmationManager implements Disposable {
     public void dispose() {
         disposables.dispose();
         // Invalidate all pending requests
-        pending.values().forEach(req -> {
-            req.lifecycle().dispose();
-            safeCall("onInvalidate", req.request()::onInvalidate);
-        });
+        for (LinkedHashMap<String, PendingRequest> playerRequests : pending.values()) {
+            for (PendingRequest req : playerRequests.values()) {
+                req.lifecycle().dispose();
+                safeCall("onInvalidate", req.request()::onInvalidate);
+            }
+        }
         pending.clear();
     }
 

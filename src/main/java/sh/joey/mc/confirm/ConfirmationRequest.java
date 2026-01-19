@@ -67,10 +67,11 @@ public interface ConfirmationRequest {
 
     /**
      * Called when the request is replaced by a new request.
-     * This happens when a new confirmation is sent to the same player
-     * before they respond to this one.
-     * Default: no-op.
+     *
+     * @deprecated Multiple concurrent requests are now supported.
+     * Requests coexist independently and this callback is no longer invoked.
      */
+    @Deprecated
     default void onReplaced() {}
 
     // --- Lifecycle ---

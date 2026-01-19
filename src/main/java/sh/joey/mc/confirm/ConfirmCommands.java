@@ -27,7 +27,11 @@ public final class ConfirmCommands {
                         sender.sendMessage("This command can only be used by players.");
                         return;
                     }
-                    manager.accept(player);
+                    if (args.length >= 1 && !args[0].isEmpty()) {
+                        manager.accept(player, args[0]);
+                    } else {
+                        manager.accept(player);
+                    }
                 });
             }
         };
@@ -47,7 +51,11 @@ public final class ConfirmCommands {
                         sender.sendMessage("This command can only be used by players.");
                         return;
                     }
-                    manager.decline(player);
+                    if (args.length >= 1 && !args[0].isEmpty()) {
+                        manager.decline(player, args[0]);
+                    } else {
+                        manager.decline(player);
+                    }
                 });
             }
         };
